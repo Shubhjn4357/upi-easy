@@ -1,0 +1,24 @@
+{
+  "name": "upi-easy",
+  "version": "1.0.0",
+  "private": true,
+  "description": "UPI-Easy Fullstack Platform - Hono Backend and Native Android Client",
+  "scripts": {
+    "dev": "npm --prefix api run dev",
+    "build": "npm run api:build && npm run android:build",
+    "test": "npm run api:test && npm run android:test",
+    "api:dev": "npm --prefix api run dev",
+    "api:build": "npm --prefix api run build",
+    "api:start": "npm --prefix api run start",
+    "api:test": "npm --prefix api run test",
+    "worker:dev": "npm --prefix api run worker:dev",
+    "worker:deploy": "npm --prefix api run worker:deploy",
+    "android:fingerprints": "node scripts/fingerprints.js",
+    "android:sha": "node scripts/fingerprints.js",
+    "android:test": "node scripts/run-gradle.js testDebugUnitTest",
+    "android:build": "node scripts/run-gradle.js assembleDebug",
+    "android:bundle": "node scripts/run-gradle.js bundleRelease",
+    "android:install": "node scripts/install-apk.js",
+    "android:clean": "node scripts/run-gradle.js clean"
+  }
+}
