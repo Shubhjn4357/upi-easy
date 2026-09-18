@@ -60,6 +60,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG_NAME: ${{ github.event.release.tag_name || github.ref_name }}
         run: |
+          echo "Checking release $TAG_NAME..."
+          if ! gh release view "$TAG_NAME" >/dev/null 2>&1; then
+            echo "Release $TAG_NAME does not exist yet. Creating it..."
+            gh release create "$TAG_NAME" --title "UPI-Easy $TAG_NAME" --generate-notes
+          fi
           echo "Publishing APK assets to release $TAG_NAME..."
           gh release upload "$TAG_NAME" \
             android/app/build/outputs/apk/debug/app-debug.apk \
