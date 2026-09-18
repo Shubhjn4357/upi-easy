@@ -1,18 +1,20 @@
-﻿package com.aerospace.upieasy
+package com.aerospace.upieasy
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.*
@@ -28,9 +30,11 @@ import com.aerospace.upieasy.feature.settings.SettingsScreen
 import com.aerospace.upieasy.feature.staff.StaffScreen
 import com.aerospace.upieasy.feature.transactions.TransactionsScreen
 import com.aerospace.upieasy.feature.upi.UpiScreen
+import com.aerospace.upieasy.ui.theme.BackgroundLight
 import com.aerospace.upieasy.ui.theme.BrandAccent
 import com.aerospace.upieasy.ui.theme.SurfaceLight
 import com.aerospace.upieasy.ui.theme.UPIEasyTheme
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 sealed class Screen(val route: String, val title: String, val icon: ImageVector) {
@@ -53,99 +57,124 @@ class MainActivity : ComponentActivity() {
             UPIEasyTheme {
                 val navController = rememberNavController()
                 val scope = rememberCoroutineScope()
-                val token by sessionManager.accessTokenFlow.collectAsState(initial = null)
-                val isSetupComplete by sessionManager.isSetupCompleteFlow.collectAsState(initial = false)
-                val currentOrgId by sessionManager.currentOrgIdFlow.collectAsState(initial = null)
 
-                // If user is logged in but hasn't selected an organization, fetch and set first org
-                LaunchedEffect(token, currentOrgId) {
-                    if (!token.isNullOrBlank() && currentOrgId.isNullOrBlank()) {
-                        try {
-                            val api = NetworkClient.getApiService(sessionManager)
-                            val res = api.getOrganizations()
-                            if (res.isSuccessful && res.body()?.success == true) {
-                                val orgs = res.body()!!.organizations
-                                if (orgs.isNotEmpty()) {
-                                    sessionManager.setOrganization(orgs[0].id, orgs[0].name, orgs[0].role)
-                                }
-                            }
-                        } catch (e: Exception) {
-                            e.printStackTrace()
+                var isInitialized by remember { mutableStateOf(false) }
+                var resolvedStartDestination by remember { mutableStateOf("auth") }
+
+                // Resolve initial destination once before building NavHost to avoid recomposition graph crash
+                LaunchedEffect(Unit) {
+                    try {
+                        val token = sessionManager.getAccessToken()
+                        val isComplete = sessionManager.isSetupCompleteFlow.first()
+                        resolvedStartDestination = when {
+                            token.isNullOrBlank() -> "auth"
+                            !isComplete -> "setup"
+                            else -> "main"
                         }
+                    } catch (e: Exception) {
+                        resolvedStartDestination = "auth"
+                    } finally {
+                        isInitialized = true
                     }
                 }
 
-                val startDestination = when {
-                    token.isNullOrBlank() -> "auth"
-                    !isSetupComplete -> "setup"
-                    else -> "main"
-                }
-
-                NavHost(
-                    navController = navController,
-                    startDestination = startDestination
-                ) {
-                    composable("auth") {
-                        GoogleSignInScreen(
-                            sessionManager = sessionManager,
-                            onNavigateToSetup = {
-                                navController.navigate("setup") {
-                                    popUpTo("auth") { inclusive = true }
-                                }
-                            },
-                            onNavigateToMain = {
-                                navController.navigate("main") {
-                                    popUpTo("auth") { inclusive = true }
-                                }
-                            }
-                        )
+                if (!isInitialized) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(BackgroundLight),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(color = BrandAccent)
                     }
+                } else {
+                    val token by sessionManager.accessTokenFlow.collectAsState(initial = null)
+                    val currentOrgId by sessionManager.currentOrgIdFlow.collectAsState(initial = null)
 
-                    composable("setup") {
-                        AppSetupScreen(
-                            sessionManager = sessionManager,
-                            onSetupComplete = {
-                                navController.navigate("main") {
-                                    popUpTo("setup") { inclusive = true }
-                                }
-                            }
-                        )
-                    }
-
-                    composable("main") {
-                        MainAppContent(
-                            sessionManager = sessionManager,
-                            database = database,
-                            onNavigateToScan = { navController.navigate("qr_scan") },
-                            onNavigateToQr = { navController.navigate("qr_gen") },
-                            onLogout = {
-                                scope.launch {
-                                    sessionManager.clearSession()
-                                    navController.navigate("auth") {
-                                        popUpTo(0) { inclusive = true }
+                    // If user is logged in but hasn't selected an organization, fetch and set first org
+                    LaunchedEffect(token, currentOrgId) {
+                        if (!token.isNullOrBlank() && currentOrgId.isNullOrBlank()) {
+                            try {
+                                val api = NetworkClient.getApiService(sessionManager)
+                                val res = api.getOrganizations()
+                                if (res.isSuccessful && res.body()?.success == true) {
+                                    val orgs = res.body()!!.organizations
+                                    if (orgs.isNotEmpty()) {
+                                        sessionManager.setOrganization(orgs[0].id, orgs[0].name, orgs[0].role)
                                     }
                                 }
+                            } catch (e: Exception) {
+                                e.printStackTrace()
                             }
-                        )
+                        }
                     }
 
-                    composable("qr_scan") {
-                        QrScannerScreen(
-                            onNavigateBack = { navController.popBackStack() }
-                        )
-                    }
+                    NavHost(
+                        navController = navController,
+                        startDestination = resolvedStartDestination
+                    ) {
+                        composable("auth") {
+                            GoogleSignInScreen(
+                                sessionManager = sessionManager,
+                                onNavigateToSetup = {
+                                    navController.navigate("setup") {
+                                        popUpTo("auth") { inclusive = true }
+                                    }
+                                },
+                                onNavigateToMain = {
+                                    navController.navigate("main") {
+                                        popUpTo("auth") { inclusive = true }
+                                    }
+                                }
+                            )
+                        }
 
-                    composable("qr_gen") {
-                        QrGeneratorScreen(
-                            onNavigateBack = { navController.popBackStack() }
-                        )
+                        composable("setup") {
+                            AppSetupScreen(
+                                sessionManager = sessionManager,
+                                onSetupComplete = {
+                                    navController.navigate("main") {
+                                        popUpTo("setup") { inclusive = true }
+                                    }
+                                }
+                            )
+                        }
+
+                        composable("main") {
+                            MainAppContent(
+                                sessionManager = sessionManager,
+                                database = database,
+                                onNavigateToScan = { navController.navigate("qr_scan") },
+                                onNavigateToQr = { navController.navigate("qr_gen") },
+                                onLogout = {
+                                    scope.launch {
+                                        sessionManager.clearSession()
+                                        navController.navigate("auth") {
+                                            popUpTo(0) { inclusive = true }
+                                        }
+                                    }
+                                }
+                            )
+                        }
+
+                        composable("qr_scan") {
+                            QrScannerScreen(
+                                onNavigateBack = { navController.popBackStack() }
+                            )
+                        }
+
+                        composable("qr_gen") {
+                            QrGeneratorScreen(
+                                onNavigateBack = { navController.popBackStack() }
+                            )
+                        }
                     }
                 }
             }
         }
     }
 }
-@Preview
+
 @Composable
 fun MainAppContent(
     sessionManager: SessionManager,

@@ -3,10 +3,69 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+
+    <!-- Squircle Card Background Plate -->
     <path
-        android:fillColor="#10B981"
-        android:pathData="M31,31h46v46h-46z" />
+        android:fillColor="#111C38"
+        android:strokeColor="#203056"
+        android:strokeWidth="1.2"
+        android:pathData="M41,25 L67,25 A16,16 0 0,1 83,41 L83,67 A16,16 0 0,1 67,83 L41,83 A16,16 0 0,1 25,67 L25,41 A16,16 0 0,1 41,25 Z" />
+
+    <!-- Soft Glow Behind Glyph -->
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M40,40h28v8h-28zM40,52h28v8h-28z" />
+        android:fillColor="#18274D"
+        android:pathData="M44,38 A16,16 0 1,1 43.9,38 Z" />
+
+    <!-- Indian Rupee (₹) Symbol in Crisp White -->
+    <!-- Top Horizontal Crossbar -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="3.6"
+        android:strokeLineCap="round"
+        android:pathData="M34,39 L53,39" />
+
+    <!-- Second Horizontal Crossbar -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="3.6"
+        android:strokeLineCap="round"
+        android:pathData="M34,46.5 L49,46.5" />
+
+    <!-- Rupee Vertical Stem & Loop -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="3.6"
+        android:strokeLineJoin="round"
+        android:pathData="M40,39 L40,52 C51,52 51,39 40,39" />
+
+    <!-- Rupee Diagonal Kick Leg -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="3.8"
+        android:strokeLineCap="round"
+        android:pathData="M42,52 L52,69" />
+
+    <!-- Rupee Vertical Lower Stem -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="3.6"
+        android:strokeLineCap="round"
+        android:pathData="M40,52 L40,69" />
+
+    <!-- Dynamic UPI Forward Chevron 1: Saffron Orange -->
+    <path
+        android:strokeColor="#FF7A00"
+        android:strokeWidth="3.8"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M55,40 L65,54 L55,68" />
+
+    <!-- Dynamic UPI Forward Chevron 2: Emerald Green -->
+    <path
+        android:strokeColor="#00C853"
+        android:strokeWidth="3.8"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M63,40 L73,54 L63,68" />
+
 </vector>

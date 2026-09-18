@@ -1,4 +1,4 @@
-﻿package com.aerospace.upieasy.core.database
+package com.aerospace.upieasy.core.database
 
 import android.content.Context
 import androidx.room.Database
@@ -25,7 +25,9 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "upi_easy_database"
-                ).build()
+                )
+                .fallbackToDestructiveMigration()
+                .build()
                 INSTANCE = instance
                 instance
             }
