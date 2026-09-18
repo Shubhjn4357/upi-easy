@@ -1,0 +1,1054 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UPI-Easy API — Live Dashboard & Route Console</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0B0F19;
+      --card-bg: rgba(17, 24, 39, 0.75);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --card-hover-border: rgba(99, 102, 241, 0.45);
+      --text: #F3F4F6;
+      --text-muted: #9CA3AF;
+      --primary: #6366F1;
+      --primary-glow: rgba(99, 102, 241, 0.25);
+      --cyan: #06B6D4;
+      --emerald: #10B981;
+      --amber: #F59E0B;
+      --rose: #EF4444;
+      --code-bg: #030712;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.5;
+      background-image: 
+        radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.14) 0px, transparent 50%),
+        radial-gradient(at 100% 0%, rgba(6, 182, 212, 0.12) 0px, transparent 50%),
+        radial-gradient(at 50% 100%, rgba(139, 92, 246, 0.08) 0px, transparent 50%);
+      background-attachment: fixed;
+    }
+
+    header {
+      border-bottom: 1px solid var(--card-border);
+      background: rgba(11, 15, 25, 0.88);
+      backdrop-filter: blur(16px);
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+
+    .nav-container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 1rem 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .brand-icon {
+      width: 42px;
+      height: 42px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--primary), var(--cyan));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 1.3rem;
+      color: #fff;
+      box-shadow: 0 4px 16px var(--primary-glow);
+    }
+
+    .brand-text h1 {
+      font-size: 1.2rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+
+    .brand-text p {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.4rem 0.85rem;
+      border-radius: 9999px;
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      color: var(--emerald);
+      font-size: 0.78rem;
+      font-weight: 600;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--emerald);
+      box-shadow: 0 0 10px var(--emerald);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+
+    .auth-bar {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    .auth-input-group {
+      display: flex;
+      align-items: center;
+      background: rgba(0, 0, 0, 0.45);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 0.4rem 0.75rem;
+      font-size: 0.8rem;
+    }
+
+    .auth-input-group span {
+      color: var(--text-muted);
+      margin-right: 0.45rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    .auth-input-group input {
+      background: transparent;
+      border: none;
+      color: var(--text);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.78rem;
+      outline: none;
+      width: 175px;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 5rem;
+    }
+
+    .hero {
+      margin-bottom: 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 2rem;
+      flex-wrap: wrap;
+    }
+
+    .hero-info h2 {
+      font-size: 2rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      margin-bottom: 0.5rem;
+      background: linear-gradient(135deg, #FFFFFF 40%, #A5B4FC 100%);
+      background-clip: text;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .hero-info p {
+      color: var(--text-muted);
+      max-width: 700px;
+      font-size: 0.95rem;
+    }
+
+    .search-filter-bar {
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+      margin-bottom: 2rem;
+      flex-wrap: wrap;
+    }
+
+    .search-box {
+      flex: 1;
+      min-width: 260px;
+      display: flex;
+      align-items: center;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 0.65rem 1rem;
+      transition: all 0.2s;
+    }
+
+    .search-box:focus-within {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px var(--primary-glow);
+    }
+
+    .search-box input {
+      background: transparent;
+      border: none;
+      color: var(--text);
+      outline: none;
+      width: 100%;
+      font-size: 0.9rem;
+      margin-left: 0.5rem;
+    }
+
+    .filter-pills {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .filter-btn {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      color: var(--text-muted);
+      padding: 0.5rem 0.95rem;
+      border-radius: 8px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .filter-btn:hover, .filter-btn.active {
+      color: #fff;
+      background: rgba(99, 102, 241, 0.2);
+      border-color: var(--primary);
+    }
+
+    .grid-layout {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(640px, 1fr));
+      gap: 1.25rem;
+    }
+
+    @media (max-width: 768px) {
+      .grid-layout {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .endpoint-card {
+      background: var(--card-bg);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      overflow: hidden;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .endpoint-card:hover {
+      border-color: var(--card-hover-border);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+    }
+
+    .card-header {
+      padding: 1.1rem 1.25rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .endpoint-title {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    .method-badge {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 0.25rem 0.55rem;
+      border-radius: 6px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .method-GET { background: rgba(16, 185, 129, 0.15); color: var(--emerald); border: 1px solid rgba(16, 185, 129, 0.3); }
+    .method-POST { background: rgba(99, 102, 241, 0.15); color: #818CF8; border: 1px solid rgba(99, 102, 241, 0.3); }
+    .method-PATCH { background: rgba(245, 158, 11, 0.15); color: var(--amber); border: 1px solid rgba(245, 158, 11, 0.3); }
+    .method-DELETE { background: rgba(239, 68, 68, 0.15); color: var(--rose); border: 1px solid rgba(239, 68, 68, 0.3); }
+
+    .endpoint-path {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.88rem;
+      font-weight: 500;
+      color: #E0E7FF;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .endpoint-meta {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+
+    .category-pill {
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      background: rgba(255, 255, 255, 0.05);
+      padding: 0.2rem 0.5rem;
+      border-radius: 6px;
+    }
+
+    .toggle-icon {
+      color: var(--text-muted);
+      transition: transform 0.2s;
+    }
+
+    .endpoint-card.open .toggle-icon {
+      transform: rotate(180deg);
+    }
+
+    .card-body {
+      display: none;
+      padding: 1.25rem;
+      border-top: 1px solid var(--card-border);
+      background: rgba(0, 0, 0, 0.25);
+    }
+
+    .endpoint-card.open .card-body {
+      display: block;
+    }
+
+    .endpoint-desc {
+      font-size: 0.88rem;
+      color: #D1D5DB;
+      margin-bottom: 1rem;
+    }
+
+    .specs-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 1rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .spec-block {
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+    }
+
+    .spec-title {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-weight: 700;
+      color: var(--text-muted);
+      margin-bottom: 0.5rem;
+    }
+
+    .spec-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.78rem;
+    }
+
+    .spec-table th {
+      text-align: left;
+      color: var(--text-muted);
+      padding: 0.25rem 0.5rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .spec-table td {
+      padding: 0.35rem 0.5rem;
+      font-family: 'JetBrains Mono', monospace;
+      color: #E5E7EB;
+    }
+
+    .spec-table td.desc {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      color: var(--text-muted);
+    }
+
+    .req-tag {
+      color: var(--rose);
+      font-weight: 700;
+    }
+
+    .opt-tag {
+      color: var(--text-muted);
+    }
+
+    .tester-panel {
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      background: rgba(0, 0, 0, 0.5);
+      padding: 1rem;
+    }
+
+    .tester-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.75rem;
+    }
+
+    .tester-header span {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: var(--cyan);
+      letter-spacing: 0.05em;
+    }
+
+    .payload-editor {
+      width: 100%;
+      height: 110px;
+      background: var(--code-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      color: #E0E7FF;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+      padding: 0.75rem;
+      outline: none;
+      resize: vertical;
+      margin-bottom: 0.75rem;
+    }
+
+    .payload-editor:focus {
+      border-color: var(--primary);
+    }
+
+    .test-actions {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+    }
+
+    .btn-send {
+      background: linear-gradient(135deg, var(--primary), #4F46E5);
+      border: none;
+      color: #fff;
+      font-family: inherit;
+      font-weight: 700;
+      font-size: 0.8rem;
+      padding: 0.5rem 1.1rem;
+      border-radius: 6px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      transition: opacity 0.2s;
+    }
+
+    .btn-send:hover {
+      opacity: 0.9;
+    }
+
+    .btn-send:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .response-area {
+      margin-top: 0.75rem;
+      display: none;
+    }
+
+    .response-area.active {
+      display: block;
+    }
+
+    .response-meta {
+      display: flex;
+      gap: 0.75rem;
+      align-items: center;
+      font-size: 0.75rem;
+      margin-bottom: 0.4rem;
+    }
+
+    .res-status-200 { color: var(--emerald); font-weight: 700; }
+    .res-status-400 { color: var(--amber); font-weight: 700; }
+    .res-status-500 { color: var(--rose); font-weight: 700; }
+
+    .response-viewer {
+      background: var(--code-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 0.75rem;
+      max-height: 180px;
+      overflow-y: auto;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.76rem;
+      color: #A5B4FC;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .footer {
+      text-align: center;
+      margin-top: 4rem;
+      padding-top: 2rem;
+      border-top: 1px solid var(--card-border);
+      color: var(--text-muted);
+      font-size: 0.85rem;
+    }
+
+    .footer a {
+      color: var(--primary);
+      text-decoration: none;
+    }
+    .footer a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="nav-container">
+      <div class="brand">
+        <div class="brand-icon">⚡</div>
+        <div class="brand-text">
+          <h1>UPI-Easy API Platform</h1>
+          <p>Cloudflare Workers • Multi-Tenant Hono • Native Android Client</p>
+        </div>
+      </div>
+
+      <div class="status-badge">
+        <div class="status-dot"></div>
+        <span>Workers Live & Healthy</span>
+      </div>
+
+      <div class="auth-bar">
+        <div class="auth-input-group" title="Set Bearer token for testing authenticated requests">
+          <span>Auth Token:</span>
+          <input type="password" id="global-token" placeholder="Bearer JWT..." oninput="saveAuth()">
+        </div>
+        <div class="auth-input-group" title="Organization ID (X-Organization-Id)">
+          <span>Org ID:</span>
+          <input type="text" id="global-org" placeholder="org_..." oninput="saveAuth()">
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <div class="hero">
+      <div class="hero-info">
+        <h2>Interactive Route Map & Testing Console</h2>
+        <p>Explore all API routes, examine required headers, props, and schemas, or test requests directly against the live backend.</p>
+      </div>
+    </div>
+
+    <div class="search-filter-bar">
+      <div class="search-box">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+        <input type="text" id="route-search" placeholder="Filter by endpoint, path, or description (e.g. /auth, qr, webhook)..." oninput="filterRoutes()">
+      </div>
+      <div class="filter-pills">
+        <button class="filter-btn active" onclick="setMethodFilter('ALL')">All</button>
+        <button class="filter-btn" onclick="setMethodFilter('GET')">GET</button>
+        <button class="filter-btn" onclick="setMethodFilter('POST')">POST</button>
+        <button class="filter-btn" onclick="setMethodFilter('PATCH')">PATCH</button>
+        <button class="filter-btn" onclick="setMethodFilter('DELETE')">DELETE</button>
+      </div>
+    </div>
+
+    <div class="grid-layout" id="routes-container"></div>
+
+    <footer class="footer">
+      <p>UPI-Easy API Backend • Running on Cloudflare Workers • <a href="/health" target="_blank">Health Check JSON</a> • <a href="https://github.com/Shubhjn4357/upi-easy" target="_blank">GitHub Repository</a></p>
+    </footer>
+  </main>
+
+  <script>
+    var API_ROUTES = [
+      {
+        method: "GET",
+        path: "/health",
+        category: "System",
+        desc: "Health check and uptime status. Returns current ISO timestamp and worker service status.",
+        auth: false,
+        headers: [],
+        params: [],
+        body: null
+      },
+      {
+        method: "POST",
+        path: "/api/v1/auth/google",
+        category: "Auth",
+        desc: "Google One Tap & Credential Manager sign-in. Verifies user token and returns JWT access + refresh token.",
+        auth: false,
+        headers: [{ name: "Content-Type", req: true, desc: "application/json" }],
+        params: [],
+        body: {
+          email: "merchant@business.in",
+          fullName: "Rahul Verma",
+          googleId: "g_1029384756",
+          avatarUrl: "https://lh3.googleusercontent.com/sample.jpg",
+          deviceId: "android-dev-pixel8"
+        }
+      },
+      {
+        method: "POST",
+        path: "/api/v1/auth/request-otp",
+        category: "Auth",
+        desc: "Initiates mobile number OTP verification. In non-production, returns dev OTP preview for fast testing.",
+        auth: false,
+        headers: [{ name: "Content-Type", req: true, desc: "application/json" }],
+        params: [],
+        body: {
+          mobileNumber: "+919876543210"
+        }
+      },
+      {
+        method: "POST",
+        path: "/api/v1/auth/verify-otp",
+        category: "Auth",
+        desc: "Validates 6-digit OTP and authenticates merchant device.",
+        auth: false,
+        headers: [{ name: "Content-Type", req: true, desc: "application/json" }],
+        params: [],
+        body: {
+          mobileNumber: "+919876543210",
+          otp: "123456",
+          deviceId: "android-dev-pixel8"
+        }
+      },
+      {
+        method: "POST",
+        path: "/api/v1/auth/refresh",
+        category: "Auth",
+        desc: "Rotates refresh token and issues a new access token.",
+        auth: false,
+        headers: [{ name: "Content-Type", req: true, desc: "application/json" }],
+        params: [],
+        body: {
+          refreshToken: "eyJhbGciOiJIUzI1NiIsInR5c..."
+        }
+      },
+      {
+        method: "POST",
+        path: "/api/v1/organizations/setup",
+        category: "Organization",
+        desc: "Full initial merchant onboarding. Creates business org, registers primary UPI ID, and sets up owner role.",
+        auth: true,
+        headers: [
+          { name: "Authorization", req: true, desc: "Bearer <AccessToken>" },
+          { name: "Content-Type", req: true, desc: "application/json" }
+        ],
+        params: [],
+        body: {
+          businessName: "Verma General Store",
+          mobileNumber: "+919876543210",
+          primaryVpa: "vermastore@okhdfcbank",
+          payeeName: "Rahul Verma",
+          category: "RETAIL",
+          bankName: "HDFC Bank",
+          accountNumber: "50100123456789",
+          ifscCode: "HDFC0001234"
+        }
+      },
+      {
+        method: "GET",
+        path: "/api/v1/organizations",
+        category: "Organization",
+        desc: "List all organizations where the authenticated user is an active member or owner.",
+        auth: true,
+        headers: [{ name: "Authorization", req: true, desc: "Bearer <AccessToken>" }],
+        params: [],
+        body: null
+      },
+      {
+        method: "GET",
+        path: "/api/v1/organizations/:id/dashboard",
+        category: "Organization",
+        desc: "Fetches live business metrics: today's collection volume, transaction count, active staff, and recent payments.",
+        auth: true,
+        headers: [
+          { name: "Authorization", req: true, desc: "Bearer <AccessToken>" },
+          { name: "X-Organization-Id", req: true, desc: "Target organization ID" }
+        ],
+        params: [{ name: ":id", req: true, desc: "Organization ID (e.g. org_123)" }],
+        body: null
+      },
+      {
+        method: "GET",
+        path: "/api/v1/organizations/:id/transactions",
+        category: "Transactions",
+        desc: "Search and filter payment records by status, date range, staff, or customer VPA.",
+        auth: true,
+        headers: [
+          { name: "Authorization", req: true, desc: "Bearer <AccessToken>" },
+          { name: "X-Organization-Id", req: true, desc: "Organization ID" }
+        ],
+        params: [
+          { name: ":id", req: true, desc: "Organization ID" },
+          { name: "limit", req: false, desc: "Page size (default 20, max 100)" },
+          { name: "status", req: false, desc: "SUCCESS | PENDING | FAILED" }
+        ],
+        body: null
+      },
+      {
+        method: "POST",
+        path: "/api/v1/organizations/:id/transactions",
+        category: "Transactions",
+        desc: "Record a manual transaction or intent payment record.",
+        auth: true,
+        headers: [
+          { name: "Authorization", req: true, desc: "Bearer <AccessToken>" },
+          { name: "X-Organization-Id", req: true, desc: "Organization ID" },
+          { name: "Idempotency-Key", req: false, desc: "UUID to prevent duplicate charges" }
+        ],
+        params: [{ name: ":id", req: true, desc: "Organization ID" }],
+        body: {
+          amount: 250.00,
+          payeeVpa: "vermastore@okhdfcbank",
+          payeeName: "Rahul Verma",
+          payerVpa: "customer@upi",
+          note: "Order #8421",
+          status: "SUCCESS"
+        }
+      },
+      {
+        method: "GET",
+        path: "/api/v1/organizations/:id/upi",
+        category: "UPI Accounts",
+        desc: "List active UPI VPAs registered under this business organization.",
+        auth: true,
+        headers: [
+          { name: "Authorization", req: true, desc: "Bearer <AccessToken>" },
+          { name: "X-Organization-Id", req: true, desc: "Organization ID" }
+        ],
+        params: [{ name: ":id", req: true, desc: "Organization ID" }],
+        body: null
+      },
+      {
+        method: "POST",
+        path: "/api/v1/organizations/:id/upi",
+        category: "UPI Accounts",
+        desc: "Register a new business UPI ID / VPA with NPCI Merchant Category Code.",
+        auth: true,
+        headers: [
+          { name: "Authorization", req: true, desc: "Bearer <AccessToken>" },
+          { name: "X-Organization-Id", req: true, desc: "Organization ID" }
+        ],
+        params: [{ name: ":id", req: true, desc: "Organization ID" }],
+        body: {
+          vpa: "verma.shop@icici",
+          payeeName: "Rahul Verma",
+          merchantCategoryCode: "5411",
+          isDefault: false
+        }
+      },
+      {
+        method: "GET",
+        path: "/api/v1/organizations/:id/qr",
+        category: "QR Codes",
+        desc: "List static and dynamic QR codes generated for counter billing.",
+        auth: true,
+        headers: [
+          { name: "Authorization", req: true, desc: "Bearer <AccessToken>" },
+          { name: "X-Organization-Id", req: true, desc: "Organization ID" }
+        ],
+        params: [{ name: ":id", req: true, desc: "Organization ID" }],
+        body: null
+      },
+      {
+        method: "POST",
+        path: "/api/v1/organizations/:id/qr",
+        category: "QR Codes",
+        desc: "Generate a custom UPI dynamic or static QR payload with NPCI compliant parameters.",
+        auth: true,
+        headers: [
+          { name: "Authorization", req: true, desc: "Bearer <AccessToken>" },
+          { name: "X-Organization-Id", req: true, desc: "Organization ID" }
+        ],
+        params: [{ name: ":id", req: true, desc: "Organization ID" }],
+        body: {
+          upiAccountId: "upi_456",
+          title: "Counter #1 Dynamic QR",
+          amount: 499.00,
+          note: "Bill #104",
+          type: "DYNAMIC"
+        }
+      },
+      {
+        method: "GET",
+        path: "/api/v1/organizations/:id/members",
+        category: "Staff & Team",
+        desc: "Get all staff members, cashiers, and managers with role permissions.",
+        auth: true,
+        headers: [
+          { name: "Authorization", req: true, desc: "Bearer <AccessToken>" },
+          { name: "X-Organization-Id", req: true, desc: "Organization ID" }
+        ],
+        params: [{ name: ":id", req: true, desc: "Organization ID" }],
+        body: null
+      },
+      {
+        method: "POST",
+        path: "/api/v1/organizations/:id/sync/pull",
+        category: "Offline Sync",
+        desc: "Pull incremental delta events for offline SQLite sync on the Android device.",
+        auth: true,
+        headers: [
+          { name: "Authorization", req: true, desc: "Bearer <AccessToken>" },
+          { name: "X-Organization-Id", req: true, desc: "Organization ID" }
+        ],
+        params: [{ name: ":id", req: true, desc: "Organization ID" }],
+        body: {
+          deviceId: "android-dev-pixel8",
+          lastSequence: 0
+        }
+      },
+      {
+        method: "POST",
+        path: "/api/v1/webhooks/:provider",
+        category: "Webhooks",
+        desc: "NPCI / Bank gateway webhook receiver for real-time payment settlement & reconciliation.",
+        auth: false,
+        headers: [
+          { name: "x-webhook-signature", req: true, desc: "HMAC-SHA256 signature" },
+          { name: "Content-Type", req: true, desc: "application/json" }
+        ],
+        params: [{ name: ":provider", req: true, desc: "RAZORPAY | CASHFREE | PAYTM | NPCI" }],
+        body: {
+          eventId: "evt_9988",
+          referenceNumber: "123456789012",
+          amount: 250.00,
+          status: "SUCCESS"
+        }
+      }
+    ];
+
+    var currentMethodFilter = "ALL";
+
+    function saveAuth() {
+      localStorage.setItem("upi_token", document.getElementById("global-token").value);
+      localStorage.setItem("upi_org", document.getElementById("global-org").value);
+    }
+
+    function loadAuth() {
+      var token = localStorage.getItem("upi_token");
+      var org = localStorage.getItem("upi_org");
+      if (token) document.getElementById("global-token").value = token;
+      if (org) document.getElementById("global-org").value = org;
+    }
+
+    function setMethodFilter(method) {
+      currentMethodFilter = method;
+      document.querySelectorAll(".filter-btn").forEach(function(b) {
+        b.classList.toggle("active", b.innerText === method);
+      });
+      renderCards();
+    }
+
+    function filterRoutes() {
+      renderCards();
+    }
+
+    function renderCards() {
+      var query = document.getElementById("route-search").value.toLowerCase();
+      var container = document.getElementById("routes-container");
+      container.innerHTML = "";
+
+      var filtered = API_ROUTES.filter(function(r) {
+        var matchesMethod = currentMethodFilter === "ALL" || r.method === currentMethodFilter;
+        var matchesQuery = r.path.toLowerCase().indexOf(query) !== -1 || 
+                             r.desc.toLowerCase().indexOf(query) !== -1 || 
+                             r.category.toLowerCase().indexOf(query) !== -1;
+        return matchesMethod && matchesQuery;
+      });
+
+      if (filtered.length === 0) {
+        container.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 3rem; color: var(--text-muted);">No matching endpoints found.</div>';
+        return;
+      }
+
+      filtered.forEach(function(r, idx) {
+        var card = document.createElement("div");
+        card.className = "endpoint-card";
+        card.id = "card-" + idx;
+
+        var bodyStr = r.body ? JSON.stringify(r.body, null, 2) : "";
+
+        var headersHtml = "";
+        if (r.headers.length > 0) {
+          var headerRows = r.headers.map(function(h) {
+            return '<tr><td>' + h.name + ' ' + (h.req ? '<span class="req-tag">*</span>' : '') + '</td><td class="desc">' + h.desc + '</td></tr>';
+          }).join("");
+          headersHtml = '<div class="spec-block"><div class="spec-title">Required Headers</div><table class="spec-table">' + headerRows + '</table></div>';
+        }
+
+        var paramsHtml = "";
+        if (r.params.length > 0) {
+          var paramRows = r.params.map(function(p) {
+            return '<tr><td>' + p.name + ' ' + (p.req ? '<span class="req-tag">*</span>' : '<span class="opt-tag">(opt)</span>') + '</td><td class="desc">' + p.desc + '</td></tr>';
+          }).join("");
+          paramsHtml = '<div class="spec-block"><div class="spec-title">Parameters</div><table class="spec-table">' + paramRows + '</table></div>';
+        }
+
+        var payloadHtml = "";
+        if (r.body) {
+          payloadHtml = '<div style="font-size: 0.72rem; color: var(--text-muted); margin-bottom: 0.35rem; font-weight: 600;">REQUEST BODY (JSON):</div>' +
+            '<textarea class="payload-editor" id="payload-' + idx + '">' + bodyStr + '</textarea>';
+        }
+
+        card.innerHTML = 
+          '<div class="card-header" onclick="toggleCard(' + idx + ')">' +
+            '<div class="endpoint-title">' +
+              '<span class="method-badge method-' + r.method + '">' + r.method + '</span>' +
+              '<span class="endpoint-path">' + r.path + '</span>' +
+            '</div>' +
+            '<div class="endpoint-meta">' +
+              '<span class="category-pill">' + r.category + '</span>' +
+              '<span class="toggle-icon">▼</span>' +
+            '</div>' +
+          '</div>' +
+          '<div class="card-body">' +
+            '<p class="endpoint-desc">' + r.desc + '</p>' +
+            '<div class="specs-grid">' +
+              headersHtml +
+              paramsHtml +
+            '</div>' +
+            '<div class="tester-panel">' +
+              '<div class="tester-header">' +
+                '<span>Interactive Request Runner</span>' +
+                '<span style="font-size: 0.7rem; color: var(--text-muted);">' + (r.auth ? '🔒 Requires Bearer Token' : '🌐 Public Endpoint') + '</span>' +
+              '</div>' +
+              payloadHtml +
+              '<div class="test-actions">' +
+                '<button class="btn-send" id="btn-send-' + idx + '" onclick="executeRequest(' + idx + ')">' +
+                  '<span>Send Request</span> <span style="font-size: 0.7rem;">▶</span>' +
+                '</button>' +
+                '<span id="loader-' + idx + '" style="display: none; font-size: 0.75rem; color: var(--cyan);">Running...</span>' +
+              '</div>' +
+              '<div class="response-area" id="res-area-' + idx + '">' +
+                '<div class="response-meta">' +
+                  '<span id="res-status-' + idx + '"></span>' +
+                  '<span id="res-time-' + idx + '" style="color: var(--text-muted);"></span>' +
+                '</div>' +
+                '<pre class="response-viewer" id="res-body-' + idx + '"></pre>' +
+              '</div>' +
+            '</div>' +
+          '</div>';
+
+        container.appendChild(card);
+      });
+    }
+
+    function toggleCard(idx) {
+      var card = document.getElementById("card-" + idx);
+      card.classList.toggle("open");
+    }
+
+    function executeRequest(idx) {
+      var r = API_ROUTES[idx];
+      var btn = document.getElementById("btn-send-" + idx);
+      var loader = document.getElementById("loader-" + idx);
+      var resArea = document.getElementById("res-area-" + idx);
+      var resStatus = document.getElementById("res-status-" + idx);
+      var resTime = document.getElementById("res-time-" + idx);
+      var resBody = document.getElementById("res-body-" + idx);
+
+      btn.disabled = true;
+      loader.style.display = "inline";
+      resArea.classList.remove("active");
+
+      var resolvedPath = r.path;
+      var orgId = document.getElementById("global-org").value.trim() || "org_demo123";
+      resolvedPath = resolvedPath.replace(":id", orgId).replace(":provider", "RAZORPAY");
+
+      var headers = {};
+      var token = document.getElementById("global-token").value.trim();
+      if (token) {
+        headers["Authorization"] = token.indexOf("Bearer ") === 0 ? token : "Bearer " + token;
+      }
+      if (orgId) {
+        headers["X-Organization-Id"] = orgId;
+      }
+
+      var reqBody = null;
+      if (r.body) {
+        headers["Content-Type"] = "application/json";
+        var editor = document.getElementById("payload-" + idx);
+        try {
+          reqBody = editor.value.trim();
+        } catch (e) {
+          alert("Invalid JSON format in request payload");
+          btn.disabled = false;
+          loader.style.display = "none";
+          return;
+        }
+      }
+
+      var start = performance.now();
+      fetch(resolvedPath, {
+        method: r.method,
+        headers: headers,
+        body: reqBody
+      }).then(function(response) {
+        var duration = Math.round(performance.now() - start);
+        return response.json().catch(function() { return { statusText: response.statusText }; }).then(function(data) {
+          resArea.classList.add("active");
+          resStatus.innerText = response.status + " " + response.statusText;
+          resStatus.className = response.ok ? "res-status-200" : (response.status < 500 ? "res-status-400" : "res-status-500");
+          resTime.innerText = duration + " ms";
+          resBody.innerText = JSON.stringify(data, null, 2);
+        });
+      }).catch(function(err) {
+        var duration = Math.round(performance.now() - start);
+        resArea.classList.add("active");
+        resStatus.innerText = "Network / Client Error";
+        resStatus.className = "res-status-500";
+        resTime.innerText = duration + " ms";
+        resBody.innerText = err.message;
+      }).finally(function() {
+        btn.disabled = false;
+        loader.style.display = "none";
+      });
+    }
+
+    window.addEventListener("DOMContentLoaded", function() {
+      loadAuth();
+      renderCards();
+    });
+  </script>
+</body>
+</html>

@@ -13,6 +13,7 @@
     "api:test": "npm --prefix api run test",
     "worker:dev": "npm --prefix api run worker:dev",
     "worker:deploy": "npm --prefix api run worker:deploy",
+    "dashboard:build": "node scripts/build-dashboard.js",
     "android:fingerprints": "node scripts/fingerprints.js",
     "android:sha": "node scripts/fingerprints.js",
     "android:test": "node scripts/run-gradle.js testDebugUnitTest",

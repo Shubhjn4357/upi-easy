@@ -16,6 +16,7 @@ import { syncRouter } from "./modules/sync/index.js";
 import { auditRouter } from "./modules/audit/index.js";
 import { notificationsRouter } from "./modules/notifications/index.js";
 import { webhooksRouter } from "./modules/webhooks/index.js";
+import { renderDashboardHtml } from "./dashboard/html.js";
 import type { AppEnv } from "./types/hono.js";
 
 export const app = new Hono<AppEnv>();
@@ -32,6 +33,23 @@ app.use(
 );
 app.use("*", requestLogger);
 app.onError(errorHandler);
+
+// Root Interactive Dashboard & API Map
+app.get("/", (c) => {
+  const accept = c.req.header("Accept") || "";
+  if (accept.includes("application/json") && !accept.includes("text/html")) {
+    return c.json({
+      name: "UPI-Easy Multi-Tenant API",
+      status: "online",
+      version: "1.0.0",
+      endpoints: {
+        health: "/health",
+        api: "/api/v1"
+      }
+    });
+  }
+  return c.html(renderDashboardHtml());
+});
 
 // Health check
 app.get("/health", (c) => {
