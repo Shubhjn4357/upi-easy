@@ -1,1054 +1,892 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>UPI-Easy API — Live Dashboard & Route Console</title>
+  <title>UPI-Easy API Platform — Route Map & Interactive Console</title>
+  <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- React 18 and ReactDOM -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <!-- Babel for inline JSX compilation -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            brand: {
+              50: '#EEF2FF',
+              500: '#6366F1',
+              600: '#4F46E5',
+              700: '#4338CA',
+            },
+            dark: {
+              bg: '#0B0F19',
+              card: 'rgba(17, 24, 39, 0.75)',
+              border: 'rgba(255, 255, 255, 0.08)',
+            }
+          }
+        }
+      }
+    }
+  </script>
   <style>
-    :root {
-      --bg: #0B0F19;
-      --card-bg: rgba(17, 24, 39, 0.75);
-      --card-border: rgba(255, 255, 255, 0.08);
-      --card-hover-border: rgba(99, 102, 241, 0.45);
-      --text: #F3F4F6;
-      --text-muted: #9CA3AF;
-      --primary: #6366F1;
-      --primary-glow: rgba(99, 102, 241, 0.25);
-      --cyan: #06B6D4;
-      --emerald: #10B981;
-      --amber: #F59E0B;
-      --rose: #EF4444;
-      --code-bg: #030712;
-    }
-
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-
     body {
-      font-family: 'Plus Jakarta Sans', sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      min-height: 100vh;
-      line-height: 1.5;
+      background-color: #0B0F19;
       background-image: 
-        radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.14) 0px, transparent 50%),
+        radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.15) 0px, transparent 50%),
         radial-gradient(at 100% 0%, rgba(6, 182, 212, 0.12) 0px, transparent 50%),
         radial-gradient(at 50% 100%, rgba(139, 92, 246, 0.08) 0px, transparent 50%);
       background-attachment: fixed;
     }
-
-    header {
-      border-bottom: 1px solid var(--card-border);
-      background: rgba(11, 15, 25, 0.88);
-      backdrop-filter: blur(16px);
-      position: sticky;
-      top: 0;
-      z-index: 50;
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
     }
-
-    .nav-container {
-      max-width: 1400px;
-      margin: 0 auto;
-      padding: 1rem 1.5rem;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 1rem;
-      flex-wrap: wrap;
+    ::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.2);
     }
-
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 3px;
     }
-
-    .brand-icon {
-      width: 42px;
-      height: 42px;
-      border-radius: 10px;
-      background: linear-gradient(135deg, var(--primary), var(--cyan));
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 800;
-      font-size: 1.3rem;
-      color: #fff;
-      box-shadow: 0 4px 16px var(--primary-glow);
-    }
-
-    .brand-text h1 {
-      font-size: 1.2rem;
-      font-weight: 800;
-      letter-spacing: -0.02em;
-    }
-
-    .brand-text p {
-      font-size: 0.75rem;
-      color: var(--text-muted);
-    }
-
-    .status-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.5rem;
-      padding: 0.4rem 0.85rem;
-      border-radius: 9999px;
-      background: rgba(16, 185, 129, 0.1);
-      border: 1px solid rgba(16, 185, 129, 0.3);
-      color: var(--emerald);
-      font-size: 0.78rem;
-      font-weight: 600;
-    }
-
-    .status-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: var(--emerald);
-      box-shadow: 0 0 10px var(--emerald);
-      animation: pulse 2s infinite;
-    }
-
-    @keyframes pulse {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.4; transform: scale(0.85); }
-    }
-
-    .auth-bar {
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-      flex-wrap: wrap;
-    }
-
-    .auth-input-group {
-      display: flex;
-      align-items: center;
-      background: rgba(0, 0, 0, 0.45);
-      border: 1px solid var(--card-border);
-      border-radius: 8px;
-      padding: 0.4rem 0.75rem;
-      font-size: 0.8rem;
-    }
-
-    .auth-input-group span {
-      color: var(--text-muted);
-      margin-right: 0.45rem;
-      font-size: 0.75rem;
-      font-weight: 600;
-    }
-
-    .auth-input-group input {
-      background: transparent;
-      border: none;
-      color: var(--text);
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 0.78rem;
-      outline: none;
-      width: 175px;
-    }
-
-    .container {
-      max-width: 1400px;
-      margin: 0 auto;
-      padding: 2rem 1.5rem 5rem;
-    }
-
-    .hero {
-      margin-bottom: 2rem;
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      gap: 2rem;
-      flex-wrap: wrap;
-    }
-
-    .hero-info h2 {
-      font-size: 2rem;
-      font-weight: 800;
-      letter-spacing: -0.03em;
-      margin-bottom: 0.5rem;
-      background: linear-gradient(135deg, #FFFFFF 40%, #A5B4FC 100%);
-      background-clip: text;
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-    }
-
-    .hero-info p {
-      color: var(--text-muted);
-      max-width: 700px;
-      font-size: 0.95rem;
-    }
-
-    .search-filter-bar {
-      display: flex;
-      gap: 1rem;
-      align-items: center;
-      margin-bottom: 2rem;
-      flex-wrap: wrap;
-    }
-
-    .search-box {
-      flex: 1;
-      min-width: 260px;
-      display: flex;
-      align-items: center;
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
-      border-radius: 12px;
-      padding: 0.65rem 1rem;
-      transition: all 0.2s;
-    }
-
-    .search-box:focus-within {
-      border-color: var(--primary);
-      box-shadow: 0 0 0 3px var(--primary-glow);
-    }
-
-    .search-box input {
-      background: transparent;
-      border: none;
-      color: var(--text);
-      outline: none;
-      width: 100%;
-      font-size: 0.9rem;
-      margin-left: 0.5rem;
-    }
-
-    .filter-pills {
-      display: flex;
-      gap: 0.5rem;
-      flex-wrap: wrap;
-    }
-
-    .filter-btn {
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
-      color: var(--text-muted);
-      padding: 0.5rem 0.95rem;
-      border-radius: 8px;
-      font-size: 0.8rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-
-    .filter-btn:hover, .filter-btn.active {
-      color: #fff;
-      background: rgba(99, 102, 241, 0.2);
-      border-color: var(--primary);
-    }
-
-    .grid-layout {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(640px, 1fr));
-      gap: 1.25rem;
-    }
-
-    @media (max-width: 768px) {
-      .grid-layout {
-        grid-template-columns: 1fr;
-      }
-    }
-
-    .endpoint-card {
-      background: var(--card-bg);
-      backdrop-filter: blur(12px);
-      border: 1px solid var(--card-border);
-      border-radius: 14px;
-      overflow: hidden;
-      transition: border-color 0.2s, box-shadow 0.2s;
-    }
-
-    .endpoint-card:hover {
-      border-color: var(--card-hover-border);
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
-    }
-
-    .card-header {
-      padding: 1.1rem 1.25rem;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 1rem;
-      cursor: pointer;
-      user-select: none;
-    }
-
-    .endpoint-title {
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-      flex: 1;
-      overflow: hidden;
-    }
-
-    .method-badge {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 0.72rem;
-      font-weight: 700;
-      padding: 0.25rem 0.55rem;
-      border-radius: 6px;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-    }
-
-    .method-GET { background: rgba(16, 185, 129, 0.15); color: var(--emerald); border: 1px solid rgba(16, 185, 129, 0.3); }
-    .method-POST { background: rgba(99, 102, 241, 0.15); color: #818CF8; border: 1px solid rgba(99, 102, 241, 0.3); }
-    .method-PATCH { background: rgba(245, 158, 11, 0.15); color: var(--amber); border: 1px solid rgba(245, 158, 11, 0.3); }
-    .method-DELETE { background: rgba(239, 68, 68, 0.15); color: var(--rose); border: 1px solid rgba(239, 68, 68, 0.3); }
-
-    .endpoint-path {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 0.88rem;
-      font-weight: 500;
-      color: #E0E7FF;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .endpoint-meta {
-      display: flex;
-      align-items: center;
-      gap: 0.6rem;
-    }
-
-    .category-pill {
-      font-size: 0.7rem;
-      font-weight: 600;
-      color: var(--text-muted);
-      background: rgba(255, 255, 255, 0.05);
-      padding: 0.2rem 0.5rem;
-      border-radius: 6px;
-    }
-
-    .toggle-icon {
-      color: var(--text-muted);
-      transition: transform 0.2s;
-    }
-
-    .endpoint-card.open .toggle-icon {
-      transform: rotate(180deg);
-    }
-
-    .card-body {
-      display: none;
-      padding: 1.25rem;
-      border-top: 1px solid var(--card-border);
-      background: rgba(0, 0, 0, 0.25);
-    }
-
-    .endpoint-card.open .card-body {
-      display: block;
-    }
-
-    .endpoint-desc {
-      font-size: 0.88rem;
-      color: #D1D5DB;
-      margin-bottom: 1rem;
-    }
-
-    .specs-grid {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 1rem;
-      margin-bottom: 1.25rem;
-    }
-
-    .spec-block {
-      background: rgba(0, 0, 0, 0.4);
-      border: 1px solid var(--card-border);
-      border-radius: 8px;
-      padding: 0.75rem 1rem;
-    }
-
-    .spec-title {
-      font-size: 0.72rem;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      font-weight: 700;
-      color: var(--text-muted);
-      margin-bottom: 0.5rem;
-    }
-
-    .spec-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 0.78rem;
-    }
-
-    .spec-table th {
-      text-align: left;
-      color: var(--text-muted);
-      padding: 0.25rem 0.5rem;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-    }
-
-    .spec-table td {
-      padding: 0.35rem 0.5rem;
-      font-family: 'JetBrains Mono', monospace;
-      color: #E5E7EB;
-    }
-
-    .spec-table td.desc {
-      font-family: 'Plus Jakarta Sans', sans-serif;
-      color: var(--text-muted);
-    }
-
-    .req-tag {
-      color: var(--rose);
-      font-weight: 700;
-    }
-
-    .opt-tag {
-      color: var(--text-muted);
-    }
-
-    .tester-panel {
-      border: 1px solid var(--card-border);
-      border-radius: 10px;
-      background: rgba(0, 0, 0, 0.5);
-      padding: 1rem;
-    }
-
-    .tester-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 0.75rem;
-    }
-
-    .tester-header span {
-      font-size: 0.75rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      color: var(--cyan);
-      letter-spacing: 0.05em;
-    }
-
-    .payload-editor {
-      width: 100%;
-      height: 110px;
-      background: var(--code-bg);
-      border: 1px solid var(--card-border);
-      border-radius: 8px;
-      color: #E0E7FF;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 0.8rem;
-      padding: 0.75rem;
-      outline: none;
-      resize: vertical;
-      margin-bottom: 0.75rem;
-    }
-
-    .payload-editor:focus {
-      border-color: var(--primary);
-    }
-
-    .test-actions {
-      display: flex;
-      gap: 0.5rem;
-      align-items: center;
-    }
-
-    .btn-send {
-      background: linear-gradient(135deg, var(--primary), #4F46E5);
-      border: none;
-      color: #fff;
-      font-family: inherit;
-      font-weight: 700;
-      font-size: 0.8rem;
-      padding: 0.5rem 1.1rem;
-      border-radius: 6px;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 0.4rem;
-      transition: opacity 0.2s;
-    }
-
-    .btn-send:hover {
-      opacity: 0.9;
-    }
-
-    .btn-send:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-
-    .response-area {
-      margin-top: 0.75rem;
-      display: none;
-    }
-
-    .response-area.active {
-      display: block;
-    }
-
-    .response-meta {
-      display: flex;
-      gap: 0.75rem;
-      align-items: center;
-      font-size: 0.75rem;
-      margin-bottom: 0.4rem;
-    }
-
-    .res-status-200 { color: var(--emerald); font-weight: 700; }
-    .res-status-400 { color: var(--amber); font-weight: 700; }
-    .res-status-500 { color: var(--rose); font-weight: 700; }
-
-    .response-viewer {
-      background: var(--code-bg);
-      border: 1px solid var(--card-border);
-      border-radius: 8px;
-      padding: 0.75rem;
-      max-height: 180px;
-      overflow-y: auto;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 0.76rem;
-      color: #A5B4FC;
-      white-space: pre-wrap;
-      word-break: break-all;
-    }
-
-    .footer {
-      text-align: center;
-      margin-top: 4rem;
-      padding-top: 2rem;
-      border-top: 1px solid var(--card-border);
-      color: var(--text-muted);
-      font-size: 0.85rem;
-    }
-
-    .footer a {
-      color: var(--primary);
-      text-decoration: none;
-    }
-    .footer a:hover {
-      text-decoration: underline;
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.25);
     }
   </style>
 </head>
-<body>
+<body class="text-gray-100 antialiased min-h-screen">
+  <div id="root"></div>
 
-  <header>
-    <div class="nav-container">
-      <div class="brand">
-        <div class="brand-icon">⚡</div>
-        <div class="brand-text">
-          <h1>UPI-Easy API Platform</h1>
-          <p>Cloudflare Workers • Multi-Tenant Hono • Native Android Client</p>
-        </div>
-      </div>
+  <script type="text/babel">
+    const { useState, useEffect, useMemo } = React;
 
-      <div class="status-badge">
-        <div class="status-dot"></div>
-        <span>Workers Live & Healthy</span>
-      </div>
-
-      <div class="auth-bar">
-        <div class="auth-input-group" title="Set Bearer token for testing authenticated requests">
-          <span>Auth Token:</span>
-          <input type="password" id="global-token" placeholder="Bearer JWT..." oninput="saveAuth()">
-        </div>
-        <div class="auth-input-group" title="Organization ID (X-Organization-Id)">
-          <span>Org ID:</span>
-          <input type="text" id="global-org" placeholder="org_..." oninput="saveAuth()">
-        </div>
-      </div>
-    </div>
-  </header>
-
-  <main class="container">
-    <div class="hero">
-      <div class="hero-info">
-        <h2>Interactive Route Map & Testing Console</h2>
-        <p>Explore all API routes, examine required headers, props, and schemas, or test requests directly against the live backend.</p>
-      </div>
-    </div>
-
-    <div class="search-filter-bar">
-      <div class="search-box">
-        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-        <input type="text" id="route-search" placeholder="Filter by endpoint, path, or description (e.g. /auth, qr, webhook)..." oninput="filterRoutes()">
-      </div>
-      <div class="filter-pills">
-        <button class="filter-btn active" onclick="setMethodFilter('ALL')">All</button>
-        <button class="filter-btn" onclick="setMethodFilter('GET')">GET</button>
-        <button class="filter-btn" onclick="setMethodFilter('POST')">POST</button>
-        <button class="filter-btn" onclick="setMethodFilter('PATCH')">PATCH</button>
-        <button class="filter-btn" onclick="setMethodFilter('DELETE')">DELETE</button>
-      </div>
-    </div>
-
-    <div class="grid-layout" id="routes-container"></div>
-
-    <footer class="footer">
-      <p>UPI-Easy API Backend • Running on Cloudflare Workers • <a href="/health" target="_blank">Health Check JSON</a> • <a href="https://github.com/Shubhjn4357/upi-easy" target="_blank">GitHub Repository</a></p>
-    </footer>
-  </main>
-
-  <script>
-    var API_ROUTES = [
-      {
-        method: "GET",
-        path: "/health",
-        category: "System",
-        desc: "Health check and uptime status. Returns current ISO timestamp and worker service status.",
-        auth: false,
-        headers: [],
-        params: [],
-        body: null
-      },
-      {
-        method: "POST",
-        path: "/api/v1/auth/google",
-        category: "Auth",
-        desc: "Google One Tap & Credential Manager sign-in. Verifies user token and returns JWT access + refresh token.",
-        auth: false,
-        headers: [{ name: "Content-Type", req: true, desc: "application/json" }],
-        params: [],
-        body: {
-          email: "merchant@business.in",
-          fullName: "Rahul Verma",
-          googleId: "g_1029384756",
-          avatarUrl: "https://lh3.googleusercontent.com/sample.jpg",
-          deviceId: "android-dev-pixel8"
+    const API_DATA = {
+      versions: [
+        {
+          id: "v1",
+          name: "API Version 1",
+          basePath: "/api/v1",
+          modules: [
+            {
+              id: "auth",
+              name: "Authentication & Identity",
+              desc: "Google One Tap, OTP SMS verification, and JWT session rotation",
+              routes: [
+                {
+                  id: "auth-google",
+                  method: "POST",
+                  path: "/api/v1/auth/google",
+                  summary: "Google One Tap / Credential Manager Sign In",
+                  desc: "Verifies Google ID token or Google user profile and issues JWT access & refresh tokens.",
+                  auth: false,
+                  role: "PUBLIC",
+                  headers: [{ name: "Content-Type", req: true, val: "application/json" }],
+                  params: [],
+                  body: {
+                    email: "merchant@business.in",
+                    fullName: "Rahul Verma",
+                    googleId: "g_1029384756",
+                    avatarUrl: "https://lh3.googleusercontent.com/sample.jpg",
+                    deviceId: "android-dev-pixel8"
+                  }
+                },
+                {
+                  id: "auth-req-otp",
+                  method: "POST",
+                  path: "/api/v1/auth/request-otp",
+                  summary: "Request Login OTP",
+                  desc: "Dispatches 6-digit cryptographic verification code to merchant phone number.",
+                  auth: false,
+                  role: "PUBLIC",
+                  headers: [{ name: "Content-Type", req: true, val: "application/json" }],
+                  params: [],
+                  body: { mobileNumber: "+919876543210" }
+                },
+                {
+                  id: "auth-verify-otp",
+                  method: "POST",
+                  path: "/api/v1/auth/verify-otp",
+                  summary: "Verify OTP & Device Register",
+                  desc: "Validates OTP code, marks phone as verified, and creates active session.",
+                  auth: false,
+                  role: "PUBLIC",
+                  headers: [{ name: "Content-Type", req: true, val: "application/json" }],
+                  params: [],
+                  body: {
+                    mobileNumber: "+919876543210",
+                    otp: "123456",
+                    deviceId: "android-dev-pixel8"
+                  }
+                },
+                {
+                  id: "auth-refresh",
+                  method: "POST",
+                  path: "/api/v1/auth/refresh",
+                  summary: "Refresh JWT Session Token",
+                  desc: "Rotates refresh token and issues a new 15-minute access token.",
+                  auth: false,
+                  role: "PUBLIC",
+                  headers: [{ name: "Content-Type", req: true, val: "application/json" }],
+                  params: [],
+                  body: { refreshToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." }
+                }
+              ]
+            },
+            {
+              id: "organizations",
+              name: "Organizations & Onboarding",
+              desc: "Merchant business profile, setup flow, and overview dashboard",
+              routes: [
+                {
+                  id: "org-setup",
+                  method: "POST",
+                  path: "/api/v1/organizations/setup",
+                  summary: "Complete Business Setup Flow",
+                  desc: "Onboards a new merchant in one step: registers organization, primary UPI ID, and bank account.",
+                  auth: true,
+                  role: "AUTHENTICATED",
+                  headers: [
+                    { name: "Authorization", req: true, val: "Bearer <token>" },
+                    { name: "Content-Type", req: true, val: "application/json" }
+                  ],
+                  params: [],
+                  body: {
+                    businessName: "Verma General Store",
+                    mobileNumber: "+919876543210",
+                    primaryVpa: "vermastore@okhdfcbank",
+                    payeeName: "Rahul Verma",
+                    category: "RETAIL",
+                    bankName: "HDFC Bank",
+                    accountNumber: "50100123456789",
+                    ifscCode: "HDFC0001234"
+                  }
+                },
+                {
+                  id: "org-list",
+                  method: "GET",
+                  path: "/api/v1/organizations",
+                  summary: "List User Organizations",
+                  desc: "Returns all merchant organizations where the user is an owner, manager, or cashier.",
+                  auth: true,
+                  role: "AUTHENTICATED",
+                  headers: [{ name: "Authorization", req: true, val: "Bearer <token>" }],
+                  params: [],
+                  body: null
+                },
+                {
+                  id: "org-dashboard",
+                  method: "GET",
+                  path: "/api/v1/organizations/:id/dashboard",
+                  summary: "Organization Overview Metrics",
+                  desc: "Calculates today's total collection, total transaction count, active staff, and recent payments.",
+                  auth: true,
+                  role: "CASHIER / OWNER",
+                  headers: [
+                    { name: "Authorization", req: true, val: "Bearer <token>" },
+                    { name: "X-Organization-Id", req: true, val: "org_..." }
+                  ],
+                  params: [{ name: ":id", req: true, desc: "Organization ID" }],
+                  body: null
+                }
+              ]
+            },
+            {
+              id: "transactions",
+              name: "Transactions & Payments",
+              desc: "Record, search, and reconcile UPI payments",
+              routes: [
+                {
+                  id: "tx-list",
+                  method: "GET",
+                  path: "/api/v1/organizations/:id/transactions",
+                  summary: "List & Filter Transactions",
+                  desc: "Returns paginated payment records with search by customer VPA, reference number, or status.",
+                  auth: true,
+                  role: "CASHIER / OWNER",
+                  headers: [
+                    { name: "Authorization", req: true, val: "Bearer <token>" },
+                    { name: "X-Organization-Id", req: true, val: "org_..." }
+                  ],
+                  params: [
+                    { name: ":id", req: true, desc: "Organization ID" },
+                    { name: "limit", req: false, desc: "Page limit (default 20)" },
+                    { name: "status", req: false, desc: "SUCCESS | PENDING | FAILED" }
+                  ],
+                  body: null
+                },
+                {
+                  id: "tx-create",
+                  method: "POST",
+                  path: "/api/v1/organizations/:id/transactions",
+                  summary: "Record Payment Transaction",
+                  desc: "Logs an intent payment or completed UPI transaction with idempotency protection.",
+                  auth: true,
+                  role: "CASHIER / OWNER",
+                  headers: [
+                    { name: "Authorization", req: true, val: "Bearer <token>" },
+                    { name: "X-Organization-Id", req: true, val: "org_..." },
+                    { name: "Idempotency-Key", req: false, val: "uuid-v4" }
+                  ],
+                  params: [{ name: ":id", req: true, desc: "Organization ID" }],
+                  body: {
+                    amount: 250.00,
+                    payeeVpa: "vermastore@okhdfcbank",
+                    payeeName: "Rahul Verma",
+                    payerVpa: "customer@upi",
+                    note: "Counter Bill #8421",
+                    status: "SUCCESS"
+                  }
+                }
+              ]
+            },
+            {
+              id: "upi",
+              name: "UPI VPA Management",
+              desc: "Multiple merchant VPAs and intent launchers",
+              routes: [
+                {
+                  id: "upi-list",
+                  method: "GET",
+                  path: "/api/v1/organizations/:id/upi",
+                  summary: "List Business UPI IDs",
+                  desc: "Returns all verified UPI VPAs configured for this merchant.",
+                  auth: true,
+                  role: "CASHIER / OWNER",
+                  headers: [
+                    { name: "Authorization", req: true, val: "Bearer <token>" },
+                    { name: "X-Organization-Id", req: true, val: "org_..." }
+                  ],
+                  params: [{ name: ":id", req: true, desc: "Organization ID" }],
+                  body: null
+                },
+                {
+                  id: "upi-create",
+                  method: "POST",
+                  path: "/api/v1/organizations/:id/upi",
+                  summary: "Register New UPI VPA",
+                  desc: "Binds a new UPI ID with NPCI Merchant Category Code.",
+                  auth: true,
+                  role: "OWNER / MANAGER",
+                  headers: [
+                    { name: "Authorization", req: true, val: "Bearer <token>" },
+                    { name: "X-Organization-Id", req: true, val: "org_..." }
+                  ],
+                  params: [{ name: ":id", req: true, desc: "Organization ID" }],
+                  body: {
+                    vpa: "verma.shop@icici",
+                    payeeName: "Rahul Verma",
+                    merchantCategoryCode: "5411",
+                    isDefault: false
+                  }
+                }
+              ]
+            },
+            {
+              id: "qr",
+              name: "QR Code Engine",
+              desc: "Static counter QRs and dynamic bill payment QRs",
+              routes: [
+                {
+                  id: "qr-list",
+                  method: "GET",
+                  path: "/api/v1/organizations/:id/qr",
+                  summary: "List QR Codes",
+                  desc: "Returns all counter and cashier QR codes generated.",
+                  auth: true,
+                  role: "CASHIER / OWNER",
+                  headers: [
+                    { name: "Authorization", req: true, val: "Bearer <token>" },
+                    { name: "X-Organization-Id", req: true, val: "org_..." }
+                  ],
+                  params: [{ name: ":id", req: true, desc: "Organization ID" }],
+                  body: null
+                },
+                {
+                  id: "qr-create",
+                  method: "POST",
+                  path: "/api/v1/organizations/:id/qr",
+                  summary: "Generate UPI QR Payload",
+                  desc: "Generates an NPCI compliant upi://pay payload with amount and invoice note.",
+                  auth: true,
+                  role: "CASHIER / OWNER",
+                  headers: [
+                    { name: "Authorization", req: true, val: "Bearer <token>" },
+                    { name: "X-Organization-Id", req: true, val: "org_..." }
+                  ],
+                  params: [{ name: ":id", req: true, desc: "Organization ID" }],
+                  body: {
+                    upiAccountId: "upi_456",
+                    title: "Counter #1 Dynamic QR",
+                    amount: 499.00,
+                    note: "Bill #104",
+                    type: "DYNAMIC"
+                  }
+                }
+              ]
+            },
+            {
+              id: "members",
+              name: "Staff & RBAC Permissions",
+              desc: "Team roles: OWNER, MANAGER, CASHIER, ACCOUNTANT",
+              routes: [
+                {
+                  id: "members-list",
+                  method: "GET",
+                  path: "/api/v1/organizations/:id/members",
+                  summary: "List Staff Members",
+                  desc: "Returns all staff with active role permissions.",
+                  auth: true,
+                  role: "MANAGER / OWNER",
+                  headers: [
+                    { name: "Authorization", req: true, val: "Bearer <token>" },
+                    { name: "X-Organization-Id", req: true, val: "org_..." }
+                  ],
+                  params: [{ name: ":id", req: true, desc: "Organization ID" }],
+                  body: null
+                }
+              ]
+            },
+            {
+              id: "sync",
+              name: "Offline-First Sync Engine",
+              desc: "Two-way delta sync between Android SQLite and Cloudflare Backend",
+              routes: [
+                {
+                  id: "sync-pull",
+                  method: "POST",
+                  path: "/api/v1/organizations/:id/sync/pull",
+                  summary: "Pull Incremental Sync Events",
+                  desc: "Fetches changes occurring after device's lastSequence cursor.",
+                  auth: true,
+                  role: "AUTHENTICATED",
+                  headers: [
+                    { name: "Authorization", req: true, val: "Bearer <token>" },
+                    { name: "X-Organization-Id", req: true, val: "org_..." }
+                  ],
+                  params: [{ name: ":id", req: true, desc: "Organization ID" }],
+                  body: {
+                    deviceId: "android-dev-pixel8",
+                    lastSequence: 0
+                  }
+                }
+              ]
+            },
+            {
+              id: "webhooks",
+              name: "Payment Gateway Webhooks",
+              desc: "Automated payment reconciliation from NPCI / banks",
+              routes: [
+                {
+                  id: "webhooks-receive",
+                  method: "POST",
+                  path: "/api/v1/webhooks/:provider",
+                  summary: "Inbound Payment Webhook",
+                  desc: "Verifies HMAC signature and auto-reconciles pending UPI transactions.",
+                  auth: false,
+                  role: "PUBLIC",
+                  headers: [
+                    { name: "x-webhook-signature", req: true, val: "hmac-sha256-signature" },
+                    { name: "Content-Type", req: true, val: "application/json" }
+                  ],
+                  params: [{ name: ":provider", req: true, desc: "RAZORPAY | CASHFREE | NPCI" }],
+                  body: {
+                    eventId: "evt_9988",
+                    referenceNumber: "123456789012",
+                    amount: 250.00,
+                    status: "SUCCESS"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          id: "system",
+          name: "System & Core",
+          basePath: "/",
+          modules: [
+            {
+              id: "core",
+              name: "Health & Metadata",
+              desc: "Cloudflare worker health check and metadata",
+              routes: [
+                {
+                  id: "sys-health",
+                  method: "GET",
+                  path: "/health",
+                  summary: "System Health & Uptime Check",
+                  desc: "Returns server status, current ISO timestamp, and worker version.",
+                  auth: false,
+                  role: "PUBLIC",
+                  headers: [],
+                  params: [],
+                  body: null
+                },
+                {
+                  id: "sys-root",
+                  method: "GET",
+                  path: "/",
+                  summary: "Root Dashboard & API Discovery",
+                  desc: "Renders this interactive React dashboard or returns JSON manifest.",
+                  auth: false,
+                  role: "PUBLIC",
+                  headers: [],
+                  params: [],
+                  body: null
+                }
+              ]
+            }
+          ]
         }
-      },
-      {
-        method: "POST",
-        path: "/api/v1/auth/request-otp",
-        category: "Auth",
-        desc: "Initiates mobile number OTP verification. In non-production, returns dev OTP preview for fast testing.",
-        auth: false,
-        headers: [{ name: "Content-Type", req: true, desc: "application/json" }],
-        params: [],
-        body: {
-          mobileNumber: "+919876543210"
-        }
-      },
-      {
-        method: "POST",
-        path: "/api/v1/auth/verify-otp",
-        category: "Auth",
-        desc: "Validates 6-digit OTP and authenticates merchant device.",
-        auth: false,
-        headers: [{ name: "Content-Type", req: true, desc: "application/json" }],
-        params: [],
-        body: {
-          mobileNumber: "+919876543210",
-          otp: "123456",
-          deviceId: "android-dev-pixel8"
-        }
-      },
-      {
-        method: "POST",
-        path: "/api/v1/auth/refresh",
-        category: "Auth",
-        desc: "Rotates refresh token and issues a new access token.",
-        auth: false,
-        headers: [{ name: "Content-Type", req: true, desc: "application/json" }],
-        params: [],
-        body: {
-          refreshToken: "eyJhbGciOiJIUzI1NiIsInR5c..."
-        }
-      },
-      {
-        method: "POST",
-        path: "/api/v1/organizations/setup",
-        category: "Organization",
-        desc: "Full initial merchant onboarding. Creates business org, registers primary UPI ID, and sets up owner role.",
-        auth: true,
-        headers: [
-          { name: "Authorization", req: true, desc: "Bearer <AccessToken>" },
-          { name: "Content-Type", req: true, desc: "application/json" }
-        ],
-        params: [],
-        body: {
-          businessName: "Verma General Store",
-          mobileNumber: "+919876543210",
-          primaryVpa: "vermastore@okhdfcbank",
-          payeeName: "Rahul Verma",
-          category: "RETAIL",
-          bankName: "HDFC Bank",
-          accountNumber: "50100123456789",
-          ifscCode: "HDFC0001234"
-        }
-      },
-      {
-        method: "GET",
-        path: "/api/v1/organizations",
-        category: "Organization",
-        desc: "List all organizations where the authenticated user is an active member or owner.",
-        auth: true,
-        headers: [{ name: "Authorization", req: true, desc: "Bearer <AccessToken>" }],
-        params: [],
-        body: null
-      },
-      {
-        method: "GET",
-        path: "/api/v1/organizations/:id/dashboard",
-        category: "Organization",
-        desc: "Fetches live business metrics: today's collection volume, transaction count, active staff, and recent payments.",
-        auth: true,
-        headers: [
-          { name: "Authorization", req: true, desc: "Bearer <AccessToken>" },
-          { name: "X-Organization-Id", req: true, desc: "Target organization ID" }
-        ],
-        params: [{ name: ":id", req: true, desc: "Organization ID (e.g. org_123)" }],
-        body: null
-      },
-      {
-        method: "GET",
-        path: "/api/v1/organizations/:id/transactions",
-        category: "Transactions",
-        desc: "Search and filter payment records by status, date range, staff, or customer VPA.",
-        auth: true,
-        headers: [
-          { name: "Authorization", req: true, desc: "Bearer <AccessToken>" },
-          { name: "X-Organization-Id", req: true, desc: "Organization ID" }
-        ],
-        params: [
-          { name: ":id", req: true, desc: "Organization ID" },
-          { name: "limit", req: false, desc: "Page size (default 20, max 100)" },
-          { name: "status", req: false, desc: "SUCCESS | PENDING | FAILED" }
-        ],
-        body: null
-      },
-      {
-        method: "POST",
-        path: "/api/v1/organizations/:id/transactions",
-        category: "Transactions",
-        desc: "Record a manual transaction or intent payment record.",
-        auth: true,
-        headers: [
-          { name: "Authorization", req: true, desc: "Bearer <AccessToken>" },
-          { name: "X-Organization-Id", req: true, desc: "Organization ID" },
-          { name: "Idempotency-Key", req: false, desc: "UUID to prevent duplicate charges" }
-        ],
-        params: [{ name: ":id", req: true, desc: "Organization ID" }],
-        body: {
-          amount: 250.00,
-          payeeVpa: "vermastore@okhdfcbank",
-          payeeName: "Rahul Verma",
-          payerVpa: "customer@upi",
-          note: "Order #8421",
-          status: "SUCCESS"
-        }
-      },
-      {
-        method: "GET",
-        path: "/api/v1/organizations/:id/upi",
-        category: "UPI Accounts",
-        desc: "List active UPI VPAs registered under this business organization.",
-        auth: true,
-        headers: [
-          { name: "Authorization", req: true, desc: "Bearer <AccessToken>" },
-          { name: "X-Organization-Id", req: true, desc: "Organization ID" }
-        ],
-        params: [{ name: ":id", req: true, desc: "Organization ID" }],
-        body: null
-      },
-      {
-        method: "POST",
-        path: "/api/v1/organizations/:id/upi",
-        category: "UPI Accounts",
-        desc: "Register a new business UPI ID / VPA with NPCI Merchant Category Code.",
-        auth: true,
-        headers: [
-          { name: "Authorization", req: true, desc: "Bearer <AccessToken>" },
-          { name: "X-Organization-Id", req: true, desc: "Organization ID" }
-        ],
-        params: [{ name: ":id", req: true, desc: "Organization ID" }],
-        body: {
-          vpa: "verma.shop@icici",
-          payeeName: "Rahul Verma",
-          merchantCategoryCode: "5411",
-          isDefault: false
-        }
-      },
-      {
-        method: "GET",
-        path: "/api/v1/organizations/:id/qr",
-        category: "QR Codes",
-        desc: "List static and dynamic QR codes generated for counter billing.",
-        auth: true,
-        headers: [
-          { name: "Authorization", req: true, desc: "Bearer <AccessToken>" },
-          { name: "X-Organization-Id", req: true, desc: "Organization ID" }
-        ],
-        params: [{ name: ":id", req: true, desc: "Organization ID" }],
-        body: null
-      },
-      {
-        method: "POST",
-        path: "/api/v1/organizations/:id/qr",
-        category: "QR Codes",
-        desc: "Generate a custom UPI dynamic or static QR payload with NPCI compliant parameters.",
-        auth: true,
-        headers: [
-          { name: "Authorization", req: true, desc: "Bearer <AccessToken>" },
-          { name: "X-Organization-Id", req: true, desc: "Organization ID" }
-        ],
-        params: [{ name: ":id", req: true, desc: "Organization ID" }],
-        body: {
-          upiAccountId: "upi_456",
-          title: "Counter #1 Dynamic QR",
-          amount: 499.00,
-          note: "Bill #104",
-          type: "DYNAMIC"
-        }
-      },
-      {
-        method: "GET",
-        path: "/api/v1/organizations/:id/members",
-        category: "Staff & Team",
-        desc: "Get all staff members, cashiers, and managers with role permissions.",
-        auth: true,
-        headers: [
-          { name: "Authorization", req: true, desc: "Bearer <AccessToken>" },
-          { name: "X-Organization-Id", req: true, desc: "Organization ID" }
-        ],
-        params: [{ name: ":id", req: true, desc: "Organization ID" }],
-        body: null
-      },
-      {
-        method: "POST",
-        path: "/api/v1/organizations/:id/sync/pull",
-        category: "Offline Sync",
-        desc: "Pull incremental delta events for offline SQLite sync on the Android device.",
-        auth: true,
-        headers: [
-          { name: "Authorization", req: true, desc: "Bearer <AccessToken>" },
-          { name: "X-Organization-Id", req: true, desc: "Organization ID" }
-        ],
-        params: [{ name: ":id", req: true, desc: "Organization ID" }],
-        body: {
-          deviceId: "android-dev-pixel8",
-          lastSequence: 0
-        }
-      },
-      {
-        method: "POST",
-        path: "/api/v1/webhooks/:provider",
-        category: "Webhooks",
-        desc: "NPCI / Bank gateway webhook receiver for real-time payment settlement & reconciliation.",
-        auth: false,
-        headers: [
-          { name: "x-webhook-signature", req: true, desc: "HMAC-SHA256 signature" },
-          { name: "Content-Type", req: true, desc: "application/json" }
-        ],
-        params: [{ name: ":provider", req: true, desc: "RAZORPAY | CASHFREE | PAYTM | NPCI" }],
-        body: {
-          eventId: "evt_9988",
-          referenceNumber: "123456789012",
-          amount: 250.00,
-          status: "SUCCESS"
-        }
-      }
-    ];
+      ]
+    };
 
-    var currentMethodFilter = "ALL";
+    function App() {
+      const [selectedVersion, setSelectedVersion] = useState("v1");
+      const [selectedModule, setSelectedModule] = useState(null);
+      const [searchQuery, setSearchQuery] = useState("");
+      const [methodFilter, setMethodFilter] = useState("ALL");
+      const [expandedRoutes, setExpandedRoutes] = useState({});
+      
+      const [authToken, setAuthToken] = useState(() => localStorage.getItem("upi_token") || "");
+      const [orgId, setOrgId] = useState(() => localStorage.getItem("upi_org") || "");
+      const [testOutputs, setTestOutputs] = useState({});
+      const [loadingRoute, setLoadingRoute] = useState(null);
 
-    function saveAuth() {
-      localStorage.setItem("upi_token", document.getElementById("global-token").value);
-      localStorage.setItem("upi_org", document.getElementById("global-org").value);
-    }
+      const handleTokenChange = (e) => {
+        setAuthToken(e.target.value);
+        localStorage.setItem("upi_token", e.target.value);
+      };
 
-    function loadAuth() {
-      var token = localStorage.getItem("upi_token");
-      var org = localStorage.getItem("upi_org");
-      if (token) document.getElementById("global-token").value = token;
-      if (org) document.getElementById("global-org").value = org;
-    }
+      const handleOrgChange = (e) => {
+        setOrgId(e.target.value);
+        localStorage.setItem("upi_org", e.target.value);
+      };
 
-    function setMethodFilter(method) {
-      currentMethodFilter = method;
-      document.querySelectorAll(".filter-btn").forEach(function(b) {
-        b.classList.toggle("active", b.innerText === method);
-      });
-      renderCards();
-    }
+      const toggleRoute = (id) => {
+        setExpandedRoutes(prev => ({ ...prev, [id]: !prev[id] }));
+      };
 
-    function filterRoutes() {
-      renderCards();
-    }
+      const currentVersionData = useMemo(() => {
+        return API_DATA.versions.find(v => v.id === selectedVersion) || API_DATA.versions[0];
+      }, [selectedVersion]);
 
-    function renderCards() {
-      var query = document.getElementById("route-search").value.toLowerCase();
-      var container = document.getElementById("routes-container");
-      container.innerHTML = "";
-
-      var filtered = API_ROUTES.filter(function(r) {
-        var matchesMethod = currentMethodFilter === "ALL" || r.method === currentMethodFilter;
-        var matchesQuery = r.path.toLowerCase().indexOf(query) !== -1 || 
-                             r.desc.toLowerCase().indexOf(query) !== -1 || 
-                             r.category.toLowerCase().indexOf(query) !== -1;
-        return matchesMethod && matchesQuery;
-      });
-
-      if (filtered.length === 0) {
-        container.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 3rem; color: var(--text-muted);">No matching endpoints found.</div>';
-        return;
-      }
-
-      filtered.forEach(function(r, idx) {
-        var card = document.createElement("div");
-        card.className = "endpoint-card";
-        card.id = "card-" + idx;
-
-        var bodyStr = r.body ? JSON.stringify(r.body, null, 2) : "";
-
-        var headersHtml = "";
-        if (r.headers.length > 0) {
-          var headerRows = r.headers.map(function(h) {
-            return '<tr><td>' + h.name + ' ' + (h.req ? '<span class="req-tag">*</span>' : '') + '</td><td class="desc">' + h.desc + '</td></tr>';
-          }).join("");
-          headersHtml = '<div class="spec-block"><div class="spec-title">Required Headers</div><table class="spec-table">' + headerRows + '</table></div>';
-        }
-
-        var paramsHtml = "";
-        if (r.params.length > 0) {
-          var paramRows = r.params.map(function(p) {
-            return '<tr><td>' + p.name + ' ' + (p.req ? '<span class="req-tag">*</span>' : '<span class="opt-tag">(opt)</span>') + '</td><td class="desc">' + p.desc + '</td></tr>';
-          }).join("");
-          paramsHtml = '<div class="spec-block"><div class="spec-title">Parameters</div><table class="spec-table">' + paramRows + '</table></div>';
-        }
-
-        var payloadHtml = "";
-        if (r.body) {
-          payloadHtml = '<div style="font-size: 0.72rem; color: var(--text-muted); margin-bottom: 0.35rem; font-weight: 600;">REQUEST BODY (JSON):</div>' +
-            '<textarea class="payload-editor" id="payload-' + idx + '">' + bodyStr + '</textarea>';
-        }
-
-        card.innerHTML = 
-          '<div class="card-header" onclick="toggleCard(' + idx + ')">' +
-            '<div class="endpoint-title">' +
-              '<span class="method-badge method-' + r.method + '">' + r.method + '</span>' +
-              '<span class="endpoint-path">' + r.path + '</span>' +
-            '</div>' +
-            '<div class="endpoint-meta">' +
-              '<span class="category-pill">' + r.category + '</span>' +
-              '<span class="toggle-icon">▼</span>' +
-            '</div>' +
-          '</div>' +
-          '<div class="card-body">' +
-            '<p class="endpoint-desc">' + r.desc + '</p>' +
-            '<div class="specs-grid">' +
-              headersHtml +
-              paramsHtml +
-            '</div>' +
-            '<div class="tester-panel">' +
-              '<div class="tester-header">' +
-                '<span>Interactive Request Runner</span>' +
-                '<span style="font-size: 0.7rem; color: var(--text-muted);">' + (r.auth ? '🔒 Requires Bearer Token' : '🌐 Public Endpoint') + '</span>' +
-              '</div>' +
-              payloadHtml +
-              '<div class="test-actions">' +
-                '<button class="btn-send" id="btn-send-' + idx + '" onclick="executeRequest(' + idx + ')">' +
-                  '<span>Send Request</span> <span style="font-size: 0.7rem;">▶</span>' +
-                '</button>' +
-                '<span id="loader-' + idx + '" style="display: none; font-size: 0.75rem; color: var(--cyan);">Running...</span>' +
-              '</div>' +
-              '<div class="response-area" id="res-area-' + idx + '">' +
-                '<div class="response-meta">' +
-                  '<span id="res-status-' + idx + '"></span>' +
-                  '<span id="res-time-' + idx + '" style="color: var(--text-muted);"></span>' +
-                '</div>' +
-                '<pre class="response-viewer" id="res-body-' + idx + '"></pre>' +
-              '</div>' +
-            '</div>' +
-          '</div>';
-
-        container.appendChild(card);
-      });
-    }
-
-    function toggleCard(idx) {
-      var card = document.getElementById("card-" + idx);
-      card.classList.toggle("open");
-    }
-
-    function executeRequest(idx) {
-      var r = API_ROUTES[idx];
-      var btn = document.getElementById("btn-send-" + idx);
-      var loader = document.getElementById("loader-" + idx);
-      var resArea = document.getElementById("res-area-" + idx);
-      var resStatus = document.getElementById("res-status-" + idx);
-      var resTime = document.getElementById("res-time-" + idx);
-      var resBody = document.getElementById("res-body-" + idx);
-
-      btn.disabled = true;
-      loader.style.display = "inline";
-      resArea.classList.remove("active");
-
-      var resolvedPath = r.path;
-      var orgId = document.getElementById("global-org").value.trim() || "org_demo123";
-      resolvedPath = resolvedPath.replace(":id", orgId).replace(":provider", "RAZORPAY");
-
-      var headers = {};
-      var token = document.getElementById("global-token").value.trim();
-      if (token) {
-        headers["Authorization"] = token.indexOf("Bearer ") === 0 ? token : "Bearer " + token;
-      }
-      if (orgId) {
-        headers["X-Organization-Id"] = orgId;
-      }
-
-      var reqBody = null;
-      if (r.body) {
-        headers["Content-Type"] = "application/json";
-        var editor = document.getElementById("payload-" + idx);
-        try {
-          reqBody = editor.value.trim();
-        } catch (e) {
-          alert("Invalid JSON format in request payload");
-          btn.disabled = false;
-          loader.style.display = "none";
-          return;
-        }
-      }
-
-      var start = performance.now();
-      fetch(resolvedPath, {
-        method: r.method,
-        headers: headers,
-        body: reqBody
-      }).then(function(response) {
-        var duration = Math.round(performance.now() - start);
-        return response.json().catch(function() { return { statusText: response.statusText }; }).then(function(data) {
-          resArea.classList.add("active");
-          resStatus.innerText = response.status + " " + response.statusText;
-          resStatus.className = response.ok ? "res-status-200" : (response.status < 500 ? "res-status-400" : "res-status-500");
-          resTime.innerText = duration + " ms";
-          resBody.innerText = JSON.stringify(data, null, 2);
+      const allRoutes = useMemo(() => {
+        const routes = [];
+        API_DATA.versions.forEach(ver => {
+          ver.modules.forEach(mod => {
+            mod.routes.forEach(r => {
+              routes.push({ ...r, versionId: ver.id, moduleName: mod.name, moduleId: mod.id });
+            });
+          });
         });
-      }).catch(function(err) {
-        var duration = Math.round(performance.now() - start);
-        resArea.classList.add("active");
-        resStatus.innerText = "Network / Client Error";
-        resStatus.className = "res-status-500";
-        resTime.innerText = duration + " ms";
-        resBody.innerText = err.message;
-      }).finally(function() {
-        btn.disabled = false;
-        loader.style.display = "none";
-      });
+        return routes;
+      }, []);
+
+      const filteredRoutes = useMemo(() => {
+        return allRoutes.filter(r => {
+          const matchVersion = selectedVersion === "ALL" || r.versionId === selectedVersion;
+          const matchModule = !selectedModule || r.moduleId === selectedModule;
+          const matchMethod = methodFilter === "ALL" || r.method === methodFilter;
+          const matchQuery = !searchQuery || 
+            r.path.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            r.summary.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            r.desc.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            r.moduleName.toLowerCase().includes(searchQuery.toLowerCase());
+          return matchVersion && matchModule && matchMethod && matchQuery;
+        });
+      }, [allRoutes, selectedVersion, selectedModule, methodFilter, searchQuery]);
+
+      const executeTest = async (r) => {
+        setLoadingRoute(r.id);
+        const resolvedOrg = orgId.trim() || "org_demo123";
+        let targetPath = r.path.replace(":id", resolvedOrg).replace(":provider", "RAZORPAY");
+
+        const headers = {};
+        if (r.headers) {
+          r.headers.forEach(h => {
+            if (h.name === "Content-Type") headers["Content-Type"] = h.val;
+          });
+        }
+        if (authToken.trim()) {
+          headers["Authorization"] = authToken.startsWith("Bearer ") ? authToken : "Bearer " + authToken;
+        }
+        if (resolvedOrg) {
+          headers["X-Organization-Id"] = resolvedOrg;
+        }
+
+        let body = null;
+        if (r.body) {
+          headers["Content-Type"] = "application/json";
+          const editor = document.getElementById("payload-" + r.id);
+          body = editor ? editor.value : JSON.stringify(r.body);
+        }
+
+        const start = performance.now();
+        try {
+          const res = await fetch(targetPath, {
+            method: r.method,
+            headers,
+            body
+          });
+          const duration = Math.round(performance.now() - start);
+          const json = await res.json().catch(() => ({ message: res.statusText }));
+          setTestOutputs(prev => ({
+            ...prev,
+            [r.id]: {
+              status: res.status + " " + res.statusText,
+              ok: res.ok,
+              time: duration,
+              data: json
+            }
+          }));
+        } catch (err) {
+          const duration = Math.round(performance.now() - start);
+          setTestOutputs(prev => ({
+            ...prev,
+            [r.id]: {
+              status: "Network Error",
+              ok: false,
+              time: duration,
+              data: { error: err.message }
+            }
+          }));
+        } finally {
+          setLoadingRoute(null);
+        }
+      };
+
+      return (
+        <div className="flex flex-col min-h-screen">
+          {/* Header Bar */}
+          <header className="sticky top-0 z-50 backdrop-blur-xl bg-gray-950/80 border-b border-gray-800/80 px-6 py-3.5">
+            <div className="max-w-[1600px] mx-auto flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-cyan-500 flex items-center justify-center font-extrabold text-xl shadow-lg shadow-indigo-500/20 text-white">
+                  ⚡
+                </div>
+                <div>
+                  <h1 className="text-base font-extrabold tracking-tight text-white flex items-center gap-2">
+                    UPI-Easy API Platform
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/30">React Console</span>
+                  </h1>
+                  <p className="text-xs text-gray-400">Cloudflare Workers • Multi-Tenant Hono • Version Tree Explorer</p>
+                </div>
+              </div>
+
+              {/* Status & Auth Config */}
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                  Worker Live
+                </div>
+
+                <div className="flex items-center gap-2 bg-black/40 border border-gray-800 rounded-lg px-3 py-1 text-xs">
+                  <span className="text-gray-400 font-medium">Auth Token:</span>
+                  <input
+                    type="password"
+                    placeholder="Bearer JWT..."
+                    value={authToken}
+                    onChange={handleTokenChange}
+                    className="bg-transparent font-mono text-gray-200 outline-none w-32 focus:w-48 transition-all"
+                  />
+                </div>
+
+                <div className="flex items-center gap-2 bg-black/40 border border-gray-800 rounded-lg px-3 py-1 text-xs">
+                  <span className="text-gray-400 font-medium">Org ID:</span>
+                  <input
+                    type="text"
+                    placeholder="org_..."
+                    value={orgId}
+                    onChange={handleOrgChange}
+                    className="bg-transparent font-mono text-gray-200 outline-none w-24 focus:w-36 transition-all"
+                  />
+                </div>
+              </div>
+            </div>
+          </header>
+
+          {/* Main Layout: Sidebar Tree + Content */}
+          <div className="max-w-[1600px] mx-auto w-full flex-1 flex flex-col md:flex-row gap-6 p-6">
+            {/* Version-Wise Tree Sidebar */}
+            <aside className="w-full md:w-80 shrink-0 flex flex-col gap-4">
+              <div className="bg-gray-900/60 backdrop-blur-md border border-gray-800/80 rounded-2xl p-4 sticky top-24">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-indigo-400">Version Tree</h3>
+                  <span className="text-xs font-mono bg-gray-800 text-gray-400 px-2 py-0.5 rounded-md">
+                    {filteredRoutes.length} endpoints
+                  </span>
+                </div>
+
+                {/* Version Selector Tabs */}
+                <div className="flex gap-1.5 p-1 bg-black/40 rounded-xl mb-4 border border-gray-800/60">
+                  {API_DATA.versions.map(v => (
+                    <button
+                      key={v.id}
+                      onClick={() => { setSelectedVersion(v.id); setSelectedModule(null); }}
+                      className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                        selectedVersion === v.id
+                          ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
+                          : "text-gray-400 hover:text-gray-200"
+                      }`}
+                    >
+                      {v.id.toUpperCase()}
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => { setSelectedVersion("ALL"); setSelectedModule(null); }}
+                    className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                      selectedVersion === "ALL"
+                        ? "bg-indigo-600 text-white shadow-md"
+                        : "text-gray-400 hover:text-gray-200"
+                    }`}
+                  >
+                    ALL
+                  </button>
+                </div>
+
+                {/* Tree Modules List */}
+                <div className="space-y-1 max-h-[calc(100vh-280px)] overflow-y-auto pr-1">
+                  <button
+                    onClick={() => setSelectedModule(null)}
+                    className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
+                      selectedModule === null
+                        ? "bg-indigo-500/10 text-indigo-300 border border-indigo-500/30"
+                        : "text-gray-400 hover:bg-gray-800/50 hover:text-gray-200"
+                    }`}
+                  >
+                    <span className="flex items-center gap-2">
+                      <span>📁</span> All Modules
+                    </span>
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-gray-800">
+                      {selectedVersion === "ALL" 
+                        ? allRoutes.length 
+                        : currentVersionData.modules.reduce((acc, m) => acc + m.routes.length, 0)}
+                    </span>
+                  </button>
+
+                  {(selectedVersion === "ALL" ? API_DATA.versions.flatMap(v => v.modules) : currentVersionData.modules).map(m => (
+                    <button
+                      key={m.id}
+                      onClick={() => setSelectedModule(selectedModule === m.id ? null : m.id)}
+                      className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
+                        selectedModule === m.id
+                          ? "bg-indigo-500/10 text-indigo-300 border border-indigo-500/30 font-semibold"
+                          : "text-gray-400 hover:bg-gray-800/50 hover:text-gray-200"
+                      }`}
+                    >
+                      <span className="flex items-center gap-2 truncate">
+                        <span>🏷️</span> {m.name}
+                      </span>
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-gray-800/80">
+                        {m.routes.length}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </aside>
+
+            {/* Main Content Area */}
+            <main className="flex-1 flex flex-col gap-6 min-w-0">
+              {/* Search & Filter Controls */}
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex-1 min-w-[280px] relative">
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search routes by path, method, name, or description..."
+                    className="w-full bg-gray-900/70 border border-gray-800 rounded-xl px-4 py-2.5 pl-10 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                  />
+                  <span className="absolute left-3.5 top-3 text-gray-500">🔍</span>
+                </div>
+
+                {/* HTTP Method Filter Pills */}
+                <div className="flex items-center gap-1.5 bg-gray-900/70 p-1 border border-gray-800 rounded-xl">
+                  {["ALL", "GET", "POST", "PATCH", "DELETE"].map(m => (
+                    <button
+                      key={m}
+                      onClick={() => setMethodFilter(m)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        methodFilter === m
+                          ? "bg-indigo-600 text-white shadow-sm"
+                          : "text-gray-400 hover:text-gray-200"
+                      }`}
+                    >
+                      {m}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Endpoints List */}
+              {filteredRoutes.length === 0 ? (
+                <div className="bg-gray-900/40 border border-gray-800 rounded-2xl p-12 text-center text-gray-400">
+                  <p className="text-base font-semibold">No API endpoints match your current filter.</p>
+                  <button 
+                    onClick={() => { setSearchQuery(""); setMethodFilter("ALL"); setSelectedModule(null); }}
+                    className="mt-3 text-xs text-indigo-400 hover:underline"
+                  >
+                    Reset all filters
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {filteredRoutes.map(r => {
+                    const isOpen = !!expandedRoutes[r.id];
+                    const testResult = testOutputs[r.id];
+                    const isLoading = loadingRoute === r.id;
+
+                    const methodColor = {
+                      GET: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30",
+                      POST: "bg-indigo-500/10 text-indigo-400 border-indigo-500/30",
+                      PATCH: "bg-amber-500/10 text-amber-400 border-amber-500/30",
+                      DELETE: "bg-rose-500/10 text-rose-400 border-rose-500/30"
+                    }[r.method] || "bg-gray-800 text-gray-300";
+
+                    return (
+                      <div 
+                        key={r.id}
+                        className="bg-gray-900/60 backdrop-blur-md border border-gray-800/80 hover:border-gray-700/80 rounded-2xl overflow-hidden transition-all shadow-sm"
+                      >
+                        {/* Header Row */}
+                        <div 
+                          onClick={() => toggleRoute(r.id)}
+                          className="p-4 flex flex-wrap items-center justify-between gap-3 cursor-pointer select-none"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <span className={`px-2.5 py-1 rounded-md text-xs font-mono font-bold border ${methodColor}`}>
+                              {r.method}
+                            </span>
+                            <span className="font-mono text-sm font-semibold text-gray-100 truncate">
+                              {r.path}
+                            </span>
+                            <span className="text-xs text-gray-400 hidden sm:inline">
+                              • {r.summary}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <span className="text-[11px] font-semibold text-gray-400 bg-gray-800/70 px-2 py-0.5 rounded">
+                              {r.moduleName}
+                            </span>
+                            <span className="text-xs text-gray-500 transition-transform duration-200">
+                              {isOpen ? "▲" : "▼"}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Collapsible Details & Console */}
+                        {isOpen && (
+                          <div className="p-5 border-t border-gray-800/80 bg-black/20 space-y-4">
+                            <p className="text-sm text-gray-300">{r.desc}</p>
+
+                            {/* Props & Parameters */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              {r.headers.length > 0 && (
+                                <div className="bg-black/40 border border-gray-800 rounded-xl p-3.5">
+                                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Required Headers</h4>
+                                  <ul className="space-y-1.5 text-xs font-mono">
+                                    {r.headers.map((h, i) => (
+                                      <li key={i} className="flex justify-between">
+                                        <span className="text-indigo-300 font-semibold">{h.name}</span>
+                                        <span className="text-gray-400">{h.val}</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+
+                              {r.params.length > 0 && (
+                                <div className="bg-black/40 border border-gray-800 rounded-xl p-3.5">
+                                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">URL Parameters</h4>
+                                  <ul className="space-y-1.5 text-xs font-mono">
+                                    {r.params.map((p, i) => (
+                                      <li key={i} className="flex justify-between">
+                                        <span className="text-cyan-300">{p.name} {p.req ? <span className="text-rose-400">*</span> : ""}</span>
+                                        <span className="text-gray-400">{p.desc}</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Testing Console */}
+                            <div className="border border-gray-800/90 rounded-xl p-4 bg-gray-950/70 space-y-3">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-bold text-cyan-400 uppercase tracking-wider">Live Request Runner</span>
+                                <span className="text-xs text-gray-400 font-mono">
+                                  {r.auth ? "🔒 Protected (" + r.role + ")" : "🌐 Public"}
+                                </span>
+                              </div>
+
+                              {r.body && (
+                                <div>
+                                  <label className="text-[11px] font-semibold text-gray-400 mb-1 block">Request Body (JSON):</label>
+                                  <textarea
+                                    id={"payload-" + r.id}
+                                    defaultValue={JSON.stringify(r.body, null, 2)}
+                                    rows="4"
+                                    className="w-full bg-black/60 border border-gray-800 rounded-lg p-2.5 font-mono text-xs text-indigo-200 outline-none focus:border-indigo-500 transition-colors"
+                                  />
+                                </div>
+                              )}
+
+                              <div className="flex items-center gap-3">
+                                <button
+                                  disabled={isLoading}
+                                  onClick={() => executeTest(r)}
+                                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 rounded-lg text-xs font-bold text-white transition-all shadow-md flex items-center gap-2"
+                                >
+                                  <span>{isLoading ? "Executing..." : "Send Request"}</span>
+                                  <span>▶</span>
+                                </button>
+                              </div>
+
+                              {/* Output Console */}
+                              {testResult && (
+                                <div className="mt-3 pt-3 border-t border-gray-800/80 space-y-2">
+                                  <div className="flex items-center gap-3 text-xs">
+                                    <span className={`font-bold ${testResult.ok ? "text-emerald-400" : "text-rose-400"}`}>
+                                      {testResult.status}
+                                    </span>
+                                    <span className="text-gray-400">{testResult.time} ms</span>
+                                  </div>
+                                  <pre className="bg-black/80 border border-gray-800/80 rounded-lg p-3 text-xs font-mono text-indigo-300 max-h-48 overflow-y-auto whitespace-pre-wrap word-break-all">
+                                    {JSON.stringify(testResult.data, null, 2)}
+                                  </pre>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </main>
+          </div>
+        </div>
+      );
     }
 
-    window.addEventListener("DOMContentLoaded", function() {
-      loadAuth();
-      renderCards();
-    });
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
   </script>
 </body>
 </html>

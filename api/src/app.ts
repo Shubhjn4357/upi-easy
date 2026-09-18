@@ -61,6 +61,29 @@ app.get("/health", (c) => {
   });
 });
 
+// API Routes Catalog
+app.get("/api/routes", (c) => {
+  return c.json({
+    service: "upi-easy-api",
+    versions: [
+      {
+        id: "v1",
+        name: "Version 1 (Production)",
+        basePath: "/api/v1",
+        modules: [
+          "auth", "organizations", "members", "accounts", "upi", "qr", "transactions", "sync", "notifications", "webhooks"
+        ]
+      },
+      {
+        id: "system",
+        name: "System & Core",
+        basePath: "/",
+        modules: ["health", "routes"]
+      }
+    ]
+  });
+});
+
 // Mount /api/v1 endpoints
 const v1 = new Hono<AppEnv>();
 
