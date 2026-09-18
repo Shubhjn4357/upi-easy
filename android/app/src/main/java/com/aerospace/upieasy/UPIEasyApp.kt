@@ -6,12 +6,7 @@ import androidx.work.*
 import com.aerospace.upieasy.core.sync.SyncWorker
 import java.util.concurrent.TimeUnit
 
-class UPIEasyApp : Application(), Configuration.Provider {
-
-    override val workManagerConfiguration: Configuration
-        get() = Configuration.Builder()
-            .setMinimumLoggingLevel(Log.INFO)
-            .build()
+class UPIEasyApp : Application() {
 
     override fun onCreate() {
         super.onCreate()

@@ -1,4 +1,4 @@
-﻿package com.aerospace.upieasy.feature.settings
+package com.aerospace.upieasy.feature.settings
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -131,7 +131,7 @@ fun SettingsScreen(
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = FailedRed)
             ) {
-                Icon(Icons.Default.Logout, contentDescription = null)
+                Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Sign Out", fontWeight = FontWeight.Bold)
             }

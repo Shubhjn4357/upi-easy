@@ -1,4 +1,4 @@
-﻿package com.aerospace.upieasy.feature.auth
+package com.aerospace.upieasy.feature.auth
 
 import android.content.Context
 import androidx.compose.foundation.BorderStroke
@@ -233,7 +233,7 @@ fun GoogleSignInScreen(
                                 fontWeight = FontWeight.Bold
                             )
                             Spacer(modifier = Modifier.width(8.dp))
-                            Icon(Icons.Default.ArrowForward, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, modifier = Modifier.size(18.dp))
                         }
                     }
                 }

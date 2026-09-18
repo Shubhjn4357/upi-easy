@@ -39,7 +39,7 @@ import kotlinx.coroutines.launch
 
 sealed class Screen(val route: String, val title: String, val icon: ImageVector) {
     data object Dashboard : Screen("dashboard", "Home", Icons.Default.Home)
-    data object Transactions : Screen("transactions", "Ledger", Icons.Default.ReceiptLong)
+    data object Transactions : Screen("transactions", "Ledger", Icons.AutoMirrored.Filled.ReceiptLong)
     data object Upi : Screen("upi", "UPI", Icons.Default.AccountBalanceWallet)
     data object Staff : Screen("staff", "Staff", Icons.Default.Group)
     data object Settings : Screen("settings", "More", Icons.Default.Settings)

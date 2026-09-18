@@ -1,4 +1,4 @@
-﻿package com.aerospace.upieasy.feature.dashboard
+package com.aerospace.upieasy.feature.dashboard
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -251,7 +251,7 @@ fun DashboardScreen(
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
                                 Icon(
-                                    Icons.Default.ReceiptLong,
+                                    Icons.AutoMirrored.Filled.ReceiptLong,
                                     contentDescription = null,
                                     tint = TextTertiary,
                                     modifier = Modifier.size(48.dp)
