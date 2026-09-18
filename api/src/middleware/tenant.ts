@@ -47,7 +47,7 @@ export const requireTenant: MiddlewareHandler<AppEnv> = async (c, next) => {
     .innerJoin(schema.permissions, eq(schema.rolePermissions.permissionId, schema.permissions.id))
     .where(eq(schema.rolePermissions.roleId, member.roleId))
     .all()
-    .map((p) => p.name);
+    .map((p: any) => p.name);
 
   c.set("organizationId", orgId);
   c.set("memberId", member.memberId);

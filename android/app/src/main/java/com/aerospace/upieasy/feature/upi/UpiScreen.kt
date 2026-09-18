@@ -1,4 +1,4 @@
-﻿package com.aerospace.upieasy.feature.upi
+package com.aerospace.upieasy.feature.upi
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -15,8 +15,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.aerospace.upieasy.core.database.AppDatabase
+import com.aerospace.upieasy.core.database.UpiAccountEntity
 import com.aerospace.upieasy.core.network.AddUpiRequest
 import com.aerospace.upieasy.core.network.NetworkClient
 import com.aerospace.upieasy.core.network.UpiAccountDto
@@ -31,9 +34,12 @@ fun UpiScreen(
     onNavigateToQrForVpa: (String, String) -> Unit
 ) {
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val database = remember { AppDatabase.getInstance(context) }
     val apiService = remember { NetworkClient.getApiService(sessionManager) }
     val currentOrgId by sessionManager.currentOrgIdFlow.collectAsState(initial = null)
 
+    val localAccounts by database.upiDao().getUpiAccountsFlow(currentOrgId ?: "").collectAsState(initial = emptyList())
     var upiList by remember { mutableStateOf<List<UpiAccountDto>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var showAddDialog by remember { mutableStateOf(false) }
@@ -45,10 +51,42 @@ fun UpiScreen(
                 try {
                     val res = apiService.getUpiAccounts(orgId)
                     if (res.isSuccessful && res.body()?.success == true) {
-                        upiList = res.body()?.upiAccounts ?: emptyList()
+                        val accounts = res.body()?.upiAccounts ?: emptyList()
+                        upiList = accounts
+                        val entities = accounts.map { dto ->
+                            UpiAccountEntity(
+                                id = dto.id,
+                                organizationId = orgId,
+                                vpa = dto.vpa,
+                                payeeName = dto.payeeName,
+                                merchantCategoryCode = dto.merchantCategoryCode,
+                                isDefault = dto.isDefault,
+                                status = dto.status,
+                                transactionCount = dto.transactionCount
+                            )
+                        }
+                        database.upiDao().insertUpiAccounts(entities)
                     }
                 } catch (_: Exception) {}
                 isLoading = false
+            }
+        }
+    }
+
+    val effectiveList = remember(upiList, localAccounts) {
+        if (upiList.isNotEmpty()) {
+            upiList
+        } else {
+            localAccounts.map { entity ->
+                UpiAccountDto(
+                    id = entity.id,
+                    vpa = entity.vpa,
+                    payeeName = entity.payeeName,
+                    merchantCategoryCode = entity.merchantCategoryCode,
+                    isDefault = entity.isDefault,
+                    status = entity.status,
+                    transactionCount = entity.transactionCount
+                )
             }
         }
     }
@@ -85,7 +123,7 @@ fun UpiScreen(
             Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = BrandAccent)
             }
-        } else if (upiList.isEmpty()) {
+        } else if (effectiveList.isEmpty()) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -116,7 +154,7 @@ fun UpiScreen(
                     .padding(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                items(upiList) { item ->
+                items(effectiveList) { item ->
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(16.dp),

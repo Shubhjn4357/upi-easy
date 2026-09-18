@@ -71,7 +71,7 @@ syncRouter.get("/:orgId/sync", requireTenant, async (c) => {
   return c.json({
     success: true,
     data: {
-      events: events.map((e) => ({
+      events: events.map((e: any) => ({
         sequence: e.sequence,
         id: e.id,
         eventType: e.eventType,

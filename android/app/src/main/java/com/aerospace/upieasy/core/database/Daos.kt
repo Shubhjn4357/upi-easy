@@ -1,4 +1,4 @@
-﻿package com.aerospace.upieasy.core.database
+package com.aerospace.upieasy.core.database
 
 import androidx.room.*
 import kotlinx.coroutines.flow.Flow
@@ -23,6 +23,9 @@ interface TransactionDao {
     @Query("UPDATE local_transactions SET status = :status WHERE id = :id")
     suspend fun updateStatus(id: String, status: String)
 
+    @Query("UPDATE local_transactions SET status = :status, referenceNumber = COALESCE(:referenceNumber, referenceNumber) WHERE id = :id")
+    suspend fun updateStatusAndRef(id: String, status: String, referenceNumber: String?)
+
     @Query("DELETE FROM local_transactions WHERE organizationId = :orgId")
     suspend fun clearTransactions(orgId: String)
 }
@@ -34,6 +37,18 @@ interface UpiDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertUpiAccounts(accounts: List<UpiAccountEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertUpiAccount(account: UpiAccountEntity)
+
+    @Query("UPDATE local_upi_accounts SET isDefault = 0 WHERE organizationId = :orgId")
+    suspend fun clearDefaultUpi(orgId: String)
+
+    @Query("UPDATE local_upi_accounts SET isDefault = 1 WHERE id = :id")
+    suspend fun setDefaultUpi(id: String)
+
+    @Query("DELETE FROM local_upi_accounts WHERE id = :id")
+    suspend fun deleteUpiAccount(id: String)
 
     @Query("DELETE FROM local_upi_accounts WHERE organizationId = :orgId")
     suspend fun clearUpiAccounts(orgId: String)

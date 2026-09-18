@@ -209,17 +209,32 @@ transactionsRouter.post(
         .run();
     }
 
-    // Outbox event for background notification and sync worker
+    // Outbox event for background notification and delta sync worker
     db.insert(schema.outboxEvents)
       .values({
         id: generateId("evt"),
         organizationId: orgId,
         eventType: "transaction.created",
         payloadJson: JSON.stringify({
+          id: txnId,
           transactionId: txnId,
+          organizationId: orgId,
+          bankAccountId: data.bankAccountId ?? null,
+          upiAccountId: data.upiAccountId ?? null,
+          type: data.type,
+          direction: data.direction,
           amount: data.amount,
-          payeeVpa: data.payeeVpa,
+          currency: "INR",
           status: initialStatus,
+          paymentMethod: "UPI",
+          referenceNumber: data.referenceNumber ?? null,
+          payerName: data.payerName ?? null,
+          payerVpa: data.payerVpa ?? null,
+          payeeName: data.payeeName,
+          payeeVpa: data.payeeVpa,
+          note: data.note ?? null,
+          occurredAt: now.getTime(),
+          createdAt: now.getTime(),
         }),
         status: "PENDING",
         createdAt: now,
@@ -242,3 +257,92 @@ transactionsRouter.post(
     );
   }
 );
+
+// Update transaction status (e.g. cash collected, manual verification, refund)
+transactionsRouter.patch(
+  "/:orgId/transactions/:id/status",
+  requireTenant,
+  requirePermission("transactions.refund"),
+  async (c) => {
+    const orgId = c.get("organizationId");
+    const txnId = c.req.param("id");
+    const body = await c.req.json();
+
+    const validator = z.object({
+      status: z.enum(["SUCCESS", "FAILED", "REFUNDED", "EXPIRED"]),
+      referenceNumber: z.string().optional(),
+      note: z.string().optional(),
+    });
+
+    const data = validator.parse(body);
+    const now = new Date();
+
+    const txn = db
+      .select()
+      .from(schema.transactions)
+      .where(and(eq(schema.transactions.id, txnId), eq(schema.transactions.organizationId, orgId)))
+      .get();
+
+    if (!txn) {
+      throw new NotFoundError("Transaction not found");
+    }
+
+    const previousStatus = txn.status;
+
+    db.update(schema.transactions)
+      .set({
+        status: data.status,
+        referenceNumber: data.referenceNumber ?? txn.referenceNumber,
+        note: data.note ?? txn.note,
+        updatedAt: now,
+      })
+      .where(eq(schema.transactions.id, txnId))
+      .run();
+
+    // Record transaction event
+    db.insert(schema.transactionEvents)
+      .values({
+        id: generateId("txnev"),
+        transactionId: txnId,
+        organizationId: orgId,
+        eventType: data.status === "SUCCESS" ? "transaction.success" : (data.status === "REFUNDED" ? "transaction.refunded" : "transaction.failed"),
+        previousStatus,
+        newStatus: data.status,
+        payloadJson: JSON.stringify({ referenceNumber: data.referenceNumber, note: data.note }),
+        createdAt: now,
+      })
+      .run();
+
+    // Outbox event for delta-sync
+    db.insert(schema.outboxEvents)
+      .values({
+        id: generateId("evt"),
+        organizationId: orgId,
+        eventType: "transaction.status_changed",
+        payloadJson: JSON.stringify({
+          id: txnId,
+          transactionId: txnId,
+          organizationId: orgId,
+          status: data.status,
+          previousStatus,
+          referenceNumber: data.referenceNumber ?? txn.referenceNumber,
+          updatedAt: now.getTime(),
+        }),
+        status: "PENDING",
+        createdAt: now,
+      })
+      .run();
+
+    return c.json({
+      success: true,
+      message: "Transaction status updated",
+      transaction: {
+        id: txnId,
+        status: data.status,
+        previousStatus,
+        referenceNumber: data.referenceNumber ?? txn.referenceNumber,
+      },
+    });
+  }
+);
+

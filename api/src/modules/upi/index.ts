@@ -119,6 +119,28 @@ upiRouter.post("/:orgId/upi", requireTenant, requirePermission("upi.manage"), as
     })
     .run();
 
+  // Outbox event for delta-sync
+  db.insert(schema.outboxEvents)
+    .values({
+      id: generateId("evt"),
+      organizationId: orgId,
+      eventType: "upi.created",
+      payloadJson: JSON.stringify({
+        id: upiId,
+        organizationId: orgId,
+        bankAccountId: data.bankAccountId ?? null,
+        vpa: data.vpa.toLowerCase(),
+        payeeName: data.payeeName,
+        merchantCategoryCode: data.merchantCategoryCode,
+        isDefault: data.isDefault,
+        status: "ACTIVE",
+        transactionCount: 0,
+      }),
+      status: "PENDING",
+      createdAt: now,
+    })
+    .run();
+
   return c.json(
     {
       success: true,
@@ -142,6 +164,7 @@ upiRouter.patch(
     const orgId = c.get("organizationId");
     const actorId = c.get("userId");
     const upiId = c.req.param("upiId");
+    const now = new Date();
 
     const target = db
       .select()
@@ -161,8 +184,25 @@ upiRouter.patch(
 
     // Set new default
     db.update(schema.upiAccounts)
-      .set({ isDefault: true, updatedAt: new Date() })
+      .set({ isDefault: true, updatedAt: now })
       .where(eq(schema.upiAccounts.id, upiId))
+      .run();
+
+    // Outbox event for delta-sync
+    db.insert(schema.outboxEvents)
+      .values({
+        id: generateId("evt"),
+        organizationId: orgId,
+        eventType: "upi.default_changed",
+        payloadJson: JSON.stringify({
+          organizationId: orgId,
+          upiId,
+          isDefault: true,
+          updatedAt: now.getTime(),
+        }),
+        status: "PENDING",
+        createdAt: now,
+      })
       .run();
 
     return c.json({ success: true, message: "Default UPI ID updated" });

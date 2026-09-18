@@ -2,6 +2,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("kotlin-kapt")
 }
 
 android {
@@ -86,6 +87,7 @@ dependencies {
     // Room Database
     implementation("androidx.room:room-runtime:2.6.1")
     implementation("androidx.room:room-ktx:2.6.1")
+    kapt("androidx.room:room-compiler:2.6.1")
 
     // DataStore Preferences
     implementation("androidx.datastore:datastore-preferences:1.1.1")

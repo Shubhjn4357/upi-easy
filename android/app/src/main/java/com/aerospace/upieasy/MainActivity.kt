@@ -52,7 +52,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         val sessionManager = SessionManager(applicationContext)
-        val database = AppDatabase.getInstance(applicationContext)
+        val database by lazy { AppDatabase.getInstance(applicationContext) }
 
         setContent {
             UPIEasyTheme {

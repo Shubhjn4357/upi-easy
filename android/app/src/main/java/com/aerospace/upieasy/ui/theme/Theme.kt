@@ -1,4 +1,4 @@
-﻿package com.aerospace.upieasy.ui.theme
+package com.aerospace.upieasy.ui.theme
 
 import android.app.Activity
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -38,7 +38,6 @@ fun UPIEasyTheme(
         SideEffect {
             val window = (view.context as? Activity)?.window
             window?.let {
-                it.statusBarColor = BackgroundLight.toArgb()
                 WindowCompat.getInsetsController(it, view).isAppearanceLightStatusBars = true
             }
         }

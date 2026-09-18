@@ -1,0 +1,170 @@
+import { describe, it, expect, beforeAll } from "vitest";
+import { app } from "../src/app.js";
+import { initDatabase, db } from "../src/db/index.js";
+import * as schema from "../src/db/schema/index.js";
+import { eq } from "drizzle-orm";
+import { createAccessToken } from "../src/lib/jwt.js";
+
+describe("Database Events & Dataset Seeding Tests", () => {
+  let authToken: string;
+  const orgId = "org_demo_store";
+  const userId = "usr_merchant_demo";
+
+  beforeAll(async () => {
+    initDatabase();
+    db.insert(schema.sessions).values({
+      id: "sess_demo_1",
+      userId,
+      deviceId: null,
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      isRevoked: false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }).onConflictDoNothing().run();
+
+    authToken = await createAccessToken({
+      sub: userId,
+      mobileNumber: "9876543210",
+      sessionId: "sess_demo_1",
+    });
+  });
+
+  it("should have seeded demo organization, bank, upi, and 12 transactions properly", async () => {
+    const org = db.select().from(schema.organizations).where(eq(schema.organizations.id, orgId)).get();
+    expect(org).toBeDefined();
+    expect(org.name).toBe("Sharma Kirana & General Store");
+
+    const upiAccounts = db.select().from(schema.upiAccounts).where(eq(schema.upiAccounts.organizationId, orgId)).all();
+    expect(upiAccounts.length).toBeGreaterThanOrEqual(2);
+
+    const txns = db.select().from(schema.transactions).where(eq(schema.transactions.organizationId, orgId)).all();
+    expect(txns.length).toBeGreaterThanOrEqual(12);
+
+    const outbox = db.select().from(schema.outboxEvents).where(eq(schema.outboxEvents.organizationId, orgId)).all();
+    expect(outbox.length).toBeGreaterThanOrEqual(12);
+  });
+
+  it("should stream outbox events via sync endpoint", async () => {
+    const res = await app.request(`/api/v1/organizations/${orgId}/sync?afterSequence=0&limit=50`, {
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+        "X-Organization-Id": orgId,
+      },
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.success).toBe(true);
+    expect(body.data.events.length).toBeGreaterThanOrEqual(12);
+    expect(body.data.latestSequence).toBeGreaterThan(0);
+
+    const firstEvent = body.data.events[0];
+    expect(firstEvent.sequence).toBeDefined();
+    expect(firstEvent.eventType).toBeDefined();
+    expect(firstEvent.payload).toBeDefined();
+  });
+
+  it("should emit proper outbox event with complete entity payload on transaction creation", async () => {
+    const res = await app.request(`/api/v1/organizations/${orgId}/transactions`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+        "X-Organization-Id": orgId,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        amount: 350.0,
+        payeeName: "Sharma Kirana Store",
+        payeeVpa: "sharma.store@okhdfcbank",
+        payerName: "Kunal Shah",
+        payerVpa: "kunal@cred",
+        note: "Premium Coffee beans",
+        referenceNumber: "428199999999",
+      }),
+    });
+
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.success).toBe(true);
+    const newTxnId = body.transaction.id;
+
+    // Check outbox event
+    const event = db
+      .select()
+      .from(schema.outboxEvents)
+      .where(eq(schema.outboxEvents.organizationId, orgId))
+      .all()
+      .find((e) => e.eventType === "transaction.created" && e.payloadJson.includes(newTxnId));
+
+    expect(event).toBeDefined();
+    const payload = JSON.parse(event!.payloadJson);
+    expect(payload.id).toBe(newTxnId);
+    expect(payload.amount).toBe(350.0);
+    expect(payload.payerName).toBe("Kunal Shah");
+    expect(payload.referenceNumber).toBe("428199999999");
+  });
+
+  it("should emit outbox event on transaction status change", async () => {
+    // Find an existing transaction
+    const txn = db.select().from(schema.transactions).where(eq(schema.transactions.organizationId, orgId)).get()!;
+
+    const res = await app.request(`/api/v1/organizations/${orgId}/transactions/${txn.id}/status`, {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+        "X-Organization-Id": orgId,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        status: "REFUNDED",
+        referenceNumber: "REFUND_TEST_101",
+        note: "Refund processed for test",
+      }),
+    });
+
+    expect(res.status).toBe(200);
+
+    const event = db
+      .select()
+      .from(schema.outboxEvents)
+      .where(eq(schema.outboxEvents.organizationId, orgId))
+      .all()
+      .find((e) => e.eventType === "transaction.status_changed" && e.payloadJson.includes(txn.id));
+
+    expect(event).toBeDefined();
+    const payload = JSON.parse(event!.payloadJson);
+    expect(payload.status).toBe("REFUNDED");
+  });
+
+  it("should emit outbox event on upi account creation", async () => {
+    const res = await app.request(`/api/v1/organizations/${orgId}/upi`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+        "X-Organization-Id": orgId,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        vpa: "test.upi@okhdfcbank",
+        payeeName: "Sharma Store Counter 3",
+        merchantCategoryCode: "5411",
+        isDefault: false,
+      }),
+    });
+
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    const upiId = body.upiAccount.id;
+
+    const event = db
+      .select()
+      .from(schema.outboxEvents)
+      .where(eq(schema.outboxEvents.organizationId, orgId))
+      .all()
+      .find((e) => e.eventType === "upi.created" && e.payloadJson.includes(upiId));
+
+    expect(event).toBeDefined();
+    const payload = JSON.parse(event!.payloadJson);
+    expect(payload.vpa).toBe("test.upi@okhdfcbank");
+  });
+});

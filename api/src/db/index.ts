@@ -4,6 +4,7 @@ import * as schema from "./schema/index.js";
 import { config } from "../config/index.js";
 import { logger } from "../lib/logger.js";
 import { eq } from "drizzle-orm";
+import { seedDemoMerchantData } from "./seed.js";
 
 const isPostgresUrl = config.DATABASE_URL.startsWith("postgres://") || config.DATABASE_URL.startsWith("postgresql://");
 const sqlitePath = (process.env.NODE_ENV === "test" || isPostgresUrl)
@@ -338,6 +339,7 @@ export function initDatabase() {
   try { sqlite.exec("ALTER TABLE users ADD COLUMN avatar_url TEXT"); } catch {}
 
   seedPermissionsAndRoles();
+  seedDemoMerchantData(db);
   logger.info("Database initialized with schema and seed data");
 }
 

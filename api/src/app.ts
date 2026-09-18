@@ -16,6 +16,7 @@ import { syncRouter } from "./modules/sync/index.js";
 import { auditRouter } from "./modules/audit/index.js";
 import { notificationsRouter } from "./modules/notifications/index.js";
 import { webhooksRouter } from "./modules/webhooks/index.js";
+import { seedDemoMerchantData } from "./db/seed.js";
 import { renderDashboardHtml } from "./dashboard/html.js";
 import type { AppEnv } from "./types/hono.js";
 
@@ -99,5 +100,11 @@ v1.route("/organizations", syncRouter);
 v1.route("/organizations", auditRouter);
 v1.route("/notifications", notificationsRouter);
 v1.route("/webhooks", webhooksRouter);
+
+// Development & Demo Seed Endpoint
+v1.post("/dev/seed", async (c) => {
+  seedDemoMerchantData();
+  return c.json({ success: true, message: "Demo merchant dataset seeded successfully" });
+});
 
 app.route("/api/v1", v1);

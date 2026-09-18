@@ -289,6 +289,38 @@ organizationsRouter.post("/setup", async (c) => {
     })
     .run();
 
+  // 9. Outbox events for delta-sync
+  db.insert(schema.outboxEvents)
+    .values([
+      {
+        id: generateId("evt"),
+        organizationId: orgId,
+        eventType: "organization.created",
+        payloadJson: JSON.stringify({ organizationId: orgId, name: data.businessName }),
+        status: "PENDING",
+        createdAt: now,
+      },
+      {
+        id: generateId("evt"),
+        organizationId: orgId,
+        eventType: "upi.created",
+        payloadJson: JSON.stringify({
+          id: upiId,
+          organizationId: orgId,
+          bankAccountId,
+          vpa: normalizedVpa,
+          payeeName: data.payeeName,
+          merchantCategoryCode: "5411",
+          isDefault: true,
+          status: "ACTIVE",
+          transactionCount: 0,
+        }),
+        status: "PENDING",
+        createdAt: now,
+      }
+    ])
+    .run();
+
   return c.json(
     {
       success: true,

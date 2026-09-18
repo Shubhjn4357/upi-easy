@@ -1,4 +1,4 @@
-﻿package com.aerospace.upieasy.data.repository
+package com.aerospace.upieasy.data.repository
 
 import com.aerospace.upieasy.core.database.AppDatabase
 import com.aerospace.upieasy.core.database.TransactionEntity
@@ -114,6 +114,7 @@ class TransactionRepository(
 
     private fun parseDate(isoString: String?): Long {
         if (isoString.isNullOrBlank()) return System.currentTimeMillis()
+        isoString.toLongOrNull()?.let { return it }
         return try {
             val format = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault())
             format.parse(isoString)?.time ?: System.currentTimeMillis()
