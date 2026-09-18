@@ -32,7 +32,7 @@ class AuthInterceptor(private val sessionManager: SessionManager) : Interceptor 
 object NetworkClient {
     // 10.0.2.2 points to host machine from Android Emulator.
     // For physical devices on local Wi-Fi, change to machine's LAN IP.
-    private const val DEFAULT_BASE_URL = "http://10.0.2.2:8080/"
+    private const val DEFAULT_BASE_URL = "https://upi-easy-api.aerospace.worker.dev/"
 
     @Volatile
     private var apiService: ApiService? = null

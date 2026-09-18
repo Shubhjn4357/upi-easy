@@ -10,14 +10,33 @@ const sqlitePath = (process.env.NODE_ENV === "test" || isPostgresUrl)
   ? (process.env.NODE_ENV === "test" ? "./upieasy.test.db" : "./upieasy.db")
   : config.DATABASE_URL.replace("file:", "");
 
-const sqlite = new Database(sqlitePath, { timeout: 15000 });
-sqlite.pragma("journal_mode = WAL");
-sqlite.pragma("foreign_keys = ON");
-sqlite.pragma("busy_timeout = 15000");
+let sqlite: any;
+let dbInstance: any;
 
-export const db = drizzle(sqlite, { schema });
+try {
+  sqlite = new Database(sqlitePath, { timeout: 15000 });
+  sqlite.pragma("journal_mode = WAL");
+  sqlite.pragma("foreign_keys = ON");
+  sqlite.pragma("busy_timeout = 15000");
+  dbInstance = drizzle(sqlite, { schema });
+} catch (err: any) {
+  console.warn("[UPI-Easy] SQLite/better-sqlite3 not available in this environment, using serverless fallback:", err?.message || err);
+  dbInstance = new Proxy({}, {
+    get(target, prop) {
+      return (...args: any[]) => {
+        throw new Error(`Database query (${String(prop)}) attempted but local SQLite native addon is not available in Cloudflare Workers isolate.`);
+      };
+    }
+  });
+}
+
+export const db = dbInstance;
 
 export function initDatabase() {
+  if (!sqlite) {
+    logger.warn("Skipping SQLite schema initialization (running in serverless isolate without local SQLite)");
+    return;
+  }
   // Ensure tables exist using raw DDL statements for zero-friction local/dev setup
   sqlite.exec(`
     CREATE TABLE IF NOT EXISTS users (
