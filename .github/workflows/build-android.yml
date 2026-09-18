@@ -44,7 +44,7 @@ jobs:
 
       - name: Build Android APKs (Debug & Release)
         working-directory: android
-        run: gradle assembleDebug assembleRelease --no-daemon
+        run: gradle assembleDebug --no-daemon
 
       - name: Upload APK Artifacts
         uses: actions/upload-artifact@v4
@@ -52,7 +52,6 @@ jobs:
           name: upi-easy-apks
           path: |
             android/app/build/outputs/apk/debug/*.apk
-            android/app/build/outputs/apk/release/*.apk
           retention-days: 14
 
       - name: Publish APKs to GitHub Release
@@ -63,7 +62,6 @@ jobs:
         run: |
           echo "Publishing APK assets to release $TAG_NAME..."
           gh release upload "$TAG_NAME" \
-            android/app/build/outputs/apk/release/app-release.apk \
             android/app/build/outputs/apk/debug/app-debug.apk \
             --clobber
 
