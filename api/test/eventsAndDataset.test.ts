@@ -167,4 +167,44 @@ describe("Database Events & Dataset Seeding Tests", () => {
     const payload = JSON.parse(event!.payloadJson);
     expect(payload.vpa).toBe("test.upi@okhdfcbank");
   });
+
+  it("should send notifications to all connected staff members when payment is received", async () => {
+    const paymentAmount = 3000.0;
+    const res = await app.request(`/api/v1/organizations/${orgId}/transactions`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+        "X-Organization-Id": orgId,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        amount: paymentAmount,
+        payeeName: "Sharma Kirana Store",
+        payeeVpa: "sharma.store@okhdfcbank",
+        payerName: "Rohan Varma",
+        payerVpa: "rohan@upi",
+        note: "Grocery Bill",
+        referenceNumber: "428198765432",
+      }),
+    });
+
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.success).toBe(true);
+
+    // Verify staff member (cashier) received the notification
+    const cashierNotifs = db
+      .select()
+      .from(schema.notifications)
+      .where(eq(schema.notifications.userId, "usr_cashier_demo"))
+      .all();
+
+    const paymentNotif = cashierNotifs.find(
+      (n) => n.title.includes("3,000") || n.message.includes("3,000")
+    );
+    expect(paymentNotif).toBeDefined();
+    expect(paymentNotif?.type).toBe("payment.received");
+    expect(paymentNotif?.title).toBe("Payment of ₹3,000 received");
+  });
 });
+

@@ -9,6 +9,7 @@ import { requireTenant } from "../../middleware/tenant.js";
 import { requirePermission } from "../../middleware/rbac.js";
 import { handleIdempotency } from "../../middleware/idempotency.js";
 import { NotFoundError, AppError } from "../../lib/errors.js";
+import { notifyOrganizationPayment } from "../notifications/service.js";
 import type { AppEnv } from "../../types/hono.js";
 
 export const transactionsRouter = new Hono<AppEnv>();
@@ -240,6 +241,19 @@ transactionsRouter.post(
         createdAt: now,
       })
       .run();
+
+    // Broadcast notification to all connected staff contacts
+    notifyOrganizationPayment(orgId, {
+      transactionId: txnId,
+      amount: data.amount,
+      direction: data.direction,
+      referenceNumber: data.referenceNumber ?? null,
+      payerName: data.payerName ?? null,
+      payerVpa: data.payerVpa ?? null,
+      payeeName: data.payeeName,
+      payeeVpa: data.payeeVpa,
+      occurredAt: now.getTime(),
+    });
 
     return c.json(
       {

@@ -110,6 +110,12 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
+                    val activePaymentAlert by com.aerotech.upieasy.core.util.PaymentAlertManager.activePaymentAlert.collectAsState()
+
+                    LaunchedEffect(Unit) {
+                        UPIEasyApp.triggerImmediateSync(applicationContext)
+                    }
+
                     NavHost(
                         navController = navController,
                         startDestination = resolvedStartDestination
@@ -169,6 +175,13 @@ class MainActivity : ComponentActivity() {
                                 onNavigateBack = { navController.popBackStack() }
                             )
                         }
+                    }
+
+                    activePaymentAlert?.let { alert ->
+                        com.aerotech.upieasy.ui.components.PaymentPopupDialog(
+                            alert = alert,
+                            onDismiss = { com.aerotech.upieasy.core.util.PaymentAlertManager.dismissAlert() }
+                        )
                     }
                 }
             }

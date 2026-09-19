@@ -126,30 +126,35 @@ class PaymentNotificationListenerService : NotificationListenerService() {
                 val txnEntity = TransactionEntity(
                     id = "txn_notif_${UUID.randomUUID().toString().replace("-", "").take(16)}",
                     organizationId = orgId,
-                    amount = amountInPaise,
-                    currency = "INR",
+                    bankAccountId = null,
+                    upiAccountId = null,
+                    type = "PAYMENT",
                     direction = "CREDIT",
+                    amount = amountDouble,
+                    currency = "INR",
                     status = "CONFIRMED",
-                    payerVpa = null,
-                    payerName = "UPI Customer",
-                    payeeVpa = null,
+                    paymentMethod = "UPI",
                     referenceNumber = rrn,
-                    occurredAt = System.currentTimeMillis()
+                    payerName = "UPI Customer",
+                    payerVpa = null,
+                    payeeName = sessionManager.currentOrgNameFlow.first() ?: "Merchant Store",
+                    payeeVpa = "merchant@upi",
+                    note = "Payment received via soundbox listener",
+                    occurredAt = System.currentTimeMillis(),
+                    syncStatus = "SYNCED"
                 )
 
                 // Save to offline Room database
                 database.transactionDao().insertTransaction(txnEntity)
                 Log.i(TAG, "Saved UPI payment from notification: ₹$amountDouble (RRN: $rrn)")
 
-                // Trigger voice soundbox announcement if enabled in settings
-                if (soundEnabled && isTtsReady) {
-                    val speechText = "Received ${amountDouble.toInt()} Rupees on UPI Easy"
-                    textToSpeech?.speak(speechText, TextToSpeech.QUEUE_FLUSH, null, "PAYMENT_ANNOUNCE")
-                }
-
-                // Show local in-app confirmation notification
-                showPaymentNotification(amountDouble, rrn)
-
+                // Trigger voice soundbox announcement, popup alert, and system notification
+                com.aerotech.upieasy.core.util.PaymentAlertManager.notifyPayment(
+                    context = applicationContext,
+                    amount = amountDouble,
+                    payerName = "UPI Customer",
+                    referenceNumber = rrn
+                )
             } catch (e: Exception) {
                 Log.e(TAG, "Error processing UPI payment notification", e)
             }

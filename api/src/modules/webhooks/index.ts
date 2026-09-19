@@ -7,6 +7,7 @@ import { generateId, verifyHmac } from "../../lib/crypto.js";
 import { config } from "../../config/index.js";
 import { UnauthorizedError, AppError } from "../../lib/errors.js";
 import { logger } from "../../lib/logger.js";
+import { notifyOrganizationPayment } from "../notifications/service.js";
 
 export const webhooksRouter = new Hono();
 
@@ -127,15 +128,39 @@ webhooksRouter.post("/:provider", async (c) => {
         organizationId: txn.organizationId,
         eventType: status === "SUCCESS" ? "transaction.reconciled" : "transaction.failed",
         payloadJson: JSON.stringify({
+          id: txn.id,
           transactionId: txn.id,
+          organizationId: txn.organizationId,
           amount: txn.amount,
-          status,
-          referenceNumber: refNum,
+          direction: txn.direction || "CREDIT",
+          status: status === "SUCCESS" ? "CONFIRMED" : "FAILED",
+          currency: "INR",
+          paymentMethod: "UPI",
+          referenceNumber: refNum ?? txn.referenceNumber,
+          payerName: txn.payerName ?? "UPI Customer",
+          payerVpa: txn.payerVpa ?? null,
+          payeeName: txn.payeeName,
+          payeeVpa: txn.payeeVpa,
+          occurredAt: now.getTime(),
         }),
         status: "PENDING",
         createdAt: now,
       })
       .run();
+
+    if (status === "SUCCESS") {
+      notifyOrganizationPayment(txn.organizationId, {
+        transactionId: txn.id,
+        amount: txn.amount,
+        direction: txn.direction || "CREDIT",
+        referenceNumber: refNum ?? txn.referenceNumber,
+        payerName: txn.payerName ?? "UPI Customer",
+        payerVpa: txn.payerVpa ?? null,
+        payeeName: txn.payeeName,
+        payeeVpa: txn.payeeVpa,
+        occurredAt: now.getTime(),
+      });
+    }
 
     // Mark webhook as processed
     db.update(schema.providerWebhooks)

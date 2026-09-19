@@ -43,19 +43,26 @@ class SyncWorker(
                             "transaction.created" -> {
                                 val txnId = obj.get("id")?.asString ?: obj.get("transactionId")?.asString ?: ""
                                 if (txnId.isNotBlank()) {
+                                    val existing = database.transactionDao().getTransactionById(txnId)
+                                    val direction = obj.get("direction")?.asString ?: "RECEIVED"
+                                    val status = obj.get("status")?.asString ?: "PENDING"
+                                    val amount = obj.get("amount")?.asDouble ?: 0.0
+                                    val payerName = if (obj.has("payerName") && !obj.get("payerName").isJsonNull) obj.get("payerName").asString else null
+                                    val refNum = if (obj.has("referenceNumber") && !obj.get("referenceNumber").isJsonNull) obj.get("referenceNumber").asString else null
+
                                     val entity = TransactionEntity(
                                         id = txnId,
                                         organizationId = obj.get("organizationId")?.asString ?: orgId,
                                         bankAccountId = if (obj.has("bankAccountId") && !obj.get("bankAccountId").isJsonNull) obj.get("bankAccountId").asString else null,
                                         upiAccountId = if (obj.has("upiAccountId") && !obj.get("upiAccountId").isJsonNull) obj.get("upiAccountId").asString else null,
                                         type = obj.get("type")?.asString ?: "PAYMENT",
-                                        direction = obj.get("direction")?.asString ?: "RECEIVED",
-                                        amount = obj.get("amount")?.asDouble ?: 0.0,
+                                        direction = direction,
+                                        amount = amount,
                                         currency = obj.get("currency")?.asString ?: "INR",
-                                        status = obj.get("status")?.asString ?: "PENDING",
+                                        status = status,
                                         paymentMethod = obj.get("paymentMethod")?.asString ?: "UPI",
-                                        referenceNumber = if (obj.has("referenceNumber") && !obj.get("referenceNumber").isJsonNull) obj.get("referenceNumber").asString else null,
-                                        payerName = if (obj.has("payerName") && !obj.get("payerName").isJsonNull) obj.get("payerName").asString else null,
+                                        referenceNumber = refNum,
+                                        payerName = payerName,
                                         payerVpa = if (obj.has("payerVpa") && !obj.get("payerVpa").isJsonNull) obj.get("payerVpa").asString else null,
                                         payeeName = obj.get("payeeName")?.asString ?: "",
                                         payeeVpa = obj.get("payeeVpa")?.asString ?: "",
@@ -64,6 +71,19 @@ class SyncWorker(
                                         syncStatus = "SYNCED"
                                     )
                                     database.transactionDao().insertTransaction(entity)
+
+                                    // If this is a new confirmed received payment, announce & notify
+                                    if (existing == null &&
+                                        (direction == "CREDIT" || direction == "RECEIVED") &&
+                                        (status == "CONFIRMED" || status == "SUCCESS")
+                                    ) {
+                                        com.aerotech.upieasy.core.util.PaymentAlertManager.notifyPayment(
+                                            context = applicationContext,
+                                            amount = amount,
+                                            payerName = payerName,
+                                            referenceNumber = refNum
+                                        )
+                                    }
                                 }
                             }
 
@@ -72,7 +92,24 @@ class SyncWorker(
                                 val status = obj.get("status")?.asString ?: "PENDING"
                                 val ref = if (obj.has("referenceNumber") && !obj.get("referenceNumber").isJsonNull) obj.get("referenceNumber").asString else null
                                 if (txnId.isNotBlank()) {
+                                    val existing = database.transactionDao().getTransactionById(txnId)
                                     database.transactionDao().updateStatusAndRef(txnId, status, ref)
+
+                                    if ((existing == null || (existing.status != "CONFIRMED" && existing.status != "SUCCESS")) &&
+                                        (status == "CONFIRMED" || status == "SUCCESS")
+                                    ) {
+                                        val amt = existing?.amount ?: obj.get("amount")?.asDouble ?: 0.0
+                                        val payer = existing?.payerName ?: if (obj.has("payerName") && !obj.get("payerName").isJsonNull) obj.get("payerName").asString else null
+                                        val finalRef = ref ?: existing?.referenceNumber
+                                        if (amt > 0.0) {
+                                            com.aerotech.upieasy.core.util.PaymentAlertManager.notifyPayment(
+                                                context = applicationContext,
+                                                amount = amt,
+                                                payerName = payer,
+                                                referenceNumber = finalRef
+                                            )
+                                        }
+                                    }
                                 }
                             }
 
