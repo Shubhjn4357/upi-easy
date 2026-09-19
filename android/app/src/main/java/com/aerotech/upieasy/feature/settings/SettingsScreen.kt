@@ -10,6 +10,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -55,6 +56,7 @@ fun SettingsScreen(
     val themeMode by sessionManager.themeModeFlow.collectAsState(initial = "SYSTEM")
 
     var showEditProfileBottomSheet by remember { mutableStateOf(false) }
+    var showSignOutConfirm by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     var isDeletingAccount by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -240,7 +242,7 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.height(14.dp))
 
                     SettingToggleRow(
-                        icon = Icons.Default.VolumeUp,
+                        icon = Icons.AutoMirrored.Filled.VolumeUp,
                         title = "Voice Payment Soundbox",
                         subtitle = "Instant voice announcement on incoming UPI credits",
                         checked = soundNotifications,
@@ -349,15 +351,7 @@ fun SettingsScreen(
 
             // Sign Out Button
             OutlinedButton(
-                onClick = {
-                    scope.launch {
-                        sessionManager.clearSession()
-                        withContext(Dispatchers.IO) {
-                            database.clearAllTables()
-                        }
-                        onLogout()
-                    }
-                },
+                onClick = { showSignOutConfirm = true },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp),
@@ -564,6 +558,57 @@ fun SettingsScreen(
                     onClick = { showDeleteDialog = false },
                     enabled = !isDeletingAccount
                 ) {
+                    Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        )
+    }
+
+    // Sign Out Confirmation Dialog
+    if (showSignOutConfirm) {
+        AlertDialog(
+            onDismissRequest = { showSignOutConfirm = false },
+            icon = {
+                Icon(
+                    Icons.AutoMirrored.Filled.Logout,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(32.dp)
+                )
+            },
+            title = {
+                Text(
+                    text = "Sign Out?",
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            },
+            text = {
+                Text(
+                    text = "Are you sure you want to sign out from UPI-Easy on this device? Your offline data will be cleared.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showSignOutConfirm = false
+                        scope.launch {
+                            sessionManager.clearSession()
+                            withContext(Dispatchers.IO) {
+                                database.clearAllTables()
+                            }
+                            onLogout()
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                ) {
+                    Text("Sign Out", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSignOutConfirm = false }) {
                     Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }

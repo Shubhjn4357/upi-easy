@@ -45,15 +45,19 @@ membersRouter.post("/:orgId/staff/invite", requireTenant, requirePermission("sta
   const body = await c.req.json();
 
   const validator = z.object({
-    mobileNumber: z.string().regex(/^[6-9]\d{9}$/).optional(),
-    email: z.string().email().optional(),
-    fullName: z.string().optional(),
+    mobileNumber: z.string().nullable().optional(),
+    email: z.string().nullable().optional(),
+    fullName: z.string().nullable().optional(),
     role: z.enum(["MANAGER", "CASHIER", "ACCOUNTANT"]),
-  }).refine((data) => data.mobileNumber || data.email, {
-    message: "Either mobileNumber or email must be provided",
+  }).refine((data) => (data.mobileNumber && data.mobileNumber.trim().length === 10) || (data.email && data.email.trim().includes("@")), {
+    message: "Either a valid 10-digit mobileNumber or email must be provided",
   });
 
-  const { mobileNumber, email, fullName, role } = validator.parse(body);
+  const parsed = validator.parse(body);
+  const mobileNumber = parsed.mobileNumber?.trim() ? parsed.mobileNumber.trim() : undefined;
+  const email = parsed.email?.trim() ? parsed.email.trim() : undefined;
+  const fullName = parsed.fullName?.trim() ? parsed.fullName.trim() : undefined;
+  const role = parsed.role;
 
   // Find target role
   const roleRecord = await db.select().from(schema.roles).where(eq(schema.roles.name, role)).get();

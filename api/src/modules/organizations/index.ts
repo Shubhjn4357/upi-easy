@@ -144,6 +144,44 @@ organizationsRouter.post("/", async (c) => {
   );
 });
 
+organizationsRouter.patch("/:orgId", requireTenant, async (c) => {
+  const orgId = c.get("organizationId");
+  const actorId = c.get("userId");
+  const body = await c.req.json();
+  const validator = z.object({
+    name: z.string().min(2, "Business name is required").optional(),
+    legalBusinessName: z.string().optional(),
+    category: z.string().optional(),
+  });
+  const data = validator.parse(body);
+  const now = new Date();
+
+  await db.update(schema.organizations)
+    .set({
+      ...(data.name ? { name: data.name } : {}),
+      ...(data.legalBusinessName !== undefined ? { legalBusinessName: data.legalBusinessName } : {}),
+      ...(data.category ? { category: data.category } : {}),
+      updatedAt: now,
+    })
+    .where(eq(schema.organizations.id, orgId))
+    .run();
+
+  await db.insert(schema.auditLogs)
+    .values({
+      id: generateId("aud"),
+      organizationId: orgId,
+      actorId,
+      action: "organization.updated",
+      resourceType: "organization",
+      resourceId: orgId,
+      metadataJson: JSON.stringify(data),
+      createdAt: now,
+    })
+    .run();
+
+  return c.json({ success: true, message: "Organization updated successfully" });
+});
+
 // Full App Setup Form (Business Name, Mobile, Primary UPI, Bank Account)
 organizationsRouter.post("/setup", async (c) => {
   const userId = c.get("userId");

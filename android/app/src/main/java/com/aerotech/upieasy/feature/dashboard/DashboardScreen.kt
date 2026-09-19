@@ -24,13 +24,13 @@ import com.aerotech.upieasy.core.network.NetworkClient
 import com.aerotech.upieasy.core.security.SessionManager
 import com.aerotech.upieasy.domain.model.Transaction
 import com.aerotech.upieasy.ui.components.MetricCard
+import com.aerotech.upieasy.ui.components.PayouHeroCard
+import com.aerotech.upieasy.ui.components.PayouQuickActionButton
+import com.aerotech.upieasy.ui.components.PayouTopBar
 import com.aerotech.upieasy.ui.components.TransactionRow
 import com.aerotech.upieasy.ui.theme.*
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
-import java.util.*
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardScreen(
     sessionManager: SessionManager,
@@ -43,151 +43,118 @@ fun DashboardScreen(
     val apiService = remember { NetworkClient.getApiService(sessionManager) }
 
     val currentOrgId by sessionManager.currentOrgIdFlow.collectAsState(initial = null)
-    val currentOrgName by sessionManager.currentOrgNameFlow.collectAsState(initial = "My Business")
+    val currentOrgName by sessionManager.currentOrgNameFlow.collectAsState(initial = "UPI-Easy Store")
+    val userName by sessionManager.userNameFlow.collectAsState(initial = "Merchant")
 
     var dashboardData by remember { mutableStateOf<DashboardDto?>(null) }
     var isLoading by remember { mutableStateOf(true) }
 
-    LaunchedEffect(currentOrgId) {
+    fun refresh() {
         currentOrgId?.let { orgId ->
             isLoading = true
-            try {
-                val res = apiService.getDashboard(orgId)
-                if (res.isSuccessful && res.body()?.success == true) {
-                    dashboardData = res.body()?.dashboard
+            scope.launch {
+                try {
+                    val res = apiService.getDashboard(orgId)
+                    if (res.isSuccessful && res.body()?.success == true) {
+                        dashboardData = res.body()?.dashboard
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                } finally {
+                    isLoading = false
                 }
-            } catch (_: Exception) {}
-            isLoading = false
+            }
         }
+    }
+
+    LaunchedEffect(currentOrgId) {
+        refresh()
     }
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text(
-                            text = currentOrgName ?: "Business Dashboard",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "Live Ledger & UPI Control",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = TextSecondary,
-                            fontSize = 12.sp
-                        )
-                    }
-                },
-                actions = {
-                    IconButton(onClick = onNavigateToScan) {
-                        Icon(Icons.Default.QrCodeScanner, contentDescription = "Scan QR", tint = BrandAccent)
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
+            PayouTopBar(
+                brandTitle = "UPIEasy",
+                subtitle = currentOrgName ?: "Merchant Dashboard",
+                avatarInitial = (userName?.take(1) ?: "M").uppercase(),
+                onNotificationClick = { /* Notifications */ },
+                onProfileClick = { /* Settings / Profile */ }
             )
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
         if (isLoading) {
             Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = BrandAccent)
+                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
             }
         } else {
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding)
-                    .padding(horizontal = 16.dp),
+                    .padding(horizontal = 18.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
-                contentPadding = PaddingValues(bottom = 96.dp)
+                contentPadding = PaddingValues(bottom = 100.dp)
             ) {
-                // Primary Collection Card
+                // PayOu Inspired Hero Balance Card
                 item {
                     val receivedAmount = dashboardData?.todayReceived?.amount ?: 0.0
                     val receivedCount = dashboardData?.todayReceived?.count ?: 0
 
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(20.dp),
-                        colors = CardDefaults.cardColors(containerColor = BrandPrimary)
-                    ) {
-                        Column(modifier = Modifier.padding(20.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = "TODAY'S RECEIVED COLLECTION",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = TextTertiary,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(SuccessGreen.copy(alpha = 0.2f))
-                                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                                ) {
-                                    Text(
-                                        text = "+$receivedCount Txns",
-                                        color = SuccessGreen,
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
+                    PayouHeroCard(
+                        balance = receivedAmount,
+                        transactionCount = receivedCount,
+                        onShowQrClick = onNavigateToQr,
+                        onScanPayClick = onNavigateToScan,
+                        onHistoryClick = onNavigateToTransactions,
+                        onAddUpiClick = onNavigateToUpi
+                    )
+                }
 
-                            Spacer(modifier = Modifier.height(14.dp))
-
-                            Text(
-                                text = "₹${String.format("%,.2f", receivedAmount)}",
-                                style = MaterialTheme.typography.headlineLarge,
-                                color = SurfaceLight,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 34.sp
+                // Quick Action Grid (PayOu Inspired 4x2 Grid)
+                item {
+                    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceAround
+                        ) {
+                            PayouQuickActionButton(
+                                icon = Icons.Default.QrCode2,
+                                label = "Show QR",
+                                backgroundColor = PastelGreen,
+                                iconTint = PastelGreenIcon,
+                                onClick = onNavigateToQr,
+                                modifier = Modifier.weight(1f)
                             )
-
-                            Spacer(modifier = Modifier.height(18.dp))
-
-                            // Action Shortcuts
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                Button(
-                                    onClick = onNavigateToQr,
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .height(48.dp),
-                                    shape = RoundedCornerShape(14.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = BrandAccent, contentColor = Color.White)
-                                ) {
-                                    Icon(Icons.Default.QrCode, contentDescription = null, modifier = Modifier.size(20.dp))
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Show QR", fontWeight = FontWeight.Bold)
-                                }
-
-                                OutlinedButton(
-                                    onClick = onNavigateToScan,
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .height(48.dp),
-                                    shape = RoundedCornerShape(14.dp),
-                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
-                                    border = BorderStroke(1.5.dp, Color.White.copy(alpha = 0.6f))
-                                ) {
-                                    Icon(Icons.Default.QrCodeScanner, contentDescription = null, modifier = Modifier.size(20.dp))
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Scan Pay", fontWeight = FontWeight.Bold)
-                                }
-                            }
+                            PayouQuickActionButton(
+                                icon = Icons.Default.QrCodeScanner,
+                                label = "Scan Pay",
+                                backgroundColor = PastelBlue,
+                                iconTint = PastelBlueIcon,
+                                onClick = onNavigateToScan,
+                                modifier = Modifier.weight(1f)
+                            )
+                            PayouQuickActionButton(
+                                icon = Icons.Default.AccountBalanceWallet,
+                                label = "Add UPI",
+                                backgroundColor = PastelYellow,
+                                iconTint = PastelYellowIcon,
+                                onClick = onNavigateToUpi,
+                                modifier = Modifier.weight(1f)
+                            )
+                            PayouQuickActionButton(
+                                icon = Icons.AutoMirrored.Filled.ReceiptLong,
+                                label = "Ledger",
+                                backgroundColor = PastelPurple,
+                                iconTint = PastelPurpleIcon,
+                                onClick = onNavigateToTransactions,
+                                modifier = Modifier.weight(1f)
+                            )
                         }
                     }
                 }
 
-                // Grid Metrics (Pending, Failed, Active UPI) - Balanced and Strictly Aligned
+                // Grid Metrics (Pending, Failed, Active UPI)
                 item {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -236,23 +203,23 @@ fun DashboardScreen(
                             text = "Recent Transactions",
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
-                            color = TextPrimary
+                            color = MaterialTheme.colorScheme.onSurface
                         )
 
                         TextButton(onClick = onNavigateToTransactions) {
-                            Text("See All", color = BrandAccent, fontWeight = FontWeight.SemiBold)
+                            Text("See All", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
 
-                // Transactions List
+                // Recent Transactions List
                 val recent = dashboardData?.recentTransactions ?: emptyList()
                 if (recent.isEmpty()) {
                     item {
                         Card(
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(14.dp),
-                            colors = CardDefaults.cardColors(containerColor = SurfaceLight)
+                            shape = RoundedCornerShape(18.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                         ) {
                             Column(
                                 modifier = Modifier
@@ -263,19 +230,19 @@ fun DashboardScreen(
                                 Icon(
                                     Icons.AutoMirrored.Filled.ReceiptLong,
                                     contentDescription = null,
-                                    tint = TextTertiary,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                                     modifier = Modifier.size(48.dp)
                                 )
                                 Spacer(modifier = Modifier.height(12.dp))
                                 Text(
                                     text = "No recent transactions",
                                     style = MaterialTheme.typography.titleMedium,
-                                    color = TextSecondary
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 Text(
                                     text = "Incoming UPI payments will appear here in real time",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = TextTertiary
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                                 )
                             }
                         }
@@ -304,10 +271,6 @@ fun DashboardScreen(
                             )
                         )
                     }
-                }
-
-                item {
-                    Spacer(modifier = Modifier.height(24.dp))
                 }
             }
         }

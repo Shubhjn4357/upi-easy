@@ -291,100 +291,120 @@ fun FloatingGlassBottomBar(
     onNavigateToScan: () -> Unit,
     onItemClick: (Screen) -> Unit
 ) {
+    val leftItems = listOf(Screen.Dashboard, Screen.Transactions)
+    val rightItems = listOf(Screen.Upi, Screen.Settings)
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .navigationBarsPadding()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .padding(horizontal = 18.dp, vertical = 8.dp),
         contentAlignment = Alignment.Center
     ) {
         Surface(
             shape = RoundedCornerShape(32.dp),
-            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
             tonalElevation = 8.dp,
-            shadowElevation = 12.dp,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.18f)),
+            shadowElevation = 14.dp,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)),
             modifier = Modifier.fillMaxWidth()
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                items.forEach { screen ->
-                    val isSelected = currentRoute == screen.route
-                    val isHomeScreen = screen == Screen.Dashboard
-
-                    // If we're on the dashboard and looking at the home tab, change to Scan QR button style
-                    val showScanButton = isHomeScreen && isSelected
-
-                    val icon = if (showScanButton) Icons.Default.QrCodeScanner else screen.icon
-                    val title = if (showScanButton) "Scan QR" else screen.title
-
-                    val iconColor by animateColorAsState(
-                        targetValue = when {
-                            showScanButton -> Color.White
-                            isSelected -> MaterialTheme.colorScheme.primary
-                            else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                        },
-                        animationSpec = tween(250),
-                        label = "iconColor"
+                // Left 2 items: Home, Ledger
+                leftItems.forEach { screen ->
+                    BottomNavItem(
+                        screen = screen,
+                        isSelected = currentRoute == screen.route,
+                        onClick = { onItemClick(screen) }
                     )
-
-                    val pillBgColor by animateColorAsState(
-                        targetValue = when {
-                            showScanButton -> BrandAccent
-                            isSelected -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
-                            else -> Color.Transparent
-                        },
-                        animationSpec = tween(250),
-                        label = "pillBgColor"
-                    )
-
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(24.dp))
-                            .background(pillBgColor)
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null
-                            ) {
-                                if (showScanButton) {
-                                    onNavigateToScan()
-                                } else {
-                                    onItemClick(screen)
-                                }
-                            }
-                            .padding(
-                                horizontal = if (isSelected || showScanButton) 14.dp else 10.dp,
-                                vertical = 8.dp
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            Icon(
-                                imageVector = icon,
-                                contentDescription = title,
-                                tint = iconColor,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            AnimatedVisibility(visible = isSelected || showScanButton) {
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = title,
-                                    fontSize = 12.sp,
-                                    fontWeight = if (isSelected || showScanButton) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (showScanButton) Color.White else MaterialTheme.colorScheme.onSurface
-                                )
-                            }
-                        }
-                    }
                 }
+
+                // Center Elevated QR Action Button (PayOu style)
+                Box(
+                    modifier = Modifier
+                        .size(54.dp)
+                        .clip(CircleShape)
+                        .background(
+                            Brush.linearGradient(
+                                colors = listOf(Color(0xFF2563EB), Color(0xFF1D4ED8))
+                            )
+                        )
+                        .clickable { onNavigateToScan() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.QrCodeScanner,
+                        contentDescription = "Scan QR",
+                        tint = Color.White,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+
+                // Right 2 items: UPI, Settings/More
+                rightItems.forEach { screen ->
+                    BottomNavItem(
+                        screen = screen,
+                        isSelected = currentRoute == screen.route,
+                        onClick = { onItemClick(screen) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BottomNavItem(
+    screen: Screen,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    val iconColor by animateColorAsState(
+        targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
+        animationSpec = tween(200),
+        label = "iconColor"
+    )
+    val pillBgColor by animateColorAsState(
+        targetValue = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f) else Color.Transparent,
+        animationSpec = tween(200),
+        label = "pillBgColor"
+    )
+
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(20.dp))
+            .background(pillBgColor)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) { onClick() }
+            .padding(horizontal = if (isSelected) 12.dp else 8.dp, vertical = 6.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                imageVector = screen.icon,
+                contentDescription = screen.title,
+                tint = iconColor,
+                modifier = Modifier.size(20.dp)
+            )
+            AnimatedVisibility(visible = isSelected) {
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = screen.title,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
             }
         }
     }

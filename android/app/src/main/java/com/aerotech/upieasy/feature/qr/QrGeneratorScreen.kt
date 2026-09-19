@@ -5,22 +5,22 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.QrCode
-import androidx.compose.material.icons.filled.Receipt
-import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -35,32 +35,45 @@ import androidx.compose.ui.unit.sp
 import com.aerotech.upieasy.core.util.QrCodeGenerator
 import com.aerotech.upieasy.core.util.UpiPaymentDetails
 import com.aerotech.upieasy.core.util.UpiUriHelper
+import com.aerotech.upieasy.ui.components.PayouButton
 import com.aerotech.upieasy.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun QrGeneratorScreen(
-    initialVpa: String = "business@bank",
-    initialPayeeName: String = "Merchant Store",
+    initialVpa: String = "business@okhdfcbank",
+    initialPayeeName: String = "Hakuna matata",
     onNavigateBack: () -> Unit
 ) {
     val context = LocalContext.current
 
     var vpa by remember { mutableStateOf(initialVpa) }
     var payeeName by remember { mutableStateOf(initialPayeeName) }
+    var isSetAmountEnabled by remember { mutableStateOf(false) }
     var amountText by remember { mutableStateOf("") }
     var descriptionText by remember { mutableStateOf("") }
     var refNoText by remember { mutableStateOf("") }
 
-    val upiUri = remember(vpa, payeeName, amountText, descriptionText, refNoText) {
-        val amount = amountText.toDoubleOrNull()
+    // QR Theme Frame Color Palette (From Image 1)
+    val themeColors = listOf(
+        Pair("Emerald", Color(0xFF00C07F)),
+        Pair("RoyalBlue", Color(0xFF2563EB)),
+        Pair("SunsetYellow", Color(0xFFF59E0B)),
+        Pair("Purple", Color(0xFF8B5CF6)),
+        Pair("Pink", Color(0xFFEC4899)),
+        Pair("SlateDark", Color(0xFF0F172A))
+    )
+    var selectedThemeColor by remember { mutableStateOf(themeColors[0].second) }
+
+    val upiUri = remember(vpa, payeeName, isSetAmountEnabled, amountText, descriptionText, refNoText) {
+        val amount = if (isSetAmountEnabled) amountText.toDoubleOrNull() else null
         UpiUriHelper.buildUri(
             UpiPaymentDetails(
                 payeeVpa = vpa,
                 payeeName = payeeName,
                 amount = amount,
-                transactionNote = descriptionText.ifBlank { null },
-                referenceId = refNoText.ifBlank { null }
+                transactionNote = if (isSetAmountEnabled) descriptionText.ifBlank { null } else null,
+                referenceId = if (isSetAmountEnabled) refNoText.ifBlank { null } else null
             )
         )
     }
@@ -74,10 +87,24 @@ fun QrGeneratorScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Dynamic UPI QR Generator", fontWeight = FontWeight.Bold) },
+                title = { Text("Receive Payment", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    IconButton(
+                        onClick = {
+                            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                val amtStr = if (isSetAmountEnabled && amountText.isNotBlank()) " (₹$amountText)" else ""
+                                putExtra(Intent.EXTRA_TEXT, "Pay $payeeName$amtStr via UPI: $upiUri")
+                            }
+                            context.startActivity(Intent.createChooser(shareIntent, "Share Payment Link"))
+                        }
+                    ) {
+                        Icon(Icons.Default.Share, contentDescription = "Share", tint = MaterialTheme.colorScheme.primary)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
@@ -93,225 +120,296 @@ fun QrGeneratorScreen(
                 .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
-            // Real High-Resolution Dynamic QR Display Card
+            // Main QR Card (Image 1 Style)
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(24.dp),
+                shape = RoundedCornerShape(26.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(20.dp),
+                        .padding(22.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text(
-                        text = payeeName,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+                    // Payee Header Row (Avatar, Name, VPA, Copy Icon)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(46.dp)
+                                .clip(CircleShape)
+                                .background(selectedThemeColor.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = (payeeName.take(1)).uppercase(),
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 18.sp,
+                                color = selectedThemeColor
+                            )
+                        }
 
-                    Text(
-                        text = vpa,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.SemiBold
-                    )
+                        Spacer(modifier = Modifier.width(12.dp))
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = payeeName,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = vpa,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Icon(
+                                    imageVector = Icons.Default.ContentCopy,
+                                    contentDescription = "Copy VPA",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier
+                                        .size(14.dp)
+                                        .clickable {
+                                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                            clipboard.setPrimaryClip(ClipData.newPlainText("VPA", vpa))
+                                            Toast.makeText(context, "UPI ID copied", Toast.LENGTH_SHORT).show()
+                                        }
+                                )
+                            }
+                        }
+                    }
 
-                    // Real Dynamic Rendered QR Code
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    // QR Code Frame with Theme-Colored Rounded Border (Image 1)
                     Box(
                         modifier = Modifier
-                            .size(220.dp)
-                            .clip(RoundedCornerShape(16.dp))
+                            .size(230.dp)
+                            .clip(RoundedCornerShape(26.dp))
+                            .border(BorderStroke(5.dp, selectedThemeColor), RoundedCornerShape(26.dp))
                             .background(Color.White)
-                            .padding(10.dp),
+                            .padding(14.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         if (qrBitmap != null) {
                             Image(
                                 bitmap = qrBitmap.asImageBitmap(),
-                                contentDescription = "Dynamic NPCI UPI QR Code",
+                                contentDescription = "NPCI UPI QR Code",
                                 modifier = Modifier.fillMaxSize()
                             )
+                            // Centered mini wallet badge (from Image 1)
+                            Box(
+                                modifier = Modifier
+                                    .size(34.dp)
+                                    .clip(CircleShape)
+                                    .background(selectedThemeColor)
+                                    .border(BorderStroke(2.dp, Color.White), CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.AccountBalanceWallet,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
                         } else {
-                            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                            CircularProgressIndicator(color = selectedThemeColor)
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(14.dp))
+                    Spacer(modifier = Modifier.height(18.dp))
 
-                    if (amountText.isNotBlank()) {
+                    // Bank Account Info Pill (Image 1)
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.AccountBalance,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Receive money in verified UPI account",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+
+                    if (isSetAmountEnabled && amountText.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(10.dp))
                         Text(
                             text = "₹${amountText}",
                             style = MaterialTheme.typography.headlineLarge,
                             color = SuccessGreen,
                             fontWeight = FontWeight.ExtraBold
                         )
-                        Spacer(modifier = Modifier.height(4.dp))
-                    }
-
-                    if (descriptionText.isNotBlank()) {
-                        Text(
-                            text = "Note: $descriptionText",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                    }
-
-                    Surface(
-                        shape = RoundedCornerShape(20.dp),
-                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
-                    ) {
-                        Text(
-                            text = "SCAN & PAY VIA ANY UPI APP",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
-                        )
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(18.dp))
 
-            // Custom Amount Input
-            OutlinedTextField(
-                value = amountText,
-                onValueChange = { amountText = it.filter { char -> char.isDigit() || char == '.' } },
-                label = { Text("Custom Amount") },
-                placeholder = { Text("0.00") },
-                prefix = { Text("₹ ", fontWeight = FontWeight.Bold) },
-                trailingIcon = {
-                    if (amountText.isNotEmpty()) {
-                        IconButton(onClick = { amountText = "" }) {
-                            Icon(Icons.Default.Close, contentDescription = "Clear Amount")
-                        }
-                    }
-                },
-                singleLine = true,
+            // Color Theme Palette Dots (From Image 1)
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(14.dp)
-            )
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Quick Amount Suggestion Chips
-            LazyRow(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                items(quickAmounts) { amt ->
-                    SuggestionChip(
-                        onClick = {
-                            val current = amountText.toDoubleOrNull() ?: 0.0
-                            amountText = String.format("%.0f", current + amt)
-                        },
-                        label = { Text("+₹$amt", fontWeight = FontWeight.SemiBold) },
-                        shape = RoundedCornerShape(18.dp)
+                themeColors.forEach { (_, color) ->
+                    val isSelected = selectedThemeColor == color
+                    Box(
+                        modifier = Modifier
+                            .padding(horizontal = 6.dp)
+                            .size(if (isSelected) 36.dp else 28.dp)
+                            .clip(CircleShape)
+                            .background(color)
+                            .clickable { selectedThemeColor = color }
+                            .then(
+                                if (isSelected) Modifier.border(BorderStroke(3.dp, MaterialTheme.colorScheme.background), CircleShape)
+                                else Modifier
+                            )
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(18.dp))
 
-            // Description / Note Input
-            OutlinedTextField(
-                value = descriptionText,
-                onValueChange = { descriptionText = it },
-                label = { Text("Description / Item Note (Optional)") },
-                placeholder = { Text("e.g. Table 4 Order, Groceries, Billing") },
-                leadingIcon = {
-                    Icon(Icons.Default.Description, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                },
-                trailingIcon = {
-                    if (descriptionText.isNotEmpty()) {
-                        IconButton(onClick = { descriptionText = "" }) {
-                            Icon(Icons.Default.Close, contentDescription = "Clear Note")
-                        }
-                    }
-                },
-                singleLine = true,
+            // Set Amount Toggle Switch (From Image 1)
+            Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(14.dp)
-            )
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            // Reference No / Bill No Input
-            OutlinedTextField(
-                value = refNoText,
-                onValueChange = { refNoText = it },
-                label = { Text("Bill / Order Reference No. (Optional)") },
-                placeholder = { Text("e.g. INV-2026-001") },
-                leadingIcon = {
-                    Icon(Icons.Default.Receipt, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                },
-                trailingIcon = {
-                    if (refNoText.isNotEmpty()) {
-                        IconButton(onClick = { refNoText = "" }) {
-                            Icon(Icons.Default.Close, contentDescription = "Clear Ref")
-                        }
-                    }
-                },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(14.dp)
-            )
-
-            Spacer(modifier = Modifier.height(22.dp))
-
-            // Action Buttons: Copy Link & Share
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
             ) {
-                OutlinedButton(
-                    onClick = {
-                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                        val clip = ClipData.newPlainText("UPI Payment URI", upiUri)
-                        clipboard.setPrimaryClip(clip)
-                        Toast.makeText(context, "UPI payment link copied", Toast.LENGTH_SHORT).show()
-                    },
+                Row(
                     modifier = Modifier
-                        .weight(1f)
-                        .height(50.dp),
-                    shape = RoundedCornerShape(14.dp)
+                        .fillMaxWidth()
+                        .padding(horizontal = 18.dp, vertical = 14.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Copy Link", fontWeight = FontWeight.Bold)
-                }
+                    Column {
+                        Text(
+                            text = "Set Amount",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Lock a fixed amount & description on QR",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
 
-                Button(
-                    onClick = {
-                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                            type = "text/plain"
-                            val amtStr = if (amountText.isNotBlank()) " (₹$amountText)" else ""
-                            val noteStr = if (descriptionText.isNotBlank()) " - $descriptionText" else ""
-                            putExtra(Intent.EXTRA_TEXT, "Pay $payeeName$amtStr$noteStr via UPI:\n$upiUri")
-                        }
-                        context.startActivity(Intent.createChooser(shareIntent, "Share UPI QR Payment Link"))
-                    },
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(50.dp),
-                    shape = RoundedCornerShape(14.dp)
-                ) {
-                    Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Share QR", fontWeight = FontWeight.Bold)
+                    Switch(
+                        checked = isSetAmountEnabled,
+                        onCheckedChange = { isSetAmountEnabled = it },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = SuccessGreen
+                        )
+                    )
                 }
             }
+
+            // Expandable Inputs when Set Amount is active
+            AnimatedVisibility(visible = isSetAmountEnabled) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 14.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    OutlinedTextField(
+                        value = amountText,
+                        onValueChange = { amountText = it.filter { char -> char.isDigit() || char == '.' } },
+                        label = { Text("Custom Amount") },
+                        placeholder = { Text("0.00") },
+                        prefix = { Text("₹ ", fontWeight = FontWeight.Bold) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp)
+                    )
+
+                    // Quick Amounts Row
+                    LazyRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(quickAmounts) { amt ->
+                            SuggestionChip(
+                                onClick = {
+                                    val current = amountText.toDoubleOrNull() ?: 0.0
+                                    amountText = String.format("%.0f", current + amt)
+                                },
+                                label = { Text("+₹$amt", fontWeight = FontWeight.SemiBold) },
+                                shape = RoundedCornerShape(18.dp)
+                            )
+                        }
+                    }
+
+                    OutlinedTextField(
+                        value = descriptionText,
+                        onValueChange = { descriptionText = it },
+                        label = { Text("Description / Item Note (Optional)") },
+                        placeholder = { Text("e.g. Table 4 Order, Groceries") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp)
+                    )
+
+                    OutlinedTextField(
+                        value = refNoText,
+                        onValueChange = { refNoText = it },
+                        label = { Text("Bill / Order Reference No. (Optional)") },
+                        placeholder = { Text("e.g. INV-9284") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Primary Request Payment Button (Image 1 Style)
+            PayouButton(
+                text = "Request Payment",
+                icon = Icons.Default.Share,
+                onClick = {
+                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        val amtStr = if (isSetAmountEnabled && amountText.isNotBlank()) " (₹$amountText)" else ""
+                        val noteStr = if (isSetAmountEnabled && descriptionText.isNotBlank()) " - $descriptionText" else ""
+                        putExtra(Intent.EXTRA_TEXT, "Pay $payeeName$amtStr$noteStr via UPI:\n$upiUri")
+                    }
+                    context.startActivity(Intent.createChooser(shareIntent, "Share Payment Request"))
+                },
+                containerColor = SuccessGreen
+            )
 
             Spacer(modifier = Modifier.height(32.dp))
         }
