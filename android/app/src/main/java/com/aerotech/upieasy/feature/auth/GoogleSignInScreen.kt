@@ -194,8 +194,8 @@ fun GoogleSignInScreen(
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     FeaturePill(icon = Icons.Default.AccountBalance, title = "Multi-Bank UPI Aggregation")
-                    FeaturePill(icon = Icons.Default.QrCodeScanner, title = "CameraX Instant QR Generator & Scanner")
-                    FeaturePill(icon = Icons.Default.NotificationsActive, title = "Real-time Notification Sync & Room DB")
+                    FeaturePill(icon = Icons.Default.QrCodeScanner, title = "Instant QR Generator & Scanner")
+                    FeaturePill(icon = Icons.Default.NotificationsActive, title = "Real-time Notification Sync")
                 }
 
                 Spacer(modifier = Modifier.height(28.dp))

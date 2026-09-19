@@ -34,13 +34,26 @@ export const errorHandler: ErrorHandler = (err, c) => {
     );
   }
 
-  logger.error({ err, requestId }, "Unhandled server exception");
+  const errorMessage = err instanceof Error ? err.message : String(err);
+  const errorStack = err instanceof Error ? err.stack : undefined;
+  const errorName = err instanceof Error ? err.name : typeof err;
+
+  logger.error(
+    {
+      errorMessage,
+      errorStack,
+      errorName,
+      requestId,
+    },
+    `Unhandled server exception: ${errorMessage}`
+  );
 
   return c.json(
     {
       error: {
         code: "INTERNAL_SERVER_ERROR",
         message: "An unexpected error occurred",
+        details: errorMessage,
         requestId,
       },
     },

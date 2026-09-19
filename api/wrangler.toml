@@ -7,3 +7,18 @@ compatibility_flags = ["nodejs_compat"]
 NODE_ENV = "production"
 JWT_EXPIRY = "15m"
 REFRESH_TOKEN_EXPIRY = "30d"
+GOOGLE_WEB_CLIENT_ID = "332345540842-ks8bq4csr4lklkvv3tesgkig2b221m23.apps.googleusercontent.com"
+JWT_SECRET = "pSjJLq0cuJNW+4VFzp2rQmynKr/t6vsipCoq9G6Q7MA="
+REFRESH_SECRET = "pSjJLq0cuJNW+4VFzp2rQmynKr/t6vsipCoq9G6Q7MA="
+WEBHOOK_SECRET = "pSjJLq0cuJNW+4VFzp2rQmynKr/t6vsipCoq9G6Q7MA="
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+invocation_logs = true
+persist = true
+
+[observability.traces]
+enabled = true
+head_sampling_rate = 1
+persist = true
