@@ -68,7 +68,15 @@ fun DashboardScreen(
                     if (orgRes.isSuccessful && orgRes.body()?.success == true) {
                         val firstOrg = orgRes.body()?.organizations?.firstOrNull()
                         if (firstOrg != null) {
-                            sessionManager.setOrganization(firstOrg.id, firstOrg.name, firstOrg.role)
+                            sessionManager.setOrganization(
+                                orgId = firstOrg.id,
+                                orgName = firstOrg.name,
+                                role = firstOrg.role,
+                                legalName = firstOrg.legalBusinessName,
+                                category = firstOrg.category,
+                                panNumber = firstOrg.panNumber,
+                                gstin = firstOrg.gstin
+                            )
                             orgId = firstOrg.id
                         }
                     }

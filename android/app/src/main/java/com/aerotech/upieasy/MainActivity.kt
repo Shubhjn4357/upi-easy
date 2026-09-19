@@ -8,6 +8,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -118,7 +119,16 @@ class MainActivity : FragmentActivity() {
                                 if (res.isSuccessful && res.body()?.success == true) {
                                     val orgs = res.body()!!.organizations
                                     if (orgs.isNotEmpty()) {
-                                        sessionManager.setOrganization(orgs[0].id, orgs[0].name, orgs[0].role)
+                                        val o = orgs[0]
+                                        sessionManager.setOrganization(
+                                            orgId = o.id,
+                                            orgName = o.name,
+                                            role = o.role,
+                                            legalName = o.legalBusinessName,
+                                            category = o.category,
+                                            panNumber = o.panNumber,
+                                            gstin = o.gstin
+                                        )
                                     }
                                 }
                             } catch (e: Exception) {
@@ -259,14 +269,6 @@ fun MainAppContent(
     val navBackStackEntry by bottomNavController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route ?: Screen.Dashboard.route
 
-    val items = listOf(
-        Screen.Dashboard,
-        Screen.Transactions,
-        Screen.Upi,
-        Screen.Staff,
-        Screen.Settings
-    )
-
     Scaffold(
         contentWindowInsets = WindowInsets(0.dp),
         bottomBar = {
@@ -348,18 +350,28 @@ fun FloatingGlassBottomBar(
         modifier = Modifier
             .fillMaxWidth()
             .navigationBarsPadding()
-            .padding(horizontal = 20.dp, vertical = 10.dp),
+            .padding(horizontal = 18.dp, vertical = 8.dp),
         contentAlignment = Alignment.Center
     ) {
-        Surface(
-            shape = RoundedCornerShape(32.dp),
-            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.98f),
-            tonalElevation = 8.dp,
-            shadowElevation = 14.dp,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)),
+        // Ambient soft glow pod beneath the floating bar
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(66.dp)
+                .height(48.dp)
+                .padding(horizontal = 32.dp)
+                .clip(RoundedCornerShape(32.dp))
+                .background(SoftGlowIndigo.copy(alpha = 0.35f))
+        )
+
+        Surface(
+            shape = RoundedCornerShape(32.dp),
+            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+            tonalElevation = 8.dp,
+            shadowElevation = 18.dp,
+            border = BorderStroke(1.dp, GlassBorderLight),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(68.dp)
         ) {
             Row(
                 modifier = Modifier
@@ -384,7 +396,7 @@ fun FloatingGlassBottomBar(
                 }
 
                 // Reserved space in bar for the centered floating QR FAB
-                Spacer(modifier = Modifier.width(60.dp))
+                Spacer(modifier = Modifier.width(62.dp))
 
                 // Right 2 items (UPI, Staff)
                 Row(
@@ -403,26 +415,43 @@ fun FloatingGlassBottomBar(
             }
         }
 
-        // Center Elevated QR Action Button (PayOu floating style)
+        // Center Elevated QR Action Button Glow Ring
         Box(
             modifier = Modifier
-                .offset(y = (-14).dp)
-                .size(56.dp)
+                .offset(y = (-16).dp)
+                .size(68.dp)
                 .clip(CircleShape)
-                .background(
-                    Brush.linearGradient(
-                        colors = listOf(BrandGradientStart, BrandGradientEnd)
-                    )
-                )
+                .background(SoftGlowIndigo.copy(alpha = 0.45f))
+        )
+
+        // Center Elevated QR Action Button (PayOu floating glass style)
+        Surface(
+            modifier = Modifier
+                .offset(y = (-16).dp)
+                .size(58.dp)
                 .clickable { onNavigateToScan() },
-            contentAlignment = Alignment.Center
+            shape = CircleShape,
+            color = Color.Transparent,
+            shadowElevation = 12.dp,
+            border = BorderStroke(3.dp, MaterialTheme.colorScheme.surface.copy(alpha = 0.96f))
         ) {
-            Icon(
-                imageVector = Icons.Default.QrCodeScanner,
-                contentDescription = "Scan QR",
-                tint = Color.White,
-                modifier = Modifier.size(26.dp)
-            )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.linearGradient(
+                            colors = listOf(BrandGradientStart, BrandGradientEnd)
+                        )
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.QrCodeScanner,
+                    contentDescription = "Scan QR",
+                    tint = Color.White,
+                    modifier = Modifier.size(26.dp)
+                )
+            }
         }
     }
 }
@@ -449,6 +478,10 @@ private fun BottomNavItem(
         modifier = modifier
             .clip(RoundedCornerShape(16.dp))
             .background(pillBgColor)
+            .then(
+                if (isSelected) Modifier.border(BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.20f)), RoundedCornerShape(16.dp))
+                else Modifier
+            )
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null

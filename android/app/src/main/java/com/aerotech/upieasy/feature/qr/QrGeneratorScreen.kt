@@ -32,6 +32,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.foundation.horizontalScroll
 import com.aerotech.upieasy.core.database.AppDatabase
 import com.aerotech.upieasy.core.security.SessionManager
@@ -108,6 +114,19 @@ fun QrGeneratorScreen(
         QrCodeGenerator.generateQrBitmap(upiUri, size = 600)
     }
 
+    val customCardBitmap = remember(upiUri, payeeName, vpa, isSetAmountEnabled, amountText, descriptionText, selectedThemeColor) {
+        val amt = if (isSetAmountEnabled && amountText.isNotBlank()) amountText else null
+        val desc = if (isSetAmountEnabled && descriptionText.isNotBlank()) descriptionText else null
+        QrCodeGenerator.generateCustomQrCardBitmap(
+            content = upiUri,
+            payeeName = payeeName,
+            payeeVpa = vpa,
+            amount = amt,
+            description = desc,
+            themeColor = selectedThemeColor.toArgb()
+        )
+    }
+
     val quickAmounts = listOf(50, 100, 200, 500, 1000, 2000)
 
     Scaffold(
@@ -125,9 +144,9 @@ fun QrGeneratorScreen(
                             val amtStr = if (isSetAmountEnabled && amountText.isNotBlank()) " (₹$amountText)" else ""
                             QrCodeGenerator.shareQr(
                                 context = context,
-                                bitmap = qrBitmap,
+                                bitmap = customCardBitmap ?: qrBitmap,
                                 textMessage = "Pay $payeeName$amtStr via UPI:\n$upiUri",
-                                title = "Share Payment Link & QR"
+                                title = "Share Payment Link & Custom QR"
                             )
                         }
                     ) {
@@ -139,29 +158,48 @@ fun QrGeneratorScreen(
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(horizontal = 20.dp)
-                .verticalScroll(rememberScrollState()),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Spacer(modifier = Modifier.height(10.dp))
+        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+            // Background blurry ambient glow spheres
+            Box(
+                modifier = Modifier
+                    .size(260.dp)
+                    .offset(x = (-50).dp, y = (-30).dp)
+                    .clip(CircleShape)
+                    .background(SoftGlowIndigo)
+            )
+            Box(
+                modifier = Modifier
+                    .size(220.dp)
+                    .align(Alignment.TopEnd)
+                    .offset(x = 60.dp, y = 80.dp)
+                    .clip(CircleShape)
+                    .background(SoftGlowEmerald)
+            )
 
-            // Main QR Card (Image 1 Style)
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(26.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 20.dp)
+                    .imePadding()
+                    .verticalScroll(rememberScrollState()),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(22.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Main QR Card (Image 1 Style)
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(26.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)),
+                    border = BorderStroke(1.dp, GlassBorderLight),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
                 ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(22.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
                     // Payee Header Row (Avatar, Name, VPA, Copy Icon)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -392,6 +430,7 @@ fun QrGeneratorScreen(
 
             // Expandable Inputs when Set Amount is active
             AnimatedVisibility(visible = isSetAmountEnabled) {
+                val focusManager = LocalFocusManager.current
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -406,7 +445,11 @@ fun QrGeneratorScreen(
                         prefix = { Text("₹ ", fontWeight = FontWeight.Bold) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(14.dp)
+                        shape = RoundedCornerShape(14.dp),
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Decimal,
+                            imeAction = ImeAction.Next
+                        )
                     )
 
                     // Quick Amounts Row
@@ -433,7 +476,11 @@ fun QrGeneratorScreen(
                         placeholder = { Text("e.g. Table 4 Order, Groceries") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(14.dp)
+                        shape = RoundedCornerShape(14.dp),
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Text,
+                            imeAction = ImeAction.Next
+                        )
                     )
 
                     OutlinedTextField(
@@ -443,7 +490,14 @@ fun QrGeneratorScreen(
                         placeholder = { Text("e.g. INV-9284") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(14.dp)
+                        shape = RoundedCornerShape(14.dp),
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Ascii,
+                            imeAction = ImeAction.Done
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onDone = { focusManager.clearFocus() }
+                        )
                     )
                 }
             }
@@ -459,9 +513,9 @@ fun QrGeneratorScreen(
                     val noteStr = if (isSetAmountEnabled && descriptionText.isNotBlank()) " - $descriptionText" else ""
                     QrCodeGenerator.shareQr(
                         context = context,
-                        bitmap = qrBitmap,
+                        bitmap = customCardBitmap ?: qrBitmap,
                         textMessage = "Pay $payeeName$amtStr$noteStr via UPI:\n$upiUri",
-                        title = "Share Payment Request & QR"
+                        title = "Share Payment Request & Custom QR"
                     )
                 },
                 containerColor = SuccessGreen
@@ -470,4 +524,5 @@ fun QrGeneratorScreen(
             Spacer(modifier = Modifier.height(32.dp))
         }
     }
+}
 }

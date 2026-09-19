@@ -2,6 +2,7 @@ package com.aerotech.upieasy.feature.setup
 
 import android.Manifest
 import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -28,7 +29,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.content.ContextCompat
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import com.aerotech.upieasy.core.network.AppSetupRequest
 import com.aerotech.upieasy.core.network.NetworkClient
 import com.aerotech.upieasy.core.security.SessionManager
@@ -56,6 +61,20 @@ fun AppSetupScreen(
 
     // Form inputs
     var businessName by remember { mutableStateOf("") }
+    var legalBusinessName by remember { mutableStateOf("") }
+    val categories = listOf(
+        Pair("RETAIL", "Retail & Store"),
+        Pair("FOOD_DINING", "Food & Dining"),
+        Pair("SERVICES", "Services"),
+        Pair("HEALTHCARE", "Healthcare"),
+        Pair("TECH", "Technology"),
+        Pair("WHOLESALE", "Wholesale"),
+        Pair("EDUCATION", "Education"),
+        Pair("OTHER", "Other")
+    )
+    var selectedCategory by remember { mutableStateOf("RETAIL") }
+    var panNumber by remember { mutableStateOf("") }
+    var gstin by remember { mutableStateOf("") }
     var mobileNumber by remember { mutableStateOf("") }
     var primaryVpa by remember { mutableStateOf("") }
     var payeeName by remember { mutableStateOf(savedUserName ?: "") }
@@ -117,43 +136,89 @@ fun AppSetupScreen(
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(rememberScrollState())
-                .padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp)
-        ) {
-            // Header Description
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(containerColor = BrandPrimary)
-            ) {
-                Column(modifier = Modifier.padding(20.dp)) {
-                    Text(
-                        text = "1-Step Merchant Setup",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = SurfaceLight,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = "Configure your store details and primary UPI address to generate payment QR codes and start tracking customer payments.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = TextTertiary
-                    )
-                }
-            }
+        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+            // Background blurry ambient glow spheres
+            Box(
+                modifier = Modifier
+                    .size(260.dp)
+                    .offset(x = (-50).dp, y = (-30).dp)
+                    .clip(CircleShape)
+                    .background(SoftGlowIndigo)
+            )
+            Box(
+                modifier = Modifier
+                    .size(220.dp)
+                    .align(Alignment.TopEnd)
+                    .offset(x = 60.dp, y = 80.dp)
+                    .clip(CircleShape)
+                    .background(SoftGlowEmerald)
+            )
 
-            // Step 1: Permissions Card
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+            val focusManager = LocalFocusManager.current
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .imePadding()
+                    .verticalScroll(rememberScrollState())
+                    .padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(20.dp)
             ) {
+                // Header Description Bento Card
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(22.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)),
+                    border = BorderStroke(1.dp, GlassBorderLight),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                ) {
+                    Column(modifier = Modifier.padding(20.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(42.dp)
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(PastelIndigoBg),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Storefront,
+                                    contentDescription = null,
+                                    tint = BrandPrimary,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text(
+                                    text = "Merchant Store Setup",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "Zero-fee direct bank settlements",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(
+                            text = "Configure your store details and primary UPI address to generate payment QR codes and start tracking customer payments.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                // Step 1: Permissions Bento Card
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(22.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)),
+                    border = BorderStroke(1.dp, GlassBorderLight),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                ) {
                 Column(modifier = Modifier.padding(18.dp)) {
                     Text(
                         text = "1. App Permissions",
@@ -264,13 +329,56 @@ fun AppSetupScreen(
                     OutlinedTextField(
                         value = businessName,
                         onValueChange = { businessName = it },
-                        label = { Text("Store / Business Name *") },
+                        label = { Text("Store / Brand Name *") },
                         placeholder = { Text("e.g. Sri Krishna Supermarket") },
                         leadingIcon = { Icon(Icons.Default.Storefront, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(12.dp),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next)
                     )
+
+                    OutlinedTextField(
+                        value = legalBusinessName,
+                        onValueChange = { legalBusinessName = it },
+                        label = { Text("Legal Entity Name (Optional)") },
+                        placeholder = { Text("e.g. Sri Krishna Retail Pvt Ltd") },
+                        leadingIcon = { Icon(Icons.Default.Business, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next)
+                    )
+
+                    // Business Category Selector
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(
+                            text = "Business Category *",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            categories.forEach { (catKey, catLabel) ->
+                                val isSelected = selectedCategory == catKey
+                                FilterChip(
+                                    selected = isSelected,
+                                    onClick = { selectedCategory = catKey },
+                                    label = { Text(catLabel, fontSize = 12.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
+                                    shape = RoundedCornerShape(16.dp),
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = BrandPrimary.copy(alpha = 0.15f),
+                                        selectedLabelColor = BrandPrimary
+                                    )
+                                )
+                            }
+                        }
+                    }
 
                     OutlinedTextField(
                         value = mobileNumber,
@@ -284,7 +392,7 @@ fun AppSetupScreen(
                         },
                         label = { Text("Business Mobile Number *") },
                         prefix = { Text("+91 ") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone, imeAction = ImeAction.Next),
                         trailingIcon = {
                             if (mobileNumber.length == 10) {
                                 TextButton(onClick = { openUpiDiscovery() }) {
@@ -312,7 +420,8 @@ fun AppSetupScreen(
                         },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(12.dp),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next)
                     )
 
                     OutlinedTextField(
@@ -323,12 +432,13 @@ fun AppSetupScreen(
                         leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(12.dp),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next)
                     )
                 }
             }
 
-            // Step 3: Linked Bank Account (Optional)
+            // Step 3: Statutory & Tax Identifiers (Optional)
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(18.dp),
@@ -337,7 +447,65 @@ fun AppSetupScreen(
             ) {
                 Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     Text(
-                        text = "3. Bank Account for Reconciliation (Optional)",
+                        text = "3. Tax & Legal Compliance (Optional)",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "Add PAN or GSTIN for compliant merchant settlements and official invoices.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    OutlinedTextField(
+                        value = panNumber,
+                        onValueChange = {
+                            if (it.length <= 10) panNumber = it.uppercase()
+                        },
+                        label = { Text("PAN Number (Optional)") },
+                        placeholder = { Text("e.g. ABCDE1234F") },
+                        leadingIcon = { Icon(Icons.Default.Badge, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Ascii,
+                            capitalization = KeyboardCapitalization.Characters,
+                            imeAction = ImeAction.Next
+                        )
+                    )
+
+                    OutlinedTextField(
+                        value = gstin,
+                        onValueChange = {
+                            if (it.length <= 15) gstin = it.uppercase()
+                        },
+                        label = { Text("GSTIN Number (Optional)") },
+                        placeholder = { Text("e.g. 29ABCDE1234F1Z5") },
+                        leadingIcon = { Icon(Icons.Default.ReceiptLong, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Ascii,
+                            capitalization = KeyboardCapitalization.Characters,
+                            imeAction = ImeAction.Next
+                        )
+                    )
+                }
+            }
+
+            // Step 4: Linked Bank Account (Optional)
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+            ) {
+                Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Text(
+                        text = "4. Bank Account for Reconciliation (Optional)",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
@@ -351,14 +519,15 @@ fun AppSetupScreen(
                         leadingIcon = { Icon(Icons.Default.AccountBalance, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(12.dp),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next)
                     )
 
                     OutlinedTextField(
                         value = accountNumber,
                         onValueChange = { accountNumber = it.filter { char -> char.isDigit() } },
                         label = { Text("Account Number") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword, imeAction = ImeAction.Next),
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp)
@@ -371,7 +540,15 @@ fun AppSetupScreen(
                         placeholder = { Text("e.g. HDFC0001234") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(12.dp),
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Ascii,
+                            capitalization = KeyboardCapitalization.Characters,
+                            imeAction = ImeAction.Done
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onDone = { focusManager.clearFocus() }
+                        )
                     )
                 }
             }
@@ -396,6 +573,10 @@ fun AppSetupScreen(
                                 val res = apiService.completeSetup(
                                     AppSetupRequest(
                                         businessName = businessName.trim(),
+                                        legalBusinessName = legalBusinessName.trim().ifBlank { null },
+                                        category = selectedCategory,
+                                        panNumber = panNumber.trim().ifBlank { null },
+                                        gstin = gstin.trim().ifBlank { null },
                                         mobileNumber = mobileNumber.trim(),
                                         primaryVpa = primaryVpa.trim(),
                                         payeeName = payeeName.trim(),
@@ -407,7 +588,15 @@ fun AppSetupScreen(
 
                                 if (res.isSuccessful && res.body()?.success == true) {
                                     val data = res.body()!!
-                                    sessionManager.setOrganization(data.organization.id, data.organization.name, "OWNER")
+                                    sessionManager.setOrganization(
+                                        orgId = data.organization.id,
+                                        orgName = data.organization.name,
+                                        role = "OWNER",
+                                        legalName = data.organization.legalBusinessName,
+                                        category = data.organization.category,
+                                        panNumber = data.organization.panNumber,
+                                        gstin = data.organization.gstin
+                                    )
                                     sessionManager.setSetupComplete(true)
                                     onSetupComplete()
                                 } else {
@@ -438,6 +627,7 @@ fun AppSetupScreen(
             Spacer(modifier = Modifier.height(20.dp))
         }
     }
+}
 
     // Discovered UPI Drawer (Bottom Sheet)
     if (showUpiDrawer) {

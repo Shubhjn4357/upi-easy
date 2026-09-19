@@ -18,6 +18,10 @@ class SessionManager(private val context: Context) {
         private val KEY_USER_ID = stringPreferencesKey("user_id")
         private val KEY_CURRENT_ORG_ID = stringPreferencesKey("current_org_id")
         private val KEY_CURRENT_ORG_NAME = stringPreferencesKey("current_org_name")
+        private val KEY_CURRENT_ORG_LEGAL_NAME = stringPreferencesKey("current_org_legal_name")
+        private val KEY_CURRENT_ORG_CATEGORY = stringPreferencesKey("current_org_category")
+        private val KEY_CURRENT_ORG_PAN = stringPreferencesKey("current_org_pan")
+        private val KEY_CURRENT_ORG_GSTIN = stringPreferencesKey("current_org_gstin")
         private val KEY_USER_ROLE = stringPreferencesKey("user_role")
         private val KEY_MOBILE_NUMBER = stringPreferencesKey("mobile_number")
         private val KEY_USER_EMAIL = stringPreferencesKey("user_email")
@@ -33,6 +37,10 @@ class SessionManager(private val context: Context) {
     val accessTokenFlow: Flow<String?> = context.dataStore.data.map { it[KEY_ACCESS_TOKEN] }
     val currentOrgIdFlow: Flow<String?> = context.dataStore.data.map { it[KEY_CURRENT_ORG_ID] }
     val currentOrgNameFlow: Flow<String?> = context.dataStore.data.map { it[KEY_CURRENT_ORG_NAME] }
+    val currentOrgLegalNameFlow: Flow<String?> = context.dataStore.data.map { it[KEY_CURRENT_ORG_LEGAL_NAME] }
+    val currentOrgCategoryFlow: Flow<String?> = context.dataStore.data.map { it[KEY_CURRENT_ORG_CATEGORY] }
+    val currentOrgPanFlow: Flow<String?> = context.dataStore.data.map { it[KEY_CURRENT_ORG_PAN] }
+    val currentOrgGstinFlow: Flow<String?> = context.dataStore.data.map { it[KEY_CURRENT_ORG_GSTIN] }
     val userRoleFlow: Flow<String?> = context.dataStore.data.map { it[KEY_USER_ROLE] }
     val mobileNumberFlow: Flow<String?> = context.dataStore.data.map { it[KEY_MOBILE_NUMBER] }
     val userEmailFlow: Flow<String?> = context.dataStore.data.map { it[KEY_USER_EMAIL] }
@@ -62,6 +70,22 @@ class SessionManager(private val context: Context) {
     suspend fun updateOrganizationName(name: String) {
         context.dataStore.edit { prefs ->
             prefs[KEY_CURRENT_ORG_NAME] = name
+        }
+    }
+
+    suspend fun updateOrganizationDetails(
+        name: String? = null,
+        legalName: String? = null,
+        category: String? = null,
+        panNumber: String? = null,
+        gstin: String? = null
+    ) {
+        context.dataStore.edit { prefs ->
+            if (name != null) prefs[KEY_CURRENT_ORG_NAME] = name
+            if (legalName != null) prefs[KEY_CURRENT_ORG_LEGAL_NAME] = legalName
+            if (category != null) prefs[KEY_CURRENT_ORG_CATEGORY] = category
+            if (panNumber != null) prefs[KEY_CURRENT_ORG_PAN] = panNumber
+            if (gstin != null) prefs[KEY_CURRENT_ORG_GSTIN] = gstin
         }
     }
 
@@ -99,11 +123,23 @@ class SessionManager(private val context: Context) {
         }
     }
 
-    suspend fun setOrganization(orgId: String, orgName: String, role: String) {
+    suspend fun setOrganization(
+        orgId: String,
+        orgName: String,
+        role: String,
+        legalName: String? = null,
+        category: String? = null,
+        panNumber: String? = null,
+        gstin: String? = null
+    ) {
         context.dataStore.edit { prefs ->
             prefs[KEY_CURRENT_ORG_ID] = orgId
             prefs[KEY_CURRENT_ORG_NAME] = orgName
             prefs[KEY_USER_ROLE] = role
+            if (legalName != null) prefs[KEY_CURRENT_ORG_LEGAL_NAME] = legalName
+            if (category != null) prefs[KEY_CURRENT_ORG_CATEGORY] = category
+            if (panNumber != null) prefs[KEY_CURRENT_ORG_PAN] = panNumber
+            if (gstin != null) prefs[KEY_CURRENT_ORG_GSTIN] = gstin
         }
     }
 

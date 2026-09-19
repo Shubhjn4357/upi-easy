@@ -24,6 +24,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.fragment.app.FragmentActivity
 import com.aerotech.upieasy.core.database.AppDatabase
 import com.aerotech.upieasy.core.network.NetworkClient
@@ -50,6 +57,10 @@ fun SettingsScreen(
 
     val currentOrgId by sessionManager.currentOrgIdFlow.collectAsState(initial = null)
     val currentOrgName by sessionManager.currentOrgNameFlow.collectAsState(initial = null)
+    val currentOrgLegalName by sessionManager.currentOrgLegalNameFlow.collectAsState(initial = null)
+    val currentOrgCategory by sessionManager.currentOrgCategoryFlow.collectAsState(initial = null)
+    val currentOrgPan by sessionManager.currentOrgPanFlow.collectAsState(initial = null)
+    val currentOrgGstin by sessionManager.currentOrgGstinFlow.collectAsState(initial = null)
     val userRole by sessionManager.userRoleFlow.collectAsState(initial = null)
     val userEmail by sessionManager.userEmailFlow.collectAsState(initial = null)
     val userName by sessionManager.userNameFlow.collectAsState(initial = null)
@@ -75,278 +86,378 @@ fun SettingsScreen(
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(horizontal = 16.dp)
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            // Profile & Organization Overview Card
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+            // Background blurry ambient glow spheres
+            Box(
+                modifier = Modifier
+                    .size(260.dp)
+                    .offset(x = (-50).dp, y = (-30).dp)
+                    .clip(CircleShape)
+                    .background(SoftGlowIndigo)
+            )
+            Box(
+                modifier = Modifier
+                    .size(220.dp)
+                    .align(Alignment.TopEnd)
+                    .offset(x = 60.dp, y = 80.dp)
+                    .clip(CircleShape)
+                    .background(SoftGlowEmerald)
+            )
+
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Column(modifier = Modifier.padding(18.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(48.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primary),
-                            contentAlignment = Alignment.Center
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // Profile & Organization Overview Bento Card
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(22.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)),
+                    border = BorderStroke(1.dp, GlassBorderLight),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                ) {
+                    Column(modifier = Modifier.padding(18.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                text = (userName?.take(1) ?: userEmail?.take(1) ?: "M").uppercase(),
-                                color = MaterialTheme.colorScheme.onPrimary,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 20.sp
-                            )
+                            Box(
+                                modifier = Modifier
+                                    .size(52.dp)
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(PastelIndigoBg),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = (userName?.take(1) ?: userEmail?.take(1) ?: "M").uppercase(),
+                                    color = BrandPrimary,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 22.sp
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(14.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = userName ?: "Verified Merchant",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = userEmail ?: "Google Account Linked",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 13.sp
+                                )
+                            }
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = SuccessGreenBg
+                            ) {
+                                Text(
+                                    text = userRole ?: "OWNER",
+                                    color = SuccessGreen,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
                         }
-                        Spacer(modifier = Modifier.width(14.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = userName ?: "Verified Merchant",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = userEmail ?: "Google Account Linked",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontSize = 13.sp
-                            )
-                        }
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = SuccessGreen.copy(alpha = 0.12f)
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        OutlinedButton(
+                            onClick = { showEditProfileBottomSheet = true },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
                         ) {
-                            Text(
-                                text = userRole ?: "OWNER",
-                                color = SuccessGreen,
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                            )
+                            Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Edit Profile Information", fontWeight = FontWeight.SemiBold)
+                        }
+
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 14.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(CircleShape)
+                                    .background(PastelEmeraldBg),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    Icons.Default.Storefront,
+                                    contentDescription = null,
+                                    tint = SuccessGreen,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = currentOrgName ?: "Default Store",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = PastelIndigoBg
+                                    ) {
+                                        Text(
+                                            text = currentOrgCategory ?: "RETAIL",
+                                            color = BrandPrimary,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                            fontSize = 10.sp
+                                        )
+                                    }
+                                }
+                                if (!currentOrgLegalName.isNullOrBlank()) {
+                                    Text(
+                                        text = "Legal: $currentOrgLegalName",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontSize = 12.sp
+                                    )
+                                }
+                            }
+                        }
+
+                        if (!currentOrgPan.isNullOrBlank() || !currentOrgGstin.isNullOrBlank()) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                currentOrgPan?.takeIf { it.isNotBlank() }?.let { pan ->
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                        border = BorderStroke(1.dp, GlassBorderLight)
+                                    ) {
+                                        Text(
+                                            text = "PAN: $pan",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                            fontSize = 11.sp
+                                        )
+                                    }
+                                }
+                                currentOrgGstin?.takeIf { it.isNotBlank() }?.let { gst ->
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                        border = BorderStroke(1.dp, GlassBorderLight)
+                                    ) {
+                                        Text(
+                                            text = "GSTIN: $gst",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                            fontSize = 11.sp
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
+                }
 
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    OutlinedButton(
-                        onClick = { showEditProfileBottomSheet = true },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(10.dp)
-                    ) {
-                        Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Edit Profile Information", fontWeight = FontWeight.SemiBold)
-                    }
-
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 14.dp), color = MaterialTheme.colorScheme.outlineVariant)
-
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Default.Storefront,
-                            contentDescription = null,
-                            tint = BrandAccent,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
+                // Theme & Display Settings Bento Card
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(22.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)),
+                    border = BorderStroke(1.dp, GlassBorderLight),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                ) {
+                    Column(modifier = Modifier.padding(18.dp)) {
                         Text(
-                            text = "Business Store:",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = currentOrgName ?: "Default Store",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.SemiBold,
+                            text = "Appearance & Theme",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
-                    }
-                }
-            }
+                        Spacer(modifier = Modifier.height(12.dp))
 
-            // Theme & Display Settings Card
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-            ) {
-                Column(modifier = Modifier.padding(18.dp)) {
-                    Text(
-                        text = "Appearance & Theme",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
+                        val themes = listOf(
+                            Triple("SYSTEM", "System", Icons.Default.BrightnessAuto),
+                            Triple("LIGHT", "Light", Icons.Default.LightMode),
+                            Triple("DARK", "Dark", Icons.Default.DarkMode)
+                        )
 
-                    val themes = listOf(
-                        Triple("SYSTEM", "System", Icons.Default.BrightnessAuto),
-                        Triple("LIGHT", "Light", Icons.Default.LightMode),
-                        Triple("DARK", "Dark", Icons.Default.DarkMode)
-                    )
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        themes.forEach { (mode, label, icon) ->
-                            val isSelected = themeMode == mode
-                            FilterChip(
-                                selected = isSelected,
-                                onClick = {
-                                    scope.launch { sessionManager.setThemeMode(mode) }
-                                },
-                                label = { Text(label) },
-                                leadingIcon = {
-                                    Icon(
-                                        imageVector = icon,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            themes.forEach { (mode, label, icon) ->
+                                val isSelected = themeMode == mode
+                                FilterChip(
+                                    selected = isSelected,
+                                    onClick = {
+                                        scope.launch { sessionManager.setThemeMode(mode) }
+                                    },
+                                    label = { Text(label) },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = icon,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(16.dp),
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                        selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
                                     )
-                                },
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(20.dp),
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
                                 )
-                            )
-                        }
-                    }
-
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 14.dp), color = MaterialTheme.colorScheme.outlineVariant)
-
-                    SettingToggleRow(
-                        icon = Icons.Default.Palette,
-                        title = "Material 3 Dynamic Colors",
-                        subtitle = if (dynamicColor) "Wallpaper-adaptive colors (Android 12+)" else "Default PayOu brand colors (Recommended)",
-                        checked = dynamicColor,
-                        onCheckedChange = { isChecked ->
-                            scope.launch { sessionManager.setDynamicColor(isChecked) }
-                        }
-                    )
-                }
-            }
-
-            // Customization & Notification Settings Card
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-            ) {
-                Column(modifier = Modifier.padding(18.dp)) {
-                    Text(
-                        text = "Notification & Security Preferences",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    SettingToggleRow(
-                        icon = Icons.AutoMirrored.Filled.VolumeUp,
-                        title = "Voice Payment Soundbox",
-                        subtitle = "Instant voice announcement on incoming UPI credits",
-                        checked = soundNotifications,
-                        onCheckedChange = { scope.launch { sessionManager.setSoundNotifications(it) } }
-                    )
-
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.outlineVariant)
-
-                    SettingToggleRow(
-                        icon = Icons.Default.NotificationsActive,
-                        title = "High-Value Transaction Alerts",
-                        subtitle = "Special sound & vibration for payments > ₹5,000",
-                        checked = highValueAlert,
-                        onCheckedChange = { scope.launch { sessionManager.setHighValueAlert(it) } }
-                    )
-
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.outlineVariant)
-
-                    SettingToggleRow(
-                        icon = Icons.Default.Fingerprint,
-                        title = "Biometric Lock",
-                        subtitle = "Require fingerprint or face unlock to open app",
-                        checked = biometricLock,
-                        onCheckedChange = { enable ->
-                            val activity = context as? FragmentActivity
-                            if (activity == null || !BiometricPromptHelper.isBiometricAvailable(context)) {
-                                Toast.makeText(context, "Biometric authentication is not available or enrolled on this device", Toast.LENGTH_LONG).show()
-                                return@SettingToggleRow
                             }
-
-                            BiometricPromptHelper.showBiometricPrompt(
-                                activity = activity,
-                                title = if (enable) "Enable Biometric Lock" else "Disable Biometric Lock",
-                                subtitle = "Authenticate to confirm security setting",
-                                onSuccess = {
-                                    scope.launch { sessionManager.setBiometricLock(enable) }
-                                    Toast.makeText(context, if (enable) "Biometric lock enabled" else "Biometric lock disabled", Toast.LENGTH_SHORT).show()
-                                },
-                                onError = { errorMsg ->
-                                    Toast.makeText(context, errorMsg, Toast.LENGTH_SHORT).show()
-                                }
-                            )
                         }
-                    )
-                }
-            }
 
-            // Security & Cloud Synchronization Card
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-            ) {
-                Column(modifier = Modifier.padding(18.dp)) {
-                    Text(
-                        text = "Data & Synchronization",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 14.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Default.CloudSync, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                "Offline Database Sync",
-                                style = MaterialTheme.typography.bodyLarge,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                "Automatic reconciliation when device reconnects",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Text("Active", color = SuccessGreen, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        SettingToggleRow(
+                            icon = Icons.Default.Palette,
+                            title = "Material 3 Dynamic Colors",
+                            subtitle = if (dynamicColor) "Wallpaper-adaptive colors (Android 12+)" else "Default PayOu brand colors (Recommended)",
+                            checked = dynamicColor,
+                            onCheckedChange = { isChecked ->
+                                scope.launch { sessionManager.setDynamicColor(isChecked) }
+                            }
+                        )
                     }
                 }
-            }
+
+                // Notification & Security Preferences Bento Card
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(22.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)),
+                    border = BorderStroke(1.dp, GlassBorderLight),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                ) {
+                    Column(modifier = Modifier.padding(18.dp)) {
+                        Text(
+                            text = "Soundbox & Security",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        SettingToggleRow(
+                            icon = Icons.AutoMirrored.Filled.VolumeUp,
+                            title = "Voice Payment Soundbox",
+                            subtitle = "Instant voice announcement on incoming UPI credits",
+                            checked = soundNotifications,
+                            onCheckedChange = { scope.launch { sessionManager.setSoundNotifications(it) } }
+                        )
+
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                        SettingToggleRow(
+                            icon = Icons.Default.NotificationsActive,
+                            title = "High-Value Transaction Alerts",
+                            subtitle = "Special sound & vibration for payments > ₹5,000",
+                            checked = highValueAlert,
+                            onCheckedChange = { scope.launch { sessionManager.setHighValueAlert(it) } }
+                        )
+
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                        SettingToggleRow(
+                            icon = Icons.Default.Fingerprint,
+                            title = "Biometric Lock",
+                            subtitle = "Require fingerprint or face unlock to open app",
+                            checked = biometricLock,
+                            onCheckedChange = { enable ->
+                                val activity = context as? FragmentActivity
+                                if (activity == null || !BiometricPromptHelper.isBiometricAvailable(context)) {
+                                    Toast.makeText(context, "Biometric authentication is not available or enrolled on this device", Toast.LENGTH_LONG).show()
+                                    return@SettingToggleRow
+                                }
+
+                                BiometricPromptHelper.showBiometricPrompt(
+                                    activity = activity,
+                                    title = if (enable) "Enable Biometric Lock" else "Disable Biometric Lock",
+                                    subtitle = "Authenticate to confirm security setting",
+                                    onSuccess = {
+                                        scope.launch { sessionManager.setBiometricLock(enable) }
+                                        Toast.makeText(context, if (enable) "Biometric lock enabled" else "Biometric lock disabled", Toast.LENGTH_SHORT).show()
+                                    },
+                                    onError = { errorMsg ->
+                                        Toast.makeText(context, errorMsg, Toast.LENGTH_SHORT).show()
+                                    }
+                                )
+                            }
+                        )
+                    }
+                }
+
+                // Security & Cloud Synchronization Bento Card
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(22.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)),
+                    border = BorderStroke(1.dp, GlassBorderLight),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                ) {
+                    Column(modifier = Modifier.padding(18.dp)) {
+                        Text(
+                            text = "Data & Cloud Sync",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(CircleShape)
+                                    .background(PastelIndigoBg),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.CloudSync, contentDescription = null, tint = BrandPrimary, modifier = Modifier.size(20.dp))
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    "Offline Database Sync",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    "Automatic reconciliation when device reconnects",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Text("Active", color = SuccessGreen, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        }
+                    }
+                }
 
             if (errorMessage != null) {
                 Surface(
@@ -508,11 +619,26 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(96.dp))
         }
     }
+}
 
     // Edit Profile Bottom Sheet
     if (showEditProfileBottomSheet) {
         var editedName by remember { mutableStateOf(userName ?: "") }
         var editedBusinessName by remember(currentOrgName) { mutableStateOf(currentOrgName ?: "") }
+        var editedLegalName by remember(currentOrgLegalName) { mutableStateOf(currentOrgLegalName ?: "") }
+        val categories = listOf(
+            Pair("RETAIL", "Retail & Store"),
+            Pair("FOOD_DINING", "Food & Dining"),
+            Pair("SERVICES", "Services"),
+            Pair("HEALTHCARE", "Healthcare"),
+            Pair("TECH", "Technology"),
+            Pair("WHOLESALE", "Wholesale"),
+            Pair("EDUCATION", "Education"),
+            Pair("OTHER", "Other")
+        )
+        var editedCategory by remember(currentOrgCategory) { mutableStateOf(currentOrgCategory ?: "RETAIL") }
+        var editedPan by remember(currentOrgPan) { mutableStateOf(currentOrgPan ?: "") }
+        var editedGstin by remember(currentOrgGstin) { mutableStateOf(currentOrgGstin ?: "") }
         var editedEmail by remember { mutableStateOf(userEmail ?: "") }
         var isUpdating by remember { mutableStateOf(false) }
         var updateError by remember { mutableStateOf<String?>(null) }
@@ -522,11 +648,14 @@ fun SettingsScreen(
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
             containerColor = MaterialTheme.colorScheme.surface
         ) {
+            val focusManager = LocalFocusManager.current
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 24.dp, vertical = 16.dp)
-                    .navigationBarsPadding(),
+                    .navigationBarsPadding()
+                    .imePadding()
+                    .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Text(
@@ -548,7 +677,8 @@ fun SettingsScreen(
                     },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(12.dp),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next)
                 )
 
                 OutlinedTextField(
@@ -564,7 +694,99 @@ fun SettingsScreen(
                     },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(12.dp),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next)
+                )
+
+                OutlinedTextField(
+                    value = editedLegalName,
+                    onValueChange = {
+                        editedLegalName = it
+                        updateError = null
+                    },
+                    label = { Text("Legal Entity Name (Optional)") },
+                    placeholder = { Text("e.g. My Store Technologies Pvt Ltd") },
+                    leadingIcon = {
+                        Icon(Icons.Default.Business, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next)
+                )
+
+                // Category Chips
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        text = "Business Category",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        categories.forEach { (catKey, catLabel) ->
+                            val isSelected = editedCategory == catKey
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = { editedCategory = catKey },
+                                label = { Text(catLabel, fontSize = 12.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
+                                shape = RoundedCornerShape(16.dp),
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = BrandPrimary.copy(alpha = 0.15f),
+                                    selectedLabelColor = BrandPrimary
+                                )
+                            )
+                        }
+                    }
+                }
+
+                // PAN Number
+                OutlinedTextField(
+                    value = editedPan,
+                    onValueChange = {
+                        if (it.length <= 10) editedPan = it.uppercase()
+                        updateError = null
+                    },
+                    label = { Text("PAN Number (Optional)") },
+                    placeholder = { Text("ABCDE1234F") },
+                    leadingIcon = {
+                        Icon(Icons.Default.Badge, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Ascii,
+                        capitalization = KeyboardCapitalization.Characters,
+                        imeAction = ImeAction.Next
+                    )
+                )
+
+                // GSTIN
+                OutlinedTextField(
+                    value = editedGstin,
+                    onValueChange = {
+                        if (it.length <= 15) editedGstin = it.uppercase()
+                        updateError = null
+                    },
+                    label = { Text("GSTIN Number (Optional)") },
+                    placeholder = { Text("29ABCDE1234F1Z5") },
+                    leadingIcon = {
+                        Icon(Icons.Default.ReceiptLong, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Ascii,
+                        capitalization = KeyboardCapitalization.Characters,
+                        imeAction = ImeAction.Next
+                    )
                 )
 
                 OutlinedTextField(
@@ -580,7 +802,14 @@ fun SettingsScreen(
                     },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(12.dp),
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Email,
+                        imeAction = ImeAction.Done
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onDone = { focusManager.clearFocus() }
+                    )
                 )
 
                 if (updateError != null) {
@@ -616,16 +845,24 @@ fun SettingsScreen(
                                 }
 
                                 currentOrgId?.let { orgId ->
-                                    if (editedBusinessName.trim() != currentOrgName) {
-                                        val resOrg = apiService.updateOrganization(
-                                            orgId = orgId,
-                                            request = UpdateOrganizationRequest(
-                                                name = editedBusinessName.trim()
-                                            )
+                                    val resOrg = apiService.updateOrganization(
+                                        orgId = orgId,
+                                        request = UpdateOrganizationRequest(
+                                            name = editedBusinessName.trim(),
+                                            legalBusinessName = editedLegalName.trim().ifBlank { null },
+                                            category = editedCategory,
+                                            panNumber = editedPan.trim().ifBlank { null },
+                                            gstin = editedGstin.trim().ifBlank { null }
                                         )
-                                        if (resOrg.isSuccessful && resOrg.body()?.success == true) {
-                                            sessionManager.updateOrganizationName(editedBusinessName.trim())
-                                        }
+                                    )
+                                    if (resOrg.isSuccessful && resOrg.body()?.success == true) {
+                                        sessionManager.updateOrganizationDetails(
+                                            name = editedBusinessName.trim(),
+                                            legalName = editedLegalName.trim().ifBlank { null },
+                                            category = editedCategory,
+                                            panNumber = editedPan.trim().ifBlank { null },
+                                            gstin = editedGstin.trim().ifBlank { null }
+                                        )
                                     }
                                 }
 

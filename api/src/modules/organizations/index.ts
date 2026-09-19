@@ -152,6 +152,8 @@ organizationsRouter.patch("/:orgId", requireTenant, async (c) => {
     name: z.string().min(2, "Business name is required").optional(),
     legalBusinessName: z.string().optional(),
     category: z.string().optional(),
+    panNumber: z.string().optional(),
+    gstin: z.string().optional(),
   });
   const data = validator.parse(body);
   const now = new Date();
@@ -161,6 +163,8 @@ organizationsRouter.patch("/:orgId", requireTenant, async (c) => {
       ...(data.name ? { name: data.name } : {}),
       ...(data.legalBusinessName !== undefined ? { legalBusinessName: data.legalBusinessName } : {}),
       ...(data.category ? { category: data.category } : {}),
+      ...(data.panNumber !== undefined ? { panNumber: data.panNumber ? data.panNumber.toUpperCase() : null } : {}),
+      ...(data.gstin !== undefined ? { gstin: data.gstin ? data.gstin.toUpperCase() : null } : {}),
       updatedAt: now,
     })
     .where(eq(schema.organizations.id, orgId))
@@ -188,6 +192,7 @@ organizationsRouter.post("/setup", async (c) => {
   const body = await c.req.json();
   const validator = z.object({
     businessName: z.string().min(2, "Business name is required"),
+    legalBusinessName: z.string().optional(),
     mobileNumber: z.string().regex(/^[6-9]\d{9}$/, "Invalid 10-digit mobile number"),
     primaryVpa: z.string().regex(/^[\w.-]+@[\w.-]+$/, "Invalid UPI VPA (e.g. name@bank)"),
     payeeName: z.string().min(2, "Payee name is required"),
@@ -195,6 +200,8 @@ organizationsRouter.post("/setup", async (c) => {
     accountNumber: z.string().optional(),
     ifscCode: z.string().optional(),
     category: z.string().default("RETAIL"),
+    panNumber: z.string().optional(),
+    gstin: z.string().optional(),
   });
 
   const data = validator.parse(body);
@@ -215,7 +222,10 @@ organizationsRouter.post("/setup", async (c) => {
     .values({
       id: orgId,
       name: data.businessName,
+      legalBusinessName: data.legalBusinessName ?? null,
       category: data.category,
+      panNumber: data.panNumber ? data.panNumber.toUpperCase() : null,
+      gstin: data.gstin ? data.gstin.toUpperCase() : null,
       status: "ACTIVE",
       ownerId: userId,
       createdAt: now,
@@ -366,6 +376,10 @@ organizationsRouter.post("/setup", async (c) => {
       organization: {
         id: orgId,
         name: data.businessName,
+        legalBusinessName: data.legalBusinessName ?? null,
+        category: data.category,
+        panNumber: data.panNumber ? data.panNumber.toUpperCase() : null,
+        gstin: data.gstin ? data.gstin.toUpperCase() : null,
         role: "OWNER",
       },
       upiAccount: {

@@ -55,51 +55,66 @@ fun LegalScreen(
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-        ) {
-            // Horizontal scrollable frosted tabs
-            ScrollableTabRow(
-                selectedTabIndex = selectedTab,
-                edgePadding = 16.dp,
-                containerColor = MaterialTheme.colorScheme.background,
-                divider = { HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)) }
-            ) {
-                tabs.forEachIndexed { index, title ->
-                    Tab(
-                        selected = selectedTab == index,
-                        onClick = { selectedTab = index },
-                        text = {
-                            Text(
-                                text = title,
-                                fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal,
-                                color = if (selectedTab == index) BrandPrimary else MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    )
-                }
-            }
-
-            Column(
+        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+            // Background blurry ambient glow spheres
+            Box(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                when (selectedTab) {
-                    0 -> AboutRoleSection()
-                    1 -> PrivacyPolicySection()
-                    2 -> TermsSection()
-                    3 -> UpiDisclaimerSection()
-                    4 -> RefundPolicySection()
-                    5 -> DataRetentionSection()
-                    6 -> GrievanceSection()
+                    .size(260.dp)
+                    .offset(x = (-50).dp, y = (-30).dp)
+                    .clip(CircleShape)
+                    .background(SoftGlowIndigo)
+            )
+            Box(
+                modifier = Modifier
+                    .size(220.dp)
+                    .align(Alignment.TopEnd)
+                    .offset(x = 60.dp, y = 80.dp)
+                    .clip(CircleShape)
+                    .background(SoftGlowEmerald)
+            )
+
+            Column(modifier = Modifier.fillMaxSize()) {
+                // Horizontal scrollable frosted tabs
+                ScrollableTabRow(
+                    selectedTabIndex = selectedTab,
+                    edgePadding = 16.dp,
+                    containerColor = Color.Transparent,
+                    divider = { HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)) }
+                ) {
+                    tabs.forEachIndexed { index, title ->
+                        Tab(
+                            selected = selectedTab == index,
+                            onClick = { selectedTab = index },
+                            text = {
+                                Text(
+                                    text = title,
+                                    fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (selectedTab == index) BrandPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        )
+                    }
                 }
 
-                Spacer(modifier = Modifier.height(48.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    when (selectedTab) {
+                        0 -> AboutRoleSection()
+                        1 -> PrivacyPolicySection()
+                        2 -> TermsSection()
+                        3 -> UpiDisclaimerSection()
+                        4 -> RefundPolicySection()
+                        5 -> DataRetentionSection()
+                        6 -> GrievanceSection()
+                    }
+
+                    Spacer(modifier = Modifier.height(48.dp))
+                }
             }
         }
     }

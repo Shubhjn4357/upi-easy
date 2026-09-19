@@ -19,8 +19,10 @@ data class UserProfileResponse(
 data class OrganizationMembershipDto(
     val organizationId: String,
     val organizationName: String,
-    val legalBusinessName: String?,
-    val category: String?,
+    val legalBusinessName: String? = null,
+    val category: String? = null,
+    val panNumber: String? = null,
+    val gstin: String? = null,
     val roleName: String,
     val memberStatus: String
 )
@@ -47,8 +49,10 @@ data class OrganizationsResponse(
 data class OrganizationDto(
     val id: String,
     val name: String,
-    val legalBusinessName: String?,
-    val category: String?,
+    val legalBusinessName: String? = null,
+    val category: String? = null,
+    val panNumber: String? = null,
+    val gstin: String? = null,
     val role: String,
     val status: String
 )
@@ -153,7 +157,9 @@ data class InviteStaffRequest(
 data class UpdateOrganizationRequest(
     val name: String? = null,
     val legalBusinessName: String? = null,
-    val category: String? = null
+    val category: String? = null,
+    val panNumber: String? = null,
+    val gstin: String? = null
 )
 
 data class SyncResponse(
@@ -195,13 +201,16 @@ data class GoogleLoginResponse(
 
 data class AppSetupRequest(
     val businessName: String,
+    val legalBusinessName: String? = null,
     val mobileNumber: String,
     val primaryVpa: String,
     val payeeName: String,
     val bankName: String? = null,
     val accountNumber: String? = null,
     val ifscCode: String? = null,
-    val category: String = "RETAIL"
+    val category: String = "RETAIL",
+    val panNumber: String? = null,
+    val gstin: String? = null
 )
 
 data class AppSetupResponse(

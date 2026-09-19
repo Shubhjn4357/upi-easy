@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -17,6 +18,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -135,12 +137,29 @@ fun TransactionsScreen(
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(horizontal = 16.dp)
-        ) {
+        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+            // Background blurry ambient glow spheres
+            Box(
+                modifier = Modifier
+                    .size(260.dp)
+                    .offset(x = (-50).dp, y = (-30).dp)
+                    .clip(CircleShape)
+                    .background(SoftGlowIndigo)
+            )
+            Box(
+                modifier = Modifier
+                    .size(220.dp)
+                    .align(Alignment.TopEnd)
+                    .offset(x = 60.dp, y = 80.dp)
+                    .clip(CircleShape)
+                    .background(SoftGlowEmerald)
+            )
+
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp)
+            ) {
             if (!isSelectionMode) {
                 // Bento Glass Summary Card
                 val totalVolume = remember(transactionsList) { transactionsList.filter { it.status.equals("SUCCESS", ignoreCase = true) }.sumOf { it.amount } }
@@ -297,6 +316,7 @@ fun TransactionsScreen(
             }
         }
     }
+}
 
     // Detail Bottom Sheet
     selectedTransaction?.let { txn ->
