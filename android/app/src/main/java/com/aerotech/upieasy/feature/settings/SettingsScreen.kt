@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.sp
 import androidx.fragment.app.FragmentActivity
 import com.aerotech.upieasy.core.database.AppDatabase
 import com.aerotech.upieasy.core.network.NetworkClient
+import com.aerotech.upieasy.core.network.UpdateOrganizationRequest
 import com.aerotech.upieasy.core.network.UpdateProfileRequest
 import com.aerotech.upieasy.core.security.SessionManager
 import com.aerotech.upieasy.core.util.BiometricPromptHelper
@@ -45,8 +46,9 @@ fun SettingsScreen(
     val scope = rememberCoroutineScope()
     val apiService = remember { NetworkClient.getApiService(sessionManager) }
 
-    val currentOrgName by sessionManager.currentOrgNameFlow.collectAsState(initial = "Business Store")
-    val userRole by sessionManager.userRoleFlow.collectAsState(initial = "OWNER")
+    val currentOrgId by sessionManager.currentOrgIdFlow.collectAsState(initial = null)
+    val currentOrgName by sessionManager.currentOrgNameFlow.collectAsState(initial = null)
+    val userRole by sessionManager.userRoleFlow.collectAsState(initial = null)
     val userEmail by sessionManager.userEmailFlow.collectAsState(initial = null)
     val userName by sessionManager.userNameFlow.collectAsState(initial = null)
 
@@ -54,6 +56,7 @@ fun SettingsScreen(
     val biometricLock by sessionManager.biometricLockFlow.collectAsState(initial = false)
     val highValueAlert by sessionManager.highValueAlertFlow.collectAsState(initial = true)
     val themeMode by sessionManager.themeModeFlow.collectAsState(initial = "SYSTEM")
+    val dynamicColor by sessionManager.dynamicColorFlow.collectAsState(initial = false)
 
     var showEditProfileBottomSheet by remember { mutableStateOf(false) }
     var showSignOutConfirm by remember { mutableStateOf(false) }
@@ -221,6 +224,18 @@ fun SettingsScreen(
                             )
                         }
                     }
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 14.dp), color = MaterialTheme.colorScheme.outlineVariant)
+
+                    SettingToggleRow(
+                        icon = Icons.Default.Palette,
+                        title = "Material 3 Dynamic Colors",
+                        subtitle = if (dynamicColor) "Wallpaper-adaptive colors (Android 12+)" else "Default PayOu brand colors (Recommended)",
+                        checked = dynamicColor,
+                        onCheckedChange = { isChecked ->
+                            scope.launch { sessionManager.setDynamicColor(isChecked) }
+                        }
+                    )
                 }
             }
 
@@ -385,6 +400,7 @@ fun SettingsScreen(
     // Edit Profile Bottom Sheet
     if (showEditProfileBottomSheet) {
         var editedName by remember { mutableStateOf(userName ?: "") }
+        var editedBusinessName by remember(currentOrgName) { mutableStateOf(currentOrgName ?: "") }
         var editedEmail by remember { mutableStateOf(userEmail ?: "") }
         var isUpdating by remember { mutableStateOf(false) }
         var updateError by remember { mutableStateOf<String?>(null) }
@@ -402,7 +418,7 @@ fun SettingsScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Text(
-                    text = "Edit Profile",
+                    text = "Edit Profile & Business Info",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold
                 )
@@ -415,6 +431,25 @@ fun SettingsScreen(
                     },
                     label = { Text("Full Name") },
                     placeholder = { Text("Your Name") },
+                    leadingIcon = {
+                        Icon(Icons.Default.Person, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                OutlinedTextField(
+                    value = editedBusinessName,
+                    onValueChange = {
+                        editedBusinessName = it
+                        updateError = null
+                    },
+                    label = { Text("Business / Store Name") },
+                    placeholder = { Text("My Retail Store") },
+                    leadingIcon = {
+                        Icon(Icons.Default.Storefront, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
@@ -428,6 +463,9 @@ fun SettingsScreen(
                     },
                     label = { Text("Email Address") },
                     placeholder = { Text("name@example.com") },
+                    leadingIcon = {
+                        Icon(Icons.Default.Email, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
@@ -443,6 +481,10 @@ fun SettingsScreen(
                             updateError = "Full name cannot be empty"
                             return@Button
                         }
+                        if (editedBusinessName.trim().isBlank()) {
+                            updateError = "Business name cannot be empty"
+                            return@Button
+                        }
                         if (editedEmail.isNotBlank() && !editedEmail.contains("@")) {
                             updateError = "Please enter a valid email address"
                             return@Button
@@ -451,19 +493,32 @@ fun SettingsScreen(
                         isUpdating = true
                         scope.launch {
                             try {
-                                val res = apiService.updateProfile(
+                                val resProfile = apiService.updateProfile(
                                     UpdateProfileRequest(
                                         fullName = editedName.trim(),
                                         email = editedEmail.trim().ifBlank { null }
                                     )
                                 )
-                                if (res.isSuccessful && res.body()?.success == true) {
+                                if (resProfile.isSuccessful && resProfile.body()?.success == true) {
                                     sessionManager.updateProfile(editedName.trim(), editedEmail.trim().ifBlank { null })
-                                    Toast.makeText(context, "Profile updated successfully", Toast.LENGTH_SHORT).show()
-                                    showEditProfileBottomSheet = false
-                                } else {
-                                    updateError = res.body()?.message ?: "Failed to update profile"
                                 }
+
+                                currentOrgId?.let { orgId ->
+                                    if (editedBusinessName.trim() != currentOrgName) {
+                                        val resOrg = apiService.updateOrganization(
+                                            orgId = orgId,
+                                            request = UpdateOrganizationRequest(
+                                                name = editedBusinessName.trim()
+                                            )
+                                        )
+                                        if (resOrg.isSuccessful && resOrg.body()?.success == true) {
+                                            sessionManager.updateOrganizationName(editedBusinessName.trim())
+                                        }
+                                    }
+                                }
+
+                                Toast.makeText(context, "Profile and Business updated successfully", Toast.LENGTH_SHORT).show()
+                                showEditProfileBottomSheet = false
                             } catch (e: Exception) {
                                 updateError = e.localizedMessage ?: "Network error"
                             } finally {

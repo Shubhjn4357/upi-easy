@@ -109,6 +109,7 @@ function seedPermissionsAndRoles() {
       "perm_upi_manage",
       "perm_qr_create",
       "perm_staff_read",
+      "perm_staff_manage",
       "perm_rep_read",
     ],
     role_cashier: ["perm_tx_read", "perm_tx_create", "perm_upi_read", "perm_qr_create"],

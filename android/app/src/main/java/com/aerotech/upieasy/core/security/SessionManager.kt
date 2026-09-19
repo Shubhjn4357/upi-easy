@@ -27,6 +27,7 @@ class SessionManager(private val context: Context) {
         private val KEY_BIOMETRIC_LOCK = androidx.datastore.preferences.core.booleanPreferencesKey("biometric_lock")
         private val KEY_HIGH_VALUE_ALERT = androidx.datastore.preferences.core.booleanPreferencesKey("high_value_alert")
         private val KEY_THEME_MODE = stringPreferencesKey("theme_mode")
+        private val KEY_DYNAMIC_COLOR = androidx.datastore.preferences.core.booleanPreferencesKey("dynamic_color")
     }
 
     val accessTokenFlow: Flow<String?> = context.dataStore.data.map { it[KEY_ACCESS_TOKEN] }
@@ -41,15 +42,26 @@ class SessionManager(private val context: Context) {
     val biometricLockFlow: Flow<Boolean> = context.dataStore.data.map { it[KEY_BIOMETRIC_LOCK] ?: false }
     val highValueAlertFlow: Flow<Boolean> = context.dataStore.data.map { it[KEY_HIGH_VALUE_ALERT] ?: true }
     val themeModeFlow: Flow<String> = context.dataStore.data.map { it[KEY_THEME_MODE] ?: "SYSTEM" }
+    val dynamicColorFlow: Flow<Boolean> = context.dataStore.data.map { it[KEY_DYNAMIC_COLOR] ?: false }
 
     suspend fun setThemeMode(mode: String) {
         context.dataStore.edit { it[KEY_THEME_MODE] = mode }
+    }
+
+    suspend fun setDynamicColor(enabled: Boolean) {
+        context.dataStore.edit { it[KEY_DYNAMIC_COLOR] = enabled }
     }
 
     suspend fun updateProfile(name: String?, email: String?) {
         context.dataStore.edit { prefs ->
             if (name != null) prefs[KEY_USER_NAME] = name
             if (email != null) prefs[KEY_USER_EMAIL] = email
+        }
+    }
+
+    suspend fun updateOrganizationName(name: String) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_CURRENT_ORG_NAME] = name
         }
     }
 

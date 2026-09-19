@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import android.widget.Toast
 import com.aerotech.upieasy.core.database.AppDatabase
 import com.aerotech.upieasy.core.database.UpiAccountEntity
 import com.aerotech.upieasy.core.network.AddUpiRequest
@@ -27,7 +28,9 @@ import com.aerotech.upieasy.core.network.NetworkClient
 import com.aerotech.upieasy.core.network.UpiAccountDto
 import com.aerotech.upieasy.core.security.SessionManager
 import com.aerotech.upieasy.ui.theme.*
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -52,6 +55,8 @@ fun UpiScreen(
     var accountToDelete by remember { mutableStateOf<UpiAccountDto?>(null) }
     var showBulkDeleteConfirm by remember { mutableStateOf(false) }
 
+    var hasFetchedRemote by remember { mutableStateOf(false) }
+
     fun refresh() {
         currentOrgId?.let { orgId ->
             isLoading = true
@@ -61,30 +66,36 @@ fun UpiScreen(
                     if (res.isSuccessful && res.body()?.success == true) {
                         val accounts = res.body()?.upiAccounts ?: emptyList()
                         upiList = accounts
-                        val entities = accounts.map { dto ->
-                            UpiAccountEntity(
-                                id = dto.id,
-                                organizationId = orgId,
-                                vpa = dto.vpa,
-                                payeeName = dto.payeeName,
-                                merchantCategoryCode = dto.merchantCategoryCode,
-                                isDefault = dto.isDefault,
-                                status = dto.status,
-                                transactionCount = dto.transactionCount
-                            )
+                        withContext(Dispatchers.IO) {
+                            database.upiDao().clearUpiAccounts(orgId)
+                            if (accounts.isNotEmpty()) {
+                                val entities = accounts.map { dto ->
+                                    UpiAccountEntity(
+                                        id = dto.id,
+                                        organizationId = orgId,
+                                        vpa = dto.vpa,
+                                        payeeName = dto.payeeName,
+                                        merchantCategoryCode = dto.merchantCategoryCode,
+                                        isDefault = dto.isDefault,
+                                        status = dto.status,
+                                        transactionCount = dto.transactionCount
+                                    )
+                                }
+                                database.upiDao().insertUpiAccounts(entities)
+                            }
                         }
-                        database.upiDao().insertUpiAccounts(entities)
                     }
                 } catch (_: Exception) {}
                 isLoading = false
+                hasFetchedRemote = true
             }
         }
     }
 
-    val effectiveList = remember(upiList, localAccounts) {
-        if (upiList.isNotEmpty()) {
+    val effectiveList = remember(upiList, localAccounts, hasFetchedRemote) {
+        if (hasFetchedRemote) {
             upiList
-        } else {
+        } else if (localAccounts.isNotEmpty()) {
             localAccounts.map { entity ->
                 UpiAccountDto(
                     id = entity.id,
@@ -96,6 +107,8 @@ fun UpiScreen(
                     transactionCount = entity.transactionCount
                 )
             }
+        } else {
+            upiList
         }
     }
 
@@ -467,9 +480,18 @@ fun UpiScreen(
                         currentOrgId?.let { orgId ->
                             scope.launch {
                                 try {
-                                    apiService.deleteUpiAccount(orgId, account.id)
-                                    refresh()
-                                } catch (_: Exception) {}
+                                    val res = apiService.deleteUpiAccount(orgId, account.id)
+                                    if (res.isSuccessful) {
+                                        upiList = upiList.filter { it.id != account.id }
+                                        withContext(Dispatchers.IO) { database.upiDao().deleteUpiAccount(account.id) }
+                                        hasFetchedRemote = true
+                                        Toast.makeText(context, "${account.vpa} removed", Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        Toast.makeText(context, "Failed to delete. Try again.", Toast.LENGTH_SHORT).show()
+                                    }
+                                } catch (e: Exception) {
+                                    Toast.makeText(context, "Error: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+                                }
                                 accountToDelete = null
                             }
                         }
@@ -498,15 +520,21 @@ fun UpiScreen(
                     onClick = {
                         currentOrgId?.let { orgId ->
                             scope.launch {
-                                selectedIds.forEach { id ->
+                                val toDelete = selectedIds.toList()
+                                toDelete.forEach { id ->
                                     try {
-                                        apiService.deleteUpiAccount(orgId, id)
+                                        val res = apiService.deleteUpiAccount(orgId, id)
+                                        if (res.isSuccessful) {
+                                            withContext(Dispatchers.IO) { database.upiDao().deleteUpiAccount(id) }
+                                        }
                                     } catch (_: Exception) {}
                                 }
+                                upiList = upiList.filter { it.id !in toDelete }
+                                hasFetchedRemote = true
                                 isSelectionMode = false
                                 selectedIds = emptySet()
                                 showBulkDeleteConfirm = false
-                                refresh()
+                                Toast.makeText(context, "${toDelete.size} UPI IDs deleted", Toast.LENGTH_SHORT).show()
                             }
                         }
                     },

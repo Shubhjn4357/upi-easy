@@ -137,7 +137,7 @@ data class StaffMemberDto(
     val id: String,
     val userId: String,
     val fullName: String?,
-    val mobileNumber: String,
+    val mobileNumber: String?,
     val email: String?,
     val role: String,
     val status: String
@@ -148,6 +148,12 @@ data class InviteStaffRequest(
     val email: String? = null,
     val fullName: String? = null,
     val role: String
+)
+
+data class UpdateOrganizationRequest(
+    val name: String? = null,
+    val legalBusinessName: String? = null,
+    val category: String? = null
 )
 
 data class SyncResponse(
@@ -229,6 +235,12 @@ interface ApiService {
 
     @GET("api/v1/organizations/{orgId}/dashboard")
     suspend fun getDashboard(@Path("orgId") orgId: String): Response<DashboardResponse>
+
+    @PATCH("api/v1/organizations/{orgId}")
+    suspend fun updateOrganization(
+        @Path("orgId") orgId: String,
+        @Body request: UpdateOrganizationRequest
+    ): Response<ApiResponse<Any>>
 
     @GET("api/v1/organizations/{orgId}/transactions")
     suspend fun getTransactions(

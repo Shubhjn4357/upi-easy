@@ -229,6 +229,14 @@ upiRouter.delete(
       throw new NotFoundError("UPI Account not found");
     }
 
+    // Unlink transactions referencing this UPI account to prevent foreign key errors
+    try {
+      await db.update(schema.transactions)
+        .set({ upiAccountId: null })
+        .where(eq(schema.transactions.upiAccountId, upiId))
+        .run();
+    } catch (_) {}
+
     // Delete associated QR codes
     await db.delete(schema.qrCodes)
       .where(eq(schema.qrCodes.upiAccountId, upiId))

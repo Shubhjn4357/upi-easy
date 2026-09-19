@@ -419,7 +419,14 @@ fun StaffScreen(sessionManager: SessionManager) {
                                         showInviteBottomSheet = false
                                         refresh()
                                     } else {
-                                        errorMessage = res.body()?.message ?: "Failed to invite staff member"
+                                        // Parse the error body for a real error message
+                                        val errBody = res.errorBody()?.string()
+                                        val serverMsg = try {
+                                            org.json.JSONObject(errBody ?: "").optString("message", null)
+                                        } catch (_: Exception) { null }
+                                        errorMessage = serverMsg
+                                            ?: res.body()?.message
+                                            ?: "Failed to add staff member (HTTP ${res.code()})"
                                     }
                                 } catch (e: Exception) {
                                     errorMessage = e.localizedMessage ?: "Network error"
@@ -428,6 +435,7 @@ fun StaffScreen(sessionManager: SessionManager) {
                                 }
                             }
                         }
+
                     },
                     modifier = Modifier
                         .fillMaxWidth()

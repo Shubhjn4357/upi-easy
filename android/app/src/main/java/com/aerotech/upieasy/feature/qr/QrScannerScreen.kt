@@ -31,9 +31,11 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.common.InputImage
+import com.aerotech.upieasy.core.util.CameraPermissionEffect
 import com.aerotech.upieasy.core.util.PaymentLauncher
 import com.aerotech.upieasy.core.util.UpiPaymentDetails
 import com.aerotech.upieasy.core.util.UpiUriHelper
+import com.aerotech.upieasy.core.util.hasCameraPermission
 import com.aerotech.upieasy.ui.theme.*
 import java.util.concurrent.Executors
 
@@ -47,6 +49,44 @@ fun QrScannerScreen(
 
     var scannedDetails by remember { mutableStateOf<UpiPaymentDetails?>(null) }
     var scannedRawUri by remember { mutableStateOf<String?>(null) }
+    var cameraPermissionGranted by remember { mutableStateOf(context.hasCameraPermission()) }
+    var triggerPermission by remember { mutableStateOf(true) }
+
+    // Request camera permission on first entry and re-request if missing
+    CameraPermissionEffect(
+        trigger = triggerPermission,
+        onGranted = {
+            cameraPermissionGranted = true
+            triggerPermission = false
+        },
+        onDismissed = {
+            triggerPermission = false
+            if (!context.hasCameraPermission()) {
+                onNavigateBack()
+            }
+        }
+    )
+
+    if (!cameraPermissionGranted) {
+        // Show a loading/waiting state while permission is being requested
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                CircularProgressIndicator()
+                Text(
+                    "Awaiting camera permission…",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        return
+    }
 
     // Infinite transition for the animated laser scanning line
     val infiniteTransition = rememberInfiniteTransition(label = "scanner_laser")
@@ -59,6 +99,7 @@ fun QrScannerScreen(
         ),
         label = "laser_y"
     )
+
 
     Scaffold(
         topBar = {

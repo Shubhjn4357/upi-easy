@@ -32,6 +32,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.horizontalScroll
+import com.aerotech.upieasy.core.database.AppDatabase
+import com.aerotech.upieasy.core.security.SessionManager
 import com.aerotech.upieasy.core.util.QrCodeGenerator
 import com.aerotech.upieasy.core.util.UpiPaymentDetails
 import com.aerotech.upieasy.core.util.UpiUriHelper
@@ -41,14 +44,37 @@ import com.aerotech.upieasy.ui.theme.*
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun QrGeneratorScreen(
-    initialVpa: String = "business@okhdfcbank",
-    initialPayeeName: String = "Hakuna matata",
+    sessionManager: SessionManager? = null,
+    database: AppDatabase? = null,
+    initialVpa: String? = null,
+    initialPayeeName: String? = null,
     onNavigateBack: () -> Unit
 ) {
     val context = LocalContext.current
 
-    var vpa by remember { mutableStateOf(initialVpa) }
-    var payeeName by remember { mutableStateOf(initialPayeeName) }
+    val currentOrgId by (sessionManager?.currentOrgIdFlow?.collectAsState(initial = null) ?: remember { mutableStateOf(null) })
+    val currentOrgName by (sessionManager?.currentOrgNameFlow?.collectAsState(initial = null) ?: remember { mutableStateOf(null) })
+    val userName by (sessionManager?.userNameFlow?.collectAsState(initial = null) ?: remember { mutableStateOf(null) })
+
+    val localAccounts by (database?.upiDao()?.getUpiAccountsFlow(currentOrgId ?: "")?.collectAsState(initial = emptyList()) ?: remember { mutableStateOf(emptyList()) })
+
+    val defaultAccount = remember(localAccounts) {
+        localAccounts.firstOrNull { it.isDefault } ?: localAccounts.firstOrNull()
+    }
+
+    var vpa by remember(initialVpa, defaultAccount) {
+        mutableStateOf(initialVpa ?: defaultAccount?.vpa ?: "merchant@upi")
+    }
+    var payeeName by remember(initialPayeeName, defaultAccount, currentOrgName, userName) {
+        mutableStateOf(
+            initialPayeeName
+                ?: defaultAccount?.payeeName
+                ?: currentOrgName
+                ?: userName
+                ?: "Merchant Store"
+        )
+    }
+
     var isSetAmountEnabled by remember { mutableStateOf(false) }
     var amountText by remember { mutableStateOf("") }
     var descriptionText by remember { mutableStateOf("") }
@@ -182,6 +208,34 @@ fun QrGeneratorScreen(
                                             clipboard.setPrimaryClip(ClipData.newPlainText("VPA", vpa))
                                             Toast.makeText(context, "UPI ID copied", Toast.LENGTH_SHORT).show()
                                         }
+                                )
+                            }
+                        }
+                    }
+
+                    // Multiple Linked UPI Account Selector
+                    if (localAccounts.size > 1) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            localAccounts.forEach { acc ->
+                                val isSelected = acc.vpa == vpa
+                                FilterChip(
+                                    selected = isSelected,
+                                    onClick = {
+                                        vpa = acc.vpa
+                                        payeeName = acc.payeeName
+                                    },
+                                    label = { Text(acc.vpa, fontSize = 12.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
+                                    shape = RoundedCornerShape(16.dp),
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = selectedThemeColor.copy(alpha = 0.15f),
+                                        selectedLabelColor = selectedThemeColor
+                                    )
                                 )
                             }
                         }

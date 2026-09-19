@@ -22,6 +22,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -29,6 +30,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.fragment.app.FragmentActivity
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavType
+import androidx.navigation.navArgument
 import androidx.navigation.compose.*
 import com.aerotech.upieasy.core.database.AppDatabase
 import com.aerotech.upieasy.core.network.NetworkClient
@@ -66,13 +69,14 @@ class MainActivity : FragmentActivity() {
 
         setContent {
             val themeMode by sessionManager.themeModeFlow.collectAsState(initial = "SYSTEM")
+            val dynamicColor by sessionManager.dynamicColorFlow.collectAsState(initial = false)
             val darkTheme = when (themeMode) {
                 "LIGHT" -> false
                 "DARK" -> true
                 else -> isSystemInDarkTheme()
             }
 
-            UPIEasyTheme(darkTheme = darkTheme) {
+            UPIEasyTheme(darkTheme = darkTheme, dynamicColor = dynamicColor) {
                 val navController = rememberNavController()
                 val scope = rememberCoroutineScope()
 
@@ -127,6 +131,21 @@ class MainActivity : FragmentActivity() {
 
                     val activePaymentAlert by com.aerotech.upieasy.core.util.PaymentAlertManager.activePaymentAlert.collectAsState()
 
+                    // Ask for notification permission right after the user is authenticated
+                    var askNotificationPermission by remember { mutableStateOf(false) }
+                    com.aerotech.upieasy.core.util.NotificationPermissionEffect(
+                        trigger = askNotificationPermission,
+                        onGranted = { askNotificationPermission = false },
+                        onDismissed = { askNotificationPermission = false }
+                    )
+
+                    LaunchedEffect(token) {
+                        // Trigger notification permission request once when user is logged in
+                        if (!token.isNullOrBlank()) {
+                            askNotificationPermission = true
+                        }
+                    }
+
                     LaunchedEffect(Unit) {
                         UPIEasyApp.triggerImmediateSync(applicationContext)
                     }
@@ -167,7 +186,13 @@ class MainActivity : FragmentActivity() {
                                 sessionManager = sessionManager,
                                 database = database,
                                 onNavigateToScan = { navController.navigate("qr_scan") },
-                                onNavigateToQr = { navController.navigate("qr_gen") },
+                                onNavigateToQr = { vpa, name ->
+                                    if (!vpa.isNullOrBlank()) {
+                                        navController.navigate("qr_gen?vpa=$vpa&name=${name ?: ""}")
+                                    } else {
+                                        navController.navigate("qr_gen")
+                                    }
+                                },
                                 onLogout = {
                                     scope.launch {
                                         sessionManager.clearSession()
@@ -185,8 +210,20 @@ class MainActivity : FragmentActivity() {
                             )
                         }
 
-                        composable("qr_gen") {
+                        composable(
+                            route = "qr_gen?vpa={vpa}&name={name}",
+                            arguments = listOf(
+                                navArgument("vpa") { type = NavType.StringType; nullable = true; defaultValue = null },
+                                navArgument("name") { type = NavType.StringType; nullable = true; defaultValue = null }
+                            )
+                        ) { backStackEntry ->
+                            val vpaArg = backStackEntry.arguments?.getString("vpa")
+                            val nameArg = backStackEntry.arguments?.getString("name")
                             QrGeneratorScreen(
+                                sessionManager = sessionManager,
+                                database = database,
+                                initialVpa = vpaArg,
+                                initialPayeeName = nameArg,
                                 onNavigateBack = { navController.popBackStack() }
                             )
                         }
@@ -209,7 +246,7 @@ fun MainAppContent(
     sessionManager: SessionManager,
     database: AppDatabase,
     onNavigateToScan: () -> Unit,
-    onNavigateToQr: () -> Unit,
+    onNavigateToQr: (vpa: String?, name: String?) -> Unit,
     onLogout: () -> Unit
 ) {
     val bottomNavController = rememberNavController()
@@ -256,7 +293,7 @@ fun MainAppContent(
                 DashboardScreen(
                     sessionManager = sessionManager,
                     onNavigateToScan = onNavigateToScan,
-                    onNavigateToQr = onNavigateToQr,
+                    onNavigateToQr = { onNavigateToQr(null, null) },
                     onNavigateToTransactions = { bottomNavController.navigate(Screen.Transactions.route) },
                     onNavigateToUpi = { bottomNavController.navigate(Screen.Upi.route) }
                 )
@@ -269,7 +306,7 @@ fun MainAppContent(
             composable(Screen.Upi.route) {
                 UpiScreen(
                     sessionManager = sessionManager,
-                    onNavigateToQrForVpa = { _, _ -> onNavigateToQr() }
+                    onNavigateToQrForVpa = { vpa, name -> onNavigateToQr(vpa, name) }
                 )
             }
 

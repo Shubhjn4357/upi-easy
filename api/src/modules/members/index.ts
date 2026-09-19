@@ -32,7 +32,7 @@ membersRouter.get("/:orgId/staff", requireTenant, requirePermission("staff.read"
     })
     .from(schema.organizationMembers)
     .innerJoin(schema.users, eq(schema.organizationMembers.userId, schema.users.id))
-    .innerJoin(schema.roles, eq(schema.organizationMembers.roleId, schema.roles.id))
+    .leftJoin(schema.roles, eq(schema.organizationMembers.roleId, schema.roles.id))
     .where(eq(schema.organizationMembers.organizationId, orgId))
     .all();
 
@@ -59,8 +59,22 @@ membersRouter.post("/:orgId/staff/invite", requireTenant, requirePermission("sta
   const fullName = parsed.fullName?.trim() ? parsed.fullName.trim() : undefined;
   const role = parsed.role;
 
-  // Find target role
-  const roleRecord = await db.select().from(schema.roles).where(eq(schema.roles.name, role)).get();
+  // Find target role (or ensure standard roles exist in D1)
+  let roleRecord = await db.select().from(schema.roles).where(eq(schema.roles.name, role)).get();
+  if (!roleRecord) {
+    const standardRoles = [
+      { id: "role_owner", name: "OWNER", description: "Full business control", isSystem: true },
+      { id: "role_manager", name: "MANAGER", description: "Business and staff operations", isSystem: true },
+      { id: "role_cashier", name: "CASHIER", description: "Payment initiation and transaction records", isSystem: true },
+      { id: "role_accountant", name: "ACCOUNTANT", description: "Reconciliation, reporting and exports", isSystem: true },
+    ];
+    for (const r of standardRoles) {
+      try {
+        await db.insert(schema.roles).values(r).onConflictDoNothing().run();
+      } catch (_) {}
+    }
+    roleRecord = await db.select().from(schema.roles).where(eq(schema.roles.name, role)).get();
+  }
   if (!roleRecord) {
     throw new AppError("Invalid role specified", 400);
   }
