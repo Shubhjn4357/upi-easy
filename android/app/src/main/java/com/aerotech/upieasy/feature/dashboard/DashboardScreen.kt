@@ -15,7 +15,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -23,7 +22,6 @@ import com.aerotech.upieasy.core.network.DashboardDto
 import com.aerotech.upieasy.core.network.NetworkClient
 import com.aerotech.upieasy.core.security.SessionManager
 import com.aerotech.upieasy.domain.model.Transaction
-import com.aerotech.upieasy.ui.components.MetricCard
 import com.aerotech.upieasy.ui.components.PayouHeroCard
 import com.aerotech.upieasy.ui.components.PayouQuickActionButton
 import com.aerotech.upieasy.ui.components.PayouTopBar
@@ -522,4 +520,5 @@ fun DashboardScreen(
             }
         }
     }
+}
 }
