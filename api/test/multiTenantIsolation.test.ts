@@ -14,16 +14,14 @@ describe("Multi-Tenant Isolation Security Tests", () => {
 
   beforeAll(async () => {
     // Setup User A
-    const reqA = await app.request("/api/v1/auth/request-otp", {
+    const verA = await app.request("/api/v1/auth/google", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mobileNumber: "9111111111" }),
-    });
-    const { devOtpPreview: otpA } = await reqA.json();
-    const verA = await app.request("/api/v1/auth/verify-otp", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mobileNumber: "9111111111", otp: otpA }),
+      body: JSON.stringify({
+        idToken: "mock:tenantA@gmail.com:google_sub_tenantA",
+        email: "tenantA@gmail.com",
+        fullName: "Tenant User A",
+      }),
     });
     tokenA = (await verA.json()).tokens.accessToken;
 
@@ -39,16 +37,14 @@ describe("Multi-Tenant Isolation Security Tests", () => {
     orgAId = (await createOrgA.json()).organization.id;
 
     // Setup User B
-    const reqB = await app.request("/api/v1/auth/request-otp", {
+    const verB = await app.request("/api/v1/auth/google", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mobileNumber: "9222222222" }),
-    });
-    const { devOtpPreview: otpB } = await reqB.json();
-    const verB = await app.request("/api/v1/auth/verify-otp", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mobileNumber: "9222222222", otp: otpB }),
+      body: JSON.stringify({
+        idToken: "mock:tenantB@gmail.com:google_sub_tenantB",
+        email: "tenantB@gmail.com",
+        fullName: "Tenant User B",
+      }),
     });
     tokenB = (await verB.json()).tokens.accessToken;
 

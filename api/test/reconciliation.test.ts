@@ -16,16 +16,14 @@ describe("Webhook & Reconciliation Engine Tests", () => {
 
   beforeAll(async () => {
     testRrn = `rrn_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
-    const req = await app.request("/api/v1/auth/request-otp", {
+    const ver = await app.request("/api/v1/auth/google", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mobileNumber: "9777777777" }),
-    });
-    const { devOtpPreview: otp } = await req.json();
-    const ver = await app.request("/api/v1/auth/verify-otp", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mobileNumber: "9777777777", otp }),
+      body: JSON.stringify({
+        idToken: "mock:recon.test@gmail.com:google_sub_recon",
+        email: "recon.test@gmail.com",
+        fullName: "Recon Tester",
+      }),
     });
     token = (await ver.json()).tokens.accessToken;
 

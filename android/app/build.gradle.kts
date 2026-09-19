@@ -6,11 +6,11 @@ plugins {
 }
 
 android {
-    namespace = "com.aerospace.upieasy"
+    namespace = "com.aerotech.upieasy"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.aerospace.upieasy"
+        applicationId = "com.aerotech.upieasy"
         minSdk = 26
         targetSdk = 34
         versionCode = 1
@@ -20,6 +20,7 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
+        buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"763162383806-qj95f9c9j02t1bcvd1d9r3l1k5u9h6h2.apps.googleusercontent.com\"")
     }
 
     buildTypes {
@@ -50,6 +51,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     packaging {
@@ -97,6 +99,11 @@ dependencies {
 
     // Biometrics & Keystore
     implementation("androidx.biometric:biometric:1.1.0")
+
+    // Google Credential Manager & Google ID Token
+    implementation("androidx.credentials:credentials:1.3.0")
+    implementation("androidx.credentials:credentials-play-services-auth:1.3.0")
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
 
     // CameraX & ML Kit Barcode Scanning
     implementation("androidx.camera:camera-core:1.3.4")

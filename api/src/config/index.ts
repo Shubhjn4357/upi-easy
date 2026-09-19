@@ -11,6 +11,7 @@ const envSchema = z.object({
   JWT_EXPIRY: z.string().default("15m"),
   REFRESH_TOKEN_EXPIRY: z.string().default("30d"),
   WEBHOOK_SECRET: z.string().default("default-webhook-secret-key-for-local-testing"),
+  GOOGLE_WEB_CLIENT_ID: z.string().optional().default(""),
 });
 
 export const config = envSchema.parse(process.env);

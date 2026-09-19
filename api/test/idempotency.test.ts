@@ -11,16 +11,14 @@ describe("Idempotency Engine Tests", () => {
   let orgId: string;
 
   beforeAll(async () => {
-    const req = await app.request("/api/v1/auth/request-otp", {
+    const ver = await app.request("/api/v1/auth/google", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mobileNumber: "9666666666" }),
-    });
-    const { devOtpPreview: otp } = await req.json();
-    const ver = await app.request("/api/v1/auth/verify-otp", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mobileNumber: "9666666666", otp }),
+      body: JSON.stringify({
+        idToken: "mock:idempotency.test@gmail.com:google_sub_idempotency",
+        email: "idempotency.test@gmail.com",
+        fullName: "Idempotency Tester",
+      }),
     });
     token = (await ver.json()).tokens.accessToken;
 

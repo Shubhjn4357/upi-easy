@@ -9,61 +9,70 @@ beforeAll(() => {
 describe("Auth Module Integration Tests", () => {
   const testMobile = "9876543210";
 
-  it("should request OTP successfully", async () => {
-    const res = await app.request("/api/v1/auth/request-otp", {
+  it("should sign in with Google Credential Manager and issue tokens", async () => {
+    const res = await app.request("/api/v1/auth/google", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mobileNumber: testMobile }),
+      body: JSON.stringify({
+        idToken: "mock:test.user@gmail.com:google_sub_test_123",
+        email: "test.user@gmail.com",
+        fullName: "Test User",
+        deviceId: "device-test-1",
+      }),
     });
 
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.success).toBe(true);
-    expect(body.expiresInSeconds).toBe(300);
-    expect(body.devOtpPreview).toBeDefined();
+    expect(body.user.email).toBe("test.user@gmail.com");
+    expect(body.tokens.accessToken).toBeDefined();
+    expect(body.tokens.refreshToken).toBeDefined();
   });
 
-  it("should fail OTP verification with incorrect OTP", async () => {
-    const res = await app.request("/api/v1/auth/verify-otp", {
+  it("should refresh access token using valid refresh token", async () => {
+    const loginRes = await app.request("/api/v1/auth/google", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        mobileNumber: testMobile,
-        otp: "000000",
+        idToken: "mock:refresh.test@gmail.com:google_sub_refresh",
+        email: "refresh.test@gmail.com",
+        fullName: "Refresh Tester",
       }),
     });
+    const { tokens } = await loginRes.json();
 
-    expect(res.status).toBe(400);
-    const body = await res.json();
-    expect(body.error.code).toBe("INCORRECT_OTP");
-  });
-
-  it("should verify OTP and issue tokens successfully", async () => {
-    // Request fresh OTP
-    const reqRes = await app.request("/api/v1/auth/request-otp", {
+    const refreshRes = await app.request("/api/v1/auth/refresh", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mobileNumber: testMobile }),
+      body: JSON.stringify({ refreshToken: tokens.refreshToken }),
     });
-    const { devOtpPreview } = await reqRes.json();
 
-    // Verify
-    const verifyRes = await app.request("/api/v1/auth/verify-otp", {
+    expect(refreshRes.status).toBe(200);
+    const refreshBody = await refreshRes.json();
+    expect(refreshBody.success).toBe(true);
+    expect(refreshBody.tokens.accessToken).toBeDefined();
+  });
+
+  it("should delete user account permanently via DELETE /api/v1/users/me", async () => {
+    const loginRes = await app.request("/api/v1/auth/google", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        mobileNumber: testMobile,
-        otp: devOtpPreview,
-        deviceId: "test-device-1",
+        idToken: "mock:delete.me@gmail.com:google_sub_delete",
+        email: "delete.me@gmail.com",
+        fullName: "To Delete",
       }),
     });
+    const { tokens } = await loginRes.json();
 
-    expect(verifyRes.status).toBe(200);
-    const verifyBody = await verifyRes.json();
-    expect(verifyBody.success).toBe(true);
-    expect(verifyBody.user.mobileNumber).toBe(testMobile);
-    expect(verifyBody.tokens.accessToken).toBeDefined();
-    expect(verifyBody.tokens.refreshToken).toBeDefined();
+    const delRes = await app.request("/api/v1/users/me", {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${tokens.accessToken}` },
+    });
+
+    expect(delRes.status).toBe(200);
+    const delBody = await delRes.json();
+    expect(delBody.success).toBe(true);
   });
 
   it("should sign in with Google and complete onboarding setup", async () => {

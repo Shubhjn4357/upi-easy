@@ -89,6 +89,7 @@ app.get("/api/routes", (c) => {
 const v1 = new Hono<AppEnv>();
 
 v1.route("/auth", authRouter);
+v1.route("/users", usersRouter);
 v1.route("/me", usersRouter);
 v1.route("/organizations", organizationsRouter);
 v1.route("/organizations", membersRouter);

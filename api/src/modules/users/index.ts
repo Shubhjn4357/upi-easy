@@ -11,7 +11,7 @@ export const usersRouter = new Hono<AppEnv>();
 
 usersRouter.use("*", requireAuth);
 
-usersRouter.get("/me", async (c) => {
+const getMeHandler = async (c: any) => {
   const userId = c.get("userId");
   const user = db.select().from(schema.users).where(eq(schema.users.id, userId)).get();
 
@@ -47,9 +47,12 @@ usersRouter.get("/me", async (c) => {
     },
     organizations: memberships,
   });
-});
+};
 
-usersRouter.patch("/me", async (c) => {
+usersRouter.get("/me", getMeHandler);
+usersRouter.get("/", getMeHandler);
+
+const patchMeHandler = async (c: any) => {
   const userId = c.get("userId");
   const body = await c.req.json();
   const schemaValidator = z.object({
@@ -69,4 +72,33 @@ usersRouter.patch("/me", async (c) => {
     .run();
 
   return c.json({ success: true, message: "Profile updated successfully" });
-});
+};
+
+usersRouter.patch("/me", patchMeHandler);
+usersRouter.patch("/", patchMeHandler);
+
+const deleteMeHandler = async (c: any) => {
+  const userId = c.get("userId");
+
+  // 1. Revoke all active sessions
+  db.update(schema.sessions)
+    .set({ isRevoked: true, updatedAt: new Date() })
+    .where(eq(schema.sessions.userId, userId))
+    .run();
+
+  // 2. Remove organization memberships
+  db.delete(schema.organizationMembers)
+    .where(eq(schema.organizationMembers.userId, userId))
+    .run();
+
+  // 3. Delete devices & user record (cascading to devices & sessions)
+  db.delete(schema.users).where(eq(schema.users.id, userId)).run();
+
+  return c.json({
+    success: true,
+    message: "User account and all associated sessions deleted successfully",
+  });
+};
+
+usersRouter.delete("/me", deleteMeHandler);
+usersRouter.delete("/", deleteMeHandler);

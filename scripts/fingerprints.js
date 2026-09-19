@@ -58,7 +58,7 @@ proc.on('close', (code) => {
     console.log('\n==================================================');
     console.log(' QUICK COPY FOR FIREBASE & GOOGLE CLOUD CONSOLE:');
     console.log('==================================================');
-    console.log('Package Name: com.aerospace.upieasy');
+    console.log('Package Name: com.aerotech.upieasy');
     if (sha1Match) {
       console.log(`SHA-1:        ${sha1Match[1]}`);
     }

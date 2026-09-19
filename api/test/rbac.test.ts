@@ -13,16 +13,14 @@ describe("RBAC Server-Enforced Permission Tests", () => {
 
   beforeAll(async () => {
     // Owner setup
-    const reqO = await app.request("/api/v1/auth/request-otp", {
+    const verO = await app.request("/api/v1/auth/google", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mobileNumber: "9333333333" }),
-    });
-    const { devOtpPreview: otpO } = await reqO.json();
-    const verO = await app.request("/api/v1/auth/verify-otp", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mobileNumber: "9333333333", otp: otpO }),
+      body: JSON.stringify({
+        idToken: "mock:owner.rbac@gmail.com:google_sub_owner_rbac",
+        email: "owner.rbac@gmail.com",
+        fullName: "RBAC Owner",
+      }),
     });
     ownerToken = (await verO.json()).tokens.accessToken;
 
@@ -45,23 +43,21 @@ describe("RBAC Server-Enforced Permission Tests", () => {
         Authorization: `Bearer ${ownerToken}`,
       },
       body: JSON.stringify({
-        mobileNumber: "9444444444",
+        email: "cashier.rbac@gmail.com",
         fullName: "Test Cashier",
         role: "CASHIER",
       }),
     });
 
     // Cashier logs in
-    const reqC = await app.request("/api/v1/auth/request-otp", {
+    const verC = await app.request("/api/v1/auth/google", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mobileNumber: "9444444444" }),
-    });
-    const { devOtpPreview: otpC } = await reqC.json();
-    const verC = await app.request("/api/v1/auth/verify-otp", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mobileNumber: "9444444444", otp: otpC }),
+      body: JSON.stringify({
+        idToken: "mock:cashier.rbac@gmail.com:google_sub_cashier_rbac",
+        email: "cashier.rbac@gmail.com",
+        fullName: "Test Cashier",
+      }),
     });
     cashierToken = (await verC.json()).tokens.accessToken;
   });

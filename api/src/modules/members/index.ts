@@ -45,12 +45,15 @@ membersRouter.post("/:orgId/staff/invite", requireTenant, requirePermission("sta
   const body = await c.req.json();
 
   const validator = z.object({
-    mobileNumber: z.string().regex(/^[6-9]\d{9}$/),
+    mobileNumber: z.string().regex(/^[6-9]\d{9}$/).optional(),
+    email: z.string().email().optional(),
     fullName: z.string().optional(),
     role: z.enum(["MANAGER", "CASHIER", "ACCOUNTANT"]),
+  }).refine((data) => data.mobileNumber || data.email, {
+    message: "Either mobileNumber or email must be provided",
   });
 
-  const { mobileNumber, fullName, role } = validator.parse(body);
+  const { mobileNumber, email, fullName, role } = validator.parse(body);
 
   // Find target role
   const roleRecord = db.select().from(schema.roles).where(eq(schema.roles.name, role)).get();
@@ -58,8 +61,14 @@ membersRouter.post("/:orgId/staff/invite", requireTenant, requirePermission("sta
     throw new AppError("Invalid role specified", 400);
   }
 
-  // Find or create the user
-  let user = db.select().from(schema.users).where(eq(schema.users.mobileNumber, mobileNumber)).get();
+  // Find or create the user by email or mobileNumber
+  let user: typeof schema.users.$inferSelect | undefined;
+  if (email) {
+    user = db.select().from(schema.users).where(eq(schema.users.email, email.toLowerCase())).get();
+  }
+  if (!user && mobileNumber) {
+    user = db.select().from(schema.users).where(eq(schema.users.mobileNumber, mobileNumber)).get();
+  }
   const now = new Date();
 
   if (!user) {
@@ -67,7 +76,8 @@ membersRouter.post("/:orgId/staff/invite", requireTenant, requirePermission("sta
     db.insert(schema.users)
       .values({
         id: newUserId,
-        mobileNumber,
+        mobileNumber: mobileNumber ?? null,
+        email: email ? email.toLowerCase() : null,
         fullName: fullName ?? null,
         status: "ACTIVE",
         createdAt: now,
@@ -75,6 +85,10 @@ membersRouter.post("/:orgId/staff/invite", requireTenant, requirePermission("sta
       })
       .run();
     user = db.select().from(schema.users).where(eq(schema.users.id, newUserId)).get()!;
+  }
+
+  if (!user) {
+    throw new AppError("Failed to create or find user", 500);
   }
 
   // Check if already a member

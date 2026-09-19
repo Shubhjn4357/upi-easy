@@ -104,32 +104,19 @@
                   }
                 },
                 {
-                  id: "auth-req-otp",
-                  method: "POST",
-                  path: "/api/v1/auth/request-otp",
-                  summary: "Request Login OTP",
-                  desc: "Dispatches 6-digit cryptographic verification code to merchant phone number.",
-                  auth: false,
-                  role: "PUBLIC",
-                  headers: [{ name: "Content-Type", req: true, val: "application/json" }],
+                  id: "users-delete-me",
+                  method: "DELETE",
+                  path: "/api/v1/users/me",
+                  summary: "Permanently Delete Account & Data",
+                  desc: "Revokes all active merchant sessions and deletes user account permanently.",
+                  auth: true,
+                  role: "AUTHENTICATED",
+                  headers: [
+                    { name: "Content-Type", req: true, val: "application/json" },
+                    { name: "Authorization", req: true, val: "Bearer {{token}}" }
+                  ],
                   params: [],
-                  body: { mobileNumber: "+919876543210" }
-                },
-                {
-                  id: "auth-verify-otp",
-                  method: "POST",
-                  path: "/api/v1/auth/verify-otp",
-                  summary: "Verify OTP & Device Register",
-                  desc: "Validates OTP code, marks phone as verified, and creates active session.",
-                  auth: false,
-                  role: "PUBLIC",
-                  headers: [{ name: "Content-Type", req: true, val: "application/json" }],
-                  params: [],
-                  body: {
-                    mobileNumber: "+919876543210",
-                    otp: "123456",
-                    deviceId: "android-dev-pixel8"
-                  }
+                  body: {}
                 },
                 {
                   id: "auth-refresh",
