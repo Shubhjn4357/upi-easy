@@ -81,7 +81,7 @@ fun PaymentPopupDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(24.dp),
-                horizontalAlignment = Alignment.CenterVertically
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 // Top Success Ring & Checkmark (GPay Business style)
                 Box(
