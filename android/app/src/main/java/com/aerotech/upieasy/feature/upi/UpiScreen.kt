@@ -44,9 +44,17 @@ fun UpiScreen(
     val apiService = remember { NetworkClient.getApiService(sessionManager) }
     val currentOrgId by sessionManager.currentOrgIdFlow.collectAsState(initial = null)
 
-    val localAccounts by database.upiDao().getUpiAccountsFlow(currentOrgId ?: "").collectAsState(initial = emptyList())
+    val localAccounts by remember(currentOrgId) {
+        if (!currentOrgId.isNullOrBlank()) {
+            database.upiDao().getUpiAccountsFlow(currentOrgId!!)
+        } else {
+            database.upiDao().getAllUpiAccountsFlow()
+        }
+    }.collectAsState(initial = emptyList())
+
     var upiList by remember { mutableStateOf<List<UpiAccountDto>>(emptyList()) }
-    var isLoading by remember { mutableStateOf(true) }
+    var pendingDeletedIds by remember { mutableStateOf(setOf<String>()) }
+    var isLoading by remember { mutableStateOf(false) }
     var showAddBottomSheet by remember { mutableStateOf(false) }
 
     // Multi-select state
@@ -55,19 +63,30 @@ fun UpiScreen(
     var accountToDelete by remember { mutableStateOf<UpiAccountDto?>(null) }
     var showBulkDeleteConfirm by remember { mutableStateOf(false) }
 
-    var hasFetchedRemote by remember { mutableStateOf(false) }
-
     fun refresh() {
-        currentOrgId?.let { orgId ->
+        scope.launch {
             isLoading = true
-            scope.launch {
+            var orgId = currentOrgId ?: sessionManager.getCurrentOrgId()
+            if (orgId.isNullOrBlank()) {
+                try {
+                    val orgRes = apiService.getOrganizations()
+                    if (orgRes.isSuccessful && orgRes.body()?.success == true) {
+                        val firstOrg = orgRes.body()?.organizations?.firstOrNull()
+                        if (firstOrg != null) {
+                            sessionManager.setOrganization(firstOrg.id, firstOrg.name, firstOrg.role)
+                            orgId = firstOrg.id
+                        }
+                    }
+                } catch (_: Exception) {}
+            }
+
+            if (!orgId.isNullOrBlank()) {
                 try {
                     val res = apiService.getUpiAccounts(orgId)
                     if (res.isSuccessful && res.body()?.success == true) {
                         val accounts = res.body()?.upiAccounts ?: emptyList()
                         upiList = accounts
                         withContext(Dispatchers.IO) {
-                            database.upiDao().clearUpiAccounts(orgId)
                             if (accounts.isNotEmpty()) {
                                 val entities = accounts.map { dto ->
                                     UpiAccountEntity(
@@ -86,34 +105,33 @@ fun UpiScreen(
                         }
                     }
                 } catch (_: Exception) {}
-                isLoading = false
-                hasFetchedRemote = true
             }
-        }
-    }
-
-    val effectiveList = remember(upiList, localAccounts, hasFetchedRemote) {
-        if (hasFetchedRemote) {
-            upiList
-        } else if (localAccounts.isNotEmpty()) {
-            localAccounts.map { entity ->
-                UpiAccountDto(
-                    id = entity.id,
-                    vpa = entity.vpa,
-                    payeeName = entity.payeeName,
-                    merchantCategoryCode = entity.merchantCategoryCode,
-                    isDefault = entity.isDefault,
-                    status = entity.status,
-                    transactionCount = entity.transactionCount
-                )
-            }
-        } else {
-            upiList
+            isLoading = false
         }
     }
 
     LaunchedEffect(currentOrgId) {
         refresh()
+    }
+
+    val sourceList = if (upiList.isNotEmpty()) {
+        upiList
+    } else {
+        localAccounts.map { entity ->
+            UpiAccountDto(
+                id = entity.id,
+                vpa = entity.vpa,
+                payeeName = entity.payeeName,
+                merchantCategoryCode = entity.merchantCategoryCode,
+                isDefault = entity.isDefault,
+                status = entity.status,
+                transactionCount = entity.transactionCount
+            )
+        }
+    }
+
+    val effectiveList = remember(sourceList, pendingDeletedIds) {
+        sourceList.filter { it.id !in pendingDeletedIds }
     }
 
     Scaffold(
@@ -174,7 +192,7 @@ fun UpiScreen(
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
-        if (isLoading) {
+        if (isLoading && effectiveList.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = BrandAccent)
             }
@@ -210,12 +228,16 @@ fun UpiScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 contentPadding = PaddingValues(bottom = 96.dp)
             ) {
-                items(effectiveList) { item ->
+                items(
+                    items = effectiveList,
+                    key = { it.id }
+                ) { item ->
                     val isSelected = selectedIds.contains(item.id)
 
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .animateItemPlacement()
                             .combinedClickable(
                                 onClick = {
                                     if (isSelectionMode) {
@@ -318,8 +340,9 @@ fun UpiScreen(
                                 Spacer(modifier = Modifier.height(8.dp))
                                 TextButton(
                                     onClick = {
-                                        currentOrgId?.let { orgId ->
-                                            scope.launch {
+                                        scope.launch {
+                                            val orgId = currentOrgId ?: sessionManager.getCurrentOrgId()
+                                            if (!orgId.isNullOrBlank()) {
                                                 apiService.setDefaultUpi(orgId, item.id)
                                                 refresh()
                                             }
@@ -428,13 +451,14 @@ fun UpiScreen(
                             return@Button
                         }
 
-                        currentOrgId?.let { orgId ->
-                            isSubmitting = true
-                            scope.launch {
-                                try {
+                        isSubmitting = true
+                        scope.launch {
+                            try {
+                                val orgId = currentOrgId ?: sessionManager.getCurrentOrgId()
+                                if (!orgId.isNullOrBlank()) {
                                     val res = apiService.addUpiAccount(
                                         orgId,
-                                        AddUpiRequest(vpaInput, payeeInput.trim(), setAsDefault)
+                                        AddUpiRequest(vpaInput.trim(), payeeInput.trim(), setAsDefault)
                                     )
                                     if (res.isSuccessful && res.body()?.success == true) {
                                         showAddBottomSheet = false
@@ -442,11 +466,13 @@ fun UpiScreen(
                                     } else {
                                         errorMessage = res.body()?.message ?: "Failed to add UPI ID"
                                     }
-                                } catch (e: Exception) {
-                                    errorMessage = e.localizedMessage ?: "Network error"
-                                } finally {
-                                    isSubmitting = false
+                                } else {
+                                    errorMessage = "Organization not found"
                                 }
+                            } catch (e: Exception) {
+                                errorMessage = e.localizedMessage ?: "Network error"
+                            } finally {
+                                isSubmitting = false
                             }
                         }
                     },
@@ -477,22 +503,29 @@ fun UpiScreen(
             confirmButton = {
                 Button(
                     onClick = {
-                        currentOrgId?.let { orgId ->
-                            scope.launch {
-                                try {
-                                    val res = apiService.deleteUpiAccount(orgId, account.id)
-                                    if (res.isSuccessful) {
-                                        upiList = upiList.filter { it.id != account.id }
-                                        withContext(Dispatchers.IO) { database.upiDao().deleteUpiAccount(account.id) }
-                                        hasFetchedRemote = true
-                                        Toast.makeText(context, "${account.vpa} removed", Toast.LENGTH_SHORT).show()
-                                    } else {
-                                        Toast.makeText(context, "Failed to delete. Try again.", Toast.LENGTH_SHORT).show()
+                        val target = account
+                        accountToDelete = null // Dismiss dialog immediately (0ms delay)
+                        pendingDeletedIds = pendingDeletedIds + target.id // Instant optimistic UI removal
+                        upiList = upiList.filter { it.id != target.id }
+                        Toast.makeText(context, "${target.vpa} removed", Toast.LENGTH_SHORT).show()
+
+                        scope.launch(Dispatchers.IO) {
+                            try {
+                                database.upiDao().deleteUpiAccount(target.id)
+                                val orgId = currentOrgId ?: sessionManager.getCurrentOrgId()
+                                if (!orgId.isNullOrBlank()) {
+                                    val res = apiService.deleteUpiAccount(orgId, target.id)
+                                    if (!res.isSuccessful) {
+                                        withContext(Dispatchers.Main) {
+                                            pendingDeletedIds = pendingDeletedIds - target.id
+                                            val err = res.errorBody()?.string()
+                                            val msg = try { org.json.JSONObject(err ?: "").optString("message").takeIf { it.isNotEmpty() } } catch (_: Exception) { null }
+                                            Toast.makeText(context, msg ?: "Server sync failed (${res.code()})", Toast.LENGTH_SHORT).show()
+                                        }
                                     }
-                                } catch (e: Exception) {
-                                    Toast.makeText(context, "Error: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
                                 }
-                                accountToDelete = null
+                            } catch (e: Exception) {
+                                // Background network error; item remains deleted locally
                             }
                         }
                     },
@@ -518,23 +551,23 @@ fun UpiScreen(
             confirmButton = {
                 Button(
                     onClick = {
-                        currentOrgId?.let { orgId ->
-                            scope.launch {
-                                val toDelete = selectedIds.toList()
-                                toDelete.forEach { id ->
-                                    try {
-                                        val res = apiService.deleteUpiAccount(orgId, id)
-                                        if (res.isSuccessful) {
-                                            withContext(Dispatchers.IO) { database.upiDao().deleteUpiAccount(id) }
-                                        }
-                                    } catch (_: Exception) {}
-                                }
-                                upiList = upiList.filter { it.id !in toDelete }
-                                hasFetchedRemote = true
-                                isSelectionMode = false
-                                selectedIds = emptySet()
-                                showBulkDeleteConfirm = false
-                                Toast.makeText(context, "${toDelete.size} UPI IDs deleted", Toast.LENGTH_SHORT).show()
+                        val toDelete = selectedIds.toList()
+                        showBulkDeleteConfirm = false // Dismiss immediately
+                        isSelectionMode = false
+                        selectedIds = emptySet()
+                        pendingDeletedIds = pendingDeletedIds + toDelete // Instant optimistic removal
+                        upiList = upiList.filter { it.id !in toDelete }
+                        Toast.makeText(context, "${toDelete.size} UPI IDs deleted", Toast.LENGTH_SHORT).show()
+
+                        scope.launch(Dispatchers.IO) {
+                            val orgId = currentOrgId ?: sessionManager.getCurrentOrgId()
+                            toDelete.forEach { id ->
+                                try {
+                                    database.upiDao().deleteUpiAccount(id)
+                                    if (!orgId.isNullOrBlank()) {
+                                        apiService.deleteUpiAccount(orgId, id)
+                                    }
+                                } catch (_: Exception) {}
                             }
                         }
                     },

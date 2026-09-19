@@ -35,6 +35,9 @@ interface UpiDao {
     @Query("SELECT * FROM local_upi_accounts WHERE organizationId = :orgId ORDER BY isDefault DESC")
     fun getUpiAccountsFlow(orgId: String): Flow<List<UpiAccountEntity>>
 
+    @Query("SELECT * FROM local_upi_accounts ORDER BY isDefault DESC")
+    fun getAllUpiAccountsFlow(): Flow<List<UpiAccountEntity>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertUpiAccounts(accounts: List<UpiAccountEntity>)
 

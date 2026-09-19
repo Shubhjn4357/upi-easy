@@ -422,7 +422,7 @@ fun StaffScreen(sessionManager: SessionManager) {
                                         // Parse the error body for a real error message
                                         val errBody = res.errorBody()?.string()
                                         val serverMsg = try {
-                                            org.json.JSONObject(errBody ?: "").optString("message", null)
+                                            org.json.JSONObject(errBody ?: "").optString("message", "").takeIf { it.isNotEmpty() }
                                         } catch (_: Exception) { null }
                                         errorMessage = serverMsg
                                             ?: res.body()?.message

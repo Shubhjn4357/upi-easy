@@ -38,6 +38,13 @@ object PaymentAlertManager {
     private val _activePaymentAlert = MutableStateFlow<PaymentAlert?>(null)
     val activePaymentAlert: StateFlow<PaymentAlert?> = _activePaymentAlert.asStateFlow()
 
+    private val _alertHistory = MutableStateFlow<List<PaymentAlert>>(emptyList())
+    val alertHistory: StateFlow<List<PaymentAlert>> = _alertHistory.asStateFlow()
+
+    fun clearAlertHistory() {
+        _alertHistory.value = emptyList()
+    }
+
     fun init(context: Context) {
         createNotificationChannel(context)
         initTts(context.applicationContext)
@@ -78,8 +85,9 @@ object PaymentAlertManager {
             referenceNumber = referenceNumber
         )
 
-        // 1. Post to in-app popup StateFlow
+        // 1. Post to in-app popup StateFlow and alert history
         _activePaymentAlert.value = alert
+        _alertHistory.value = listOf(alert) + _alertHistory.value.take(49)
 
         // 2. Show high-priority heads-up system notification
         showSystemNotification(appContext, alert)

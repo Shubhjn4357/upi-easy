@@ -58,6 +58,16 @@ android {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
+        jniLibs {
+            // Prevents build warnings for native libraries that can't be stripped
+            // (ML Kit barhopper, DataStore shared counter, image processing JNI)
+            useLegacyPackaging = true
+            keepDebugSymbols += listOf(
+                "**/libbarhopper_v3.so",
+                "**/libdatastore_shared_counter.so",
+                "**/libimage_processing_util_jni.so"
+            )
+        }
     }
 }
 

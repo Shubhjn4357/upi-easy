@@ -1,11 +1,17 @@
 package com.aerotech.upieasy.core.util
 
+import android.content.Context
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.net.Uri
+import androidx.core.content.FileProvider
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
 import com.google.zxing.qrcode.QRCodeWriter
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
+import java.io.File
+import java.io.FileOutputStream
 import java.util.EnumMap
 
 object QrCodeGenerator {
@@ -42,6 +48,52 @@ object QrCodeGenerator {
         } catch (e: Exception) {
             e.printStackTrace()
             null
+        }
+    }
+
+    fun shareQr(
+        context: Context,
+        bitmap: Bitmap?,
+        textMessage: String,
+        title: String = "Share Payment Request"
+    ) {
+        if (bitmap == null) {
+            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_TEXT, textMessage)
+            }
+            context.startActivity(Intent.createChooser(shareIntent, title))
+            return
+        }
+
+        try {
+            val cachePath = File(context.cacheDir, "images")
+            cachePath.mkdirs()
+            val imageFile = File(cachePath, "upi_qr_${System.currentTimeMillis()}.png")
+            FileOutputStream(imageFile).use { stream ->
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
+            }
+
+            val contentUri: Uri = FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                imageFile
+            )
+
+            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                type = "image/png"
+                putExtra(Intent.EXTRA_STREAM, contentUri)
+                putExtra(Intent.EXTRA_TEXT, textMessage)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            context.startActivity(Intent.createChooser(shareIntent, title))
+        } catch (e: Exception) {
+            e.printStackTrace()
+            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_TEXT, textMessage)
+            }
+            context.startActivity(Intent.createChooser(shareIntent, title))
         }
     }
 }

@@ -1,19 +1,17 @@
 package com.aerotech.upieasy.core.util
 
 import android.Manifest
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
-import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CameraAlt
-import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -23,7 +21,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 
 // ─────────────────────────────────────────────────────────
@@ -147,7 +144,7 @@ fun CameraPermissionEffect(
             onGranted()
         } else {
             // After denial, check if the user can be asked again
-            val canAsk = context.shouldShowRequestPermissionRationale(Manifest.permission.CAMERA)
+            val canAsk = (context as? Activity)?.shouldShowRequestPermissionRationale(Manifest.permission.CAMERA) ?: false
             permanentlyDenied = !canAsk
             showRationale = true
         }
@@ -208,9 +205,9 @@ fun NotificationPermissionEffect(
         if (isGranted) {
             onGranted()
         } else {
-            val canAsk = context.shouldShowRequestPermissionRationale(
+            val canAsk = (context as? Activity)?.shouldShowRequestPermissionRationale(
                 Manifest.permission.POST_NOTIFICATIONS
-            )
+            ) ?: false
             permanentlyDenied = !canAsk
             showRationale = true
         }

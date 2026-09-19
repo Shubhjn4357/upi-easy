@@ -45,9 +45,7 @@ import com.aerotech.upieasy.feature.settings.SettingsScreen
 import com.aerotech.upieasy.feature.staff.StaffScreen
 import com.aerotech.upieasy.feature.transactions.TransactionsScreen
 import com.aerotech.upieasy.feature.upi.UpiScreen
-import com.aerotech.upieasy.ui.theme.BackgroundLight
-import com.aerotech.upieasy.ui.theme.BrandAccent
-import com.aerotech.upieasy.ui.theme.UPIEasyTheme
+import com.aerotech.upieasy.ui.theme.*
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -193,6 +191,7 @@ class MainActivity : FragmentActivity() {
                                         navController.navigate("qr_gen")
                                     }
                                 },
+                                onNavigateToLegal = { navController.navigate("legal") },
                                 onLogout = {
                                     scope.launch {
                                         sessionManager.clearSession()
@@ -227,6 +226,12 @@ class MainActivity : FragmentActivity() {
                                 onNavigateBack = { navController.popBackStack() }
                             )
                         }
+
+                        composable("legal") {
+                            com.aerotech.upieasy.feature.legal.LegalScreen(
+                                onNavigateBack = { navController.popBackStack() }
+                            )
+                        }
                     }
 
                     activePaymentAlert?.let { alert ->
@@ -247,6 +252,7 @@ fun MainAppContent(
     database: AppDatabase,
     onNavigateToScan: () -> Unit,
     onNavigateToQr: (vpa: String?, name: String?) -> Unit,
+    onNavigateToLegal: () -> Unit,
     onLogout: () -> Unit
 ) {
     val bottomNavController = rememberNavController()
@@ -265,13 +271,14 @@ fun MainAppContent(
         contentWindowInsets = WindowInsets(0.dp),
         bottomBar = {
             FloatingGlassBottomBar(
-                items = items,
                 currentRoute = currentRoute,
                 onNavigateToScan = onNavigateToScan,
                 onItemClick = { screen ->
-                    if (currentRoute != screen.route) {
+                    if (screen.route == Screen.Dashboard.route) {
+                        bottomNavController.popBackStack(Screen.Dashboard.route, inclusive = false)
+                    } else {
                         bottomNavController.navigate(screen.route) {
-                            popUpTo(bottomNavController.graph.findStartDestination().id) {
+                            popUpTo(Screen.Dashboard.route) {
                                 saveState = true
                             }
                             launchSingleTop = true
@@ -295,7 +302,9 @@ fun MainAppContent(
                     onNavigateToScan = onNavigateToScan,
                     onNavigateToQr = { onNavigateToQr(null, null) },
                     onNavigateToTransactions = { bottomNavController.navigate(Screen.Transactions.route) },
-                    onNavigateToUpi = { bottomNavController.navigate(Screen.Upi.route) }
+                    onNavigateToUpi = { bottomNavController.navigate(Screen.Upi.route) },
+                    onNavigateToSettings = { bottomNavController.navigate(Screen.Settings.route) },
+                    onNavigateToStaff = { bottomNavController.navigate(Screen.Staff.route) }
                 )
             }
 
@@ -315,7 +324,12 @@ fun MainAppContent(
             }
 
             composable(Screen.Settings.route) {
-                SettingsScreen(sessionManager = sessionManager, database = database, onLogout = onLogout)
+                SettingsScreen(
+                    sessionManager = sessionManager,
+                    database = database,
+                    onNavigateToLegal = onNavigateToLegal,
+                    onLogout = onLogout
+                )
             }
         }
     }
@@ -323,75 +337,92 @@ fun MainAppContent(
 
 @Composable
 fun FloatingGlassBottomBar(
-    items: List<Screen>,
     currentRoute: String,
     onNavigateToScan: () -> Unit,
     onItemClick: (Screen) -> Unit
 ) {
     val leftItems = listOf(Screen.Dashboard, Screen.Transactions)
-    val rightItems = listOf(Screen.Upi, Screen.Settings)
+    val rightItems = listOf(Screen.Upi, Screen.Staff)
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .navigationBarsPadding()
-            .padding(horizontal = 18.dp, vertical = 8.dp),
+            .padding(horizontal = 20.dp, vertical = 10.dp),
         contentAlignment = Alignment.Center
     ) {
         Surface(
             shape = RoundedCornerShape(32.dp),
-            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
+            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.98f),
             tonalElevation = 8.dp,
             shadowElevation = 14.dp,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)),
-            modifier = Modifier.fillMaxWidth()
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(66.dp)
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                    .padding(horizontal = 8.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Left 2 items: Home, Ledger
-                leftItems.forEach { screen ->
-                    BottomNavItem(
-                        screen = screen,
-                        isSelected = currentRoute == screen.route,
-                        onClick = { onItemClick(screen) }
-                    )
-                }
-
-                // Center Elevated QR Action Button (PayOu style)
-                Box(
-                    modifier = Modifier
-                        .size(54.dp)
-                        .clip(CircleShape)
-                        .background(
-                            Brush.linearGradient(
-                                colors = listOf(Color(0xFF2563EB), Color(0xFF1D4ED8))
-                            )
-                        )
-                        .clickable { onNavigateToScan() },
-                    contentAlignment = Alignment.Center
+                // Left 2 items (Home, Ledger)
+                Row(
+                    modifier = Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.QrCodeScanner,
-                        contentDescription = "Scan QR",
-                        tint = Color.White,
-                        modifier = Modifier.size(24.dp)
-                    )
+                    leftItems.forEach { screen ->
+                        BottomNavItem(
+                            screen = screen,
+                            isSelected = currentRoute == screen.route,
+                            onClick = { onItemClick(screen) }
+                        )
+                    }
                 }
 
-                // Right 2 items: UPI, Settings/More
-                rightItems.forEach { screen ->
-                    BottomNavItem(
-                        screen = screen,
-                        isSelected = currentRoute == screen.route,
-                        onClick = { onItemClick(screen) }
-                    )
+                // Reserved space in bar for the centered floating QR FAB
+                Spacer(modifier = Modifier.width(60.dp))
+
+                // Right 2 items (UPI, Staff)
+                Row(
+                    modifier = Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    rightItems.forEach { screen ->
+                        BottomNavItem(
+                            screen = screen,
+                            isSelected = currentRoute == screen.route,
+                            onClick = { onItemClick(screen) }
+                        )
+                    }
                 }
             }
+        }
+
+        // Center Elevated QR Action Button (PayOu floating style)
+        Box(
+            modifier = Modifier
+                .offset(y = (-14).dp)
+                .size(56.dp)
+                .clip(CircleShape)
+                .background(
+                    Brush.linearGradient(
+                        colors = listOf(BrandGradientStart, BrandGradientEnd)
+                    )
+                )
+                .clickable { onNavigateToScan() },
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.QrCodeScanner,
+                contentDescription = "Scan QR",
+                tint = Color.White,
+                modifier = Modifier.size(26.dp)
+            )
         }
     }
 }
@@ -400,50 +431,46 @@ fun FloatingGlassBottomBar(
 private fun BottomNavItem(
     screen: Screen,
     isSelected: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val iconColor by animateColorAsState(
-        targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
+        targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
         animationSpec = tween(200),
         label = "iconColor"
     )
     val pillBgColor by animateColorAsState(
-        targetValue = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f) else Color.Transparent,
+        targetValue = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else Color.Transparent,
         animationSpec = tween(200),
         label = "pillBgColor"
     )
 
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(20.dp))
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(16.dp))
             .background(pillBgColor)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null
             ) { onClick() }
-            .padding(horizontal = if (isSelected) 12.dp else 8.dp, vertical = 6.dp),
-        contentAlignment = Alignment.Center
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
-        ) {
-            Icon(
-                imageVector = screen.icon,
-                contentDescription = screen.title,
-                tint = iconColor,
-                modifier = Modifier.size(20.dp)
-            )
-            AnimatedVisibility(visible = isSelected) {
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = screen.title,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-        }
+        Icon(
+            imageVector = screen.icon,
+            contentDescription = screen.title,
+            tint = iconColor,
+            modifier = Modifier.size(22.dp)
+        )
+        Spacer(modifier = Modifier.height(3.dp))
+        Text(
+            text = screen.title,
+            fontSize = 11.sp,
+            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+            color = iconColor,
+            maxLines = 1
+        )
     }
 }
 

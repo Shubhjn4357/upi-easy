@@ -111,6 +111,16 @@ class SessionManager(private val context: Context) {
         return context.dataStore.data.first()[KEY_ACCESS_TOKEN]
     }
 
+    suspend fun getRefreshToken(): String? {
+        return context.dataStore.data.first()[KEY_REFRESH_TOKEN]
+    }
+
+    suspend fun updateAccessToken(token: String) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_ACCESS_TOKEN] = token
+        }
+    }
+
     suspend fun getCurrentOrgId(): String? {
         return context.dataStore.data.first()[KEY_CURRENT_ORG_ID]
     }

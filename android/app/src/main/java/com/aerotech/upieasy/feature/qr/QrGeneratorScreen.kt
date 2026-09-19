@@ -122,12 +122,13 @@ fun QrGeneratorScreen(
                 actions = {
                     IconButton(
                         onClick = {
-                            val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                                type = "text/plain"
-                                val amtStr = if (isSetAmountEnabled && amountText.isNotBlank()) " (₹$amountText)" else ""
-                                putExtra(Intent.EXTRA_TEXT, "Pay $payeeName$amtStr via UPI: $upiUri")
-                            }
-                            context.startActivity(Intent.createChooser(shareIntent, "Share Payment Link"))
+                            val amtStr = if (isSetAmountEnabled && amountText.isNotBlank()) " (₹$amountText)" else ""
+                            QrCodeGenerator.shareQr(
+                                context = context,
+                                bitmap = qrBitmap,
+                                textMessage = "Pay $payeeName$amtStr via UPI:\n$upiUri",
+                                title = "Share Payment Link & QR"
+                            )
                         }
                     ) {
                         Icon(Icons.Default.Share, contentDescription = "Share", tint = MaterialTheme.colorScheme.primary)
@@ -454,13 +455,14 @@ fun QrGeneratorScreen(
                 text = "Request Payment",
                 icon = Icons.Default.Share,
                 onClick = {
-                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                        type = "text/plain"
-                        val amtStr = if (isSetAmountEnabled && amountText.isNotBlank()) " (₹$amountText)" else ""
-                        val noteStr = if (isSetAmountEnabled && descriptionText.isNotBlank()) " - $descriptionText" else ""
-                        putExtra(Intent.EXTRA_TEXT, "Pay $payeeName$amtStr$noteStr via UPI:\n$upiUri")
-                    }
-                    context.startActivity(Intent.createChooser(shareIntent, "Share Payment Request"))
+                    val amtStr = if (isSetAmountEnabled && amountText.isNotBlank()) " (₹$amountText)" else ""
+                    val noteStr = if (isSetAmountEnabled && descriptionText.isNotBlank()) " - $descriptionText" else ""
+                    QrCodeGenerator.shareQr(
+                        context = context,
+                        bitmap = qrBitmap,
+                        textMessage = "Pay $payeeName$amtStr$noteStr via UPI:\n$upiUri",
+                        title = "Share Payment Request & QR"
+                    )
                 },
                 containerColor = SuccessGreen
             )
