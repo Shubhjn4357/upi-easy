@@ -15,7 +15,7 @@ auditRouter.get("/:orgId/audit", requireTenant, requirePermission("organization.
   const orgId = c.get("organizationId");
   const limit = Math.min(Number(c.req.query("limit")) || 50, 100);
 
-  const logs = db
+  const logs = await db
     .select({
       id: schema.auditLogs.id,
       action: schema.auditLogs.action,

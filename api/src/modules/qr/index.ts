@@ -17,7 +17,7 @@ qrRouter.use("*", requireAuth);
 qrRouter.get("/:orgId/qr", requireTenant, async (c) => {
   const orgId = c.get("organizationId");
 
-  const qrs = db
+  const qrs = await db
     .select({
       id: schema.qrCodes.id,
       title: schema.qrCodes.title,
@@ -53,7 +53,7 @@ qrRouter.post("/:orgId/qr", requireTenant, requirePermission("qr.create"), async
 
   const data = validator.parse(body);
 
-  const upi = db
+  const upi = await db
     .select()
     .from(schema.upiAccounts)
     .where(and(eq(schema.upiAccounts.id, data.upiAccountId), eq(schema.upiAccounts.organizationId, orgId)))
@@ -82,7 +82,7 @@ qrRouter.post("/:orgId/qr", requireTenant, requirePermission("qr.create"), async
   const qrId = generateId("qr");
   const now = new Date();
 
-  db.insert(schema.qrCodes)
+  await db.insert(schema.qrCodes)
     .values({
       id: qrId,
       organizationId: orgId,
@@ -98,7 +98,7 @@ qrRouter.post("/:orgId/qr", requireTenant, requirePermission("qr.create"), async
     })
     .run();
 
-  db.insert(schema.auditLogs)
+  await db.insert(schema.auditLogs)
     .values({
       id: generateId("aud"),
       organizationId: orgId,

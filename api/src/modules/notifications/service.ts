@@ -22,14 +22,14 @@ export interface PaymentNotificationData {
  * Persists unread notifications in database so when offline staff phones come online,
  * they immediately receive the sync events and notifications.
  */
-export function notifyOrganizationPayment(
+export async function notifyOrganizationPayment(
   organizationId: string,
   payment: PaymentNotificationData
 ) {
   try {
     const now = new Date();
     // 1. Find all active members belonging to this organization
-    const activeMembers = db
+    const activeMembers = await db
       .select({ userId: schema.organizationMembers.userId })
       .from(schema.organizationMembers)
       .where(
@@ -41,7 +41,7 @@ export function notifyOrganizationPayment(
       .all();
 
     // 2. Also ensure organization owner is included
-    const org = db
+    const org = await db
       .select({ ownerId: schema.organizations.ownerId })
       .from(schema.organizations)
       .where(eq(schema.organizations.id, organizationId))
@@ -59,7 +59,7 @@ export function notifyOrganizationPayment(
 
     // 3. Create persistent notification record for each staff member
     for (const userId of targetUserIds) {
-      db.insert(schema.notifications)
+      await db.insert(schema.notifications)
         .values({
           id: generateId("notif"),
           userId,

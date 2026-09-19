@@ -19,7 +19,7 @@ syncRouter.get("/:orgId/sync", requireTenant, async (c) => {
   const limit = Math.min(Number(c.req.query("limit")) || 100, 250);
 
   // Fetch events strictly greater than afterSequence for this organization
-  const events = db
+  const events = await db
     .select()
     .from(schema.outboxEvents)
     .where(
@@ -35,7 +35,7 @@ syncRouter.get("/:orgId/sync", requireTenant, async (c) => {
   const latestSequence = events.length > 0 ? events[events.length - 1].sequence : afterSequence;
 
   // Update sync cursor for this user and device
-  const existingCursor = db
+  const existingCursor = await db
     .select()
     .from(schema.syncCursors)
     .where(
@@ -50,13 +50,13 @@ syncRouter.get("/:orgId/sync", requireTenant, async (c) => {
   const now = new Date();
   if (existingCursor) {
     if (latestSequence > existingCursor.lastSequence) {
-      db.update(schema.syncCursors)
+      await db.update(schema.syncCursors)
         .set({ lastSequence: latestSequence, updatedAt: now })
         .where(eq(schema.syncCursors.id, existingCursor.id))
         .run();
     }
   } else {
-    db.insert(schema.syncCursors)
+    await db.insert(schema.syncCursors)
       .values({
         id: generateId("cur"),
         userId,

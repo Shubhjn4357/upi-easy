@@ -13,14 +13,14 @@ usersRouter.use("*", requireAuth);
 
 const getMeHandler = async (c: any) => {
   const userId = c.get("userId");
-  const user = db.select().from(schema.users).where(eq(schema.users.id, userId)).get();
+  const user = await db.select().from(schema.users).where(eq(schema.users.id, userId)).get();
 
   if (!user) {
     throw new NotFoundError("User not found");
   }
 
   // Fetch organizations where user is a member
-  const memberships = db
+  const memberships = await db
     .select({
       organizationId: schema.organizations.id,
       organizationName: schema.organizations.name,
@@ -62,7 +62,7 @@ const patchMeHandler = async (c: any) => {
 
   const { fullName, email } = schemaValidator.parse(body);
 
-  db.update(schema.users)
+  await db.update(schema.users)
     .set({
       fullName: fullName ?? undefined,
       email: email ?? undefined,
@@ -81,18 +81,18 @@ const deleteMeHandler = async (c: any) => {
   const userId = c.get("userId");
 
   // 1. Revoke all active sessions
-  db.update(schema.sessions)
+  await db.update(schema.sessions)
     .set({ isRevoked: true, updatedAt: new Date() })
     .where(eq(schema.sessions.userId, userId))
     .run();
 
   // 2. Remove organization memberships
-  db.delete(schema.organizationMembers)
+  await db.delete(schema.organizationMembers)
     .where(eq(schema.organizationMembers.userId, userId))
     .run();
 
   // 3. Delete devices & user record (cascading to devices & sessions)
-  db.delete(schema.users).where(eq(schema.users.id, userId)).run();
+  await db.delete(schema.users).where(eq(schema.users.id, userId)).run();
 
   return c.json({
     success: true,

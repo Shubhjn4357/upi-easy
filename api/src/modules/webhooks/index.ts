@@ -36,7 +36,7 @@ webhooksRouter.post("/:provider", async (c) => {
   const now = new Date();
 
   // Log raw webhook
-  db.insert(schema.providerWebhooks)
+  await db.insert(schema.providerWebhooks)
     .values({
       id: webhookId,
       providerName: provider,
@@ -64,7 +64,7 @@ webhooksRouter.post("/:provider", async (c) => {
   if (refNum) matchConditions.push(eq(schema.transactions.referenceNumber, refNum));
   if (providerTxnId) matchConditions.push(eq(schema.transactions.providerTransactionId, providerTxnId));
 
-  const txn = db
+  const txn = await db
     .select()
     .from(schema.transactions)
     .where(or(...matchConditions))
@@ -73,7 +73,7 @@ webhooksRouter.post("/:provider", async (c) => {
   if (txn) {
     // Check if already reconciled to prevent duplicate status changes
     if (txn.status === status) {
-      db.update(schema.providerWebhooks)
+      await db.update(schema.providerWebhooks)
         .set({ status: "IGNORED", errorMessage: "Duplicate webhook event" })
         .where(eq(schema.providerWebhooks.id, webhookId))
         .run();
@@ -81,7 +81,7 @@ webhooksRouter.post("/:provider", async (c) => {
     }
 
     // Update transaction to authoritative state
-    db.update(schema.transactions)
+    await db.update(schema.transactions)
       .set({
         status,
         provider,
@@ -93,7 +93,7 @@ webhooksRouter.post("/:provider", async (c) => {
       .run();
 
     // Record transaction event
-    db.insert(schema.transactionEvents)
+    await db.insert(schema.transactionEvents)
       .values({
         id: generateId("txnev"),
         transactionId: txn.id,
@@ -107,7 +107,7 @@ webhooksRouter.post("/:provider", async (c) => {
       .run();
 
     // Record reconciliation record
-    db.insert(schema.reconciliationRecords)
+    await db.insert(schema.reconciliationRecords)
       .values({
         id: generateId("rec"),
         organizationId: txn.organizationId,
@@ -122,7 +122,7 @@ webhooksRouter.post("/:provider", async (c) => {
       .run();
 
     // Create Outbox event for mobile notification and delta sync
-    db.insert(schema.outboxEvents)
+    await db.insert(schema.outboxEvents)
       .values({
         id: generateId("evt"),
         organizationId: txn.organizationId,
@@ -149,7 +149,7 @@ webhooksRouter.post("/:provider", async (c) => {
       .run();
 
     if (status === "SUCCESS") {
-      notifyOrganizationPayment(txn.organizationId, {
+      await notifyOrganizationPayment(txn.organizationId, {
         transactionId: txn.id,
         amount: txn.amount,
         direction: txn.direction || "CREDIT",
@@ -163,7 +163,7 @@ webhooksRouter.post("/:provider", async (c) => {
     }
 
     // Mark webhook as processed
-    db.update(schema.providerWebhooks)
+    await db.update(schema.providerWebhooks)
       .set({ status: "PROCESSED" })
       .where(eq(schema.providerWebhooks.id, webhookId))
       .run();
@@ -172,7 +172,7 @@ webhooksRouter.post("/:provider", async (c) => {
   } else {
     // Unmatched provider transaction: create a reconciliation discrepancy record
     if (payload.organizationId) {
-      db.insert(schema.reconciliationRecords)
+      await db.insert(schema.reconciliationRecords)
         .values({
           id: generateId("rec"),
           organizationId: payload.organizationId,

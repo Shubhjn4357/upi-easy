@@ -17,7 +17,7 @@ membersRouter.use("*", requireAuth);
 membersRouter.get("/:orgId/staff", requireTenant, requirePermission("staff.read"), async (c) => {
   const orgId = c.get("organizationId");
 
-  const staff = db
+  const staff = await db
     .select({
       id: schema.organizationMembers.id,
       userId: schema.users.id,
@@ -56,7 +56,7 @@ membersRouter.post("/:orgId/staff/invite", requireTenant, requirePermission("sta
   const { mobileNumber, email, fullName, role } = validator.parse(body);
 
   // Find target role
-  const roleRecord = db.select().from(schema.roles).where(eq(schema.roles.name, role)).get();
+  const roleRecord = await db.select().from(schema.roles).where(eq(schema.roles.name, role)).get();
   if (!roleRecord) {
     throw new AppError("Invalid role specified", 400);
   }
@@ -64,16 +64,16 @@ membersRouter.post("/:orgId/staff/invite", requireTenant, requirePermission("sta
   // Find or create the user by email or mobileNumber
   let user: typeof schema.users.$inferSelect | undefined;
   if (email) {
-    user = db.select().from(schema.users).where(eq(schema.users.email, email.toLowerCase())).get();
+    user = await db.select().from(schema.users).where(eq(schema.users.email, email.toLowerCase())).get();
   }
   if (!user && mobileNumber) {
-    user = db.select().from(schema.users).where(eq(schema.users.mobileNumber, mobileNumber)).get();
+    user = await db.select().from(schema.users).where(eq(schema.users.mobileNumber, mobileNumber)).get();
   }
   const now = new Date();
 
   if (!user) {
     const newUserId = generateId("usr");
-    db.insert(schema.users)
+    await db.insert(schema.users)
       .values({
         id: newUserId,
         mobileNumber: mobileNumber ?? null,
@@ -84,7 +84,7 @@ membersRouter.post("/:orgId/staff/invite", requireTenant, requirePermission("sta
         updatedAt: now,
       })
       .run();
-    user = db.select().from(schema.users).where(eq(schema.users.id, newUserId)).get()!;
+    user = (await db.select().from(schema.users).where(eq(schema.users.id, newUserId)).get())!;
   }
 
   if (!user) {
@@ -92,7 +92,7 @@ membersRouter.post("/:orgId/staff/invite", requireTenant, requirePermission("sta
   }
 
   // Check if already a member
-  const existingMember = db
+  const existingMember = await db
     .select()
     .from(schema.organizationMembers)
     .where(
@@ -108,7 +108,7 @@ membersRouter.post("/:orgId/staff/invite", requireTenant, requirePermission("sta
   }
 
   const memberId = generateId("mem");
-  db.insert(schema.organizationMembers)
+  await db.insert(schema.organizationMembers)
     .values({
       id: memberId,
       organizationId: orgId,
@@ -123,7 +123,7 @@ membersRouter.post("/:orgId/staff/invite", requireTenant, requirePermission("sta
     .run();
 
   // Audit log
-  db.insert(schema.auditLogs)
+  await db.insert(schema.auditLogs)
     .values({
       id: generateId("aud"),
       organizationId: orgId,
@@ -137,7 +137,7 @@ membersRouter.post("/:orgId/staff/invite", requireTenant, requirePermission("sta
     .run();
 
   // Outbox event
-  db.insert(schema.outboxEvents)
+  await db.insert(schema.outboxEvents)
     .values({
       id: generateId("evt"),
       organizationId: orgId,
@@ -177,7 +177,7 @@ membersRouter.patch(
 
     const { role, status } = validator.parse(body);
 
-    const member = db
+    const member = await db
       .select()
       .from(schema.organizationMembers)
       .where(
@@ -194,12 +194,12 @@ membersRouter.patch(
 
     let newRoleId = member.roleId;
     if (role) {
-      const roleRecord = db.select().from(schema.roles).where(eq(schema.roles.name, role)).get();
+      const roleRecord = await db.select().from(schema.roles).where(eq(schema.roles.name, role)).get();
       if (!roleRecord) throw new AppError("Invalid role");
       newRoleId = roleRecord.id;
     }
 
-    db.update(schema.organizationMembers)
+    await db.update(schema.organizationMembers)
       .set({
         roleId: newRoleId,
         status: status ?? member.status,
@@ -209,7 +209,7 @@ membersRouter.patch(
       .run();
 
     // Audit log
-    db.insert(schema.auditLogs)
+    await db.insert(schema.auditLogs)
       .values({
         id: generateId("aud"),
         organizationId: orgId,
@@ -235,7 +235,7 @@ membersRouter.delete(
     const actorId = c.get("userId");
     const memberId = c.req.param("memberId");
 
-    const member = db
+    const member = await db
       .select()
       .from(schema.organizationMembers)
       .where(
@@ -250,9 +250,9 @@ membersRouter.delete(
       throw new NotFoundError("Staff member not found");
     }
 
-    db.delete(schema.organizationMembers).where(eq(schema.organizationMembers.id, memberId)).run();
+    await db.delete(schema.organizationMembers).where(eq(schema.organizationMembers.id, memberId)).run();
 
-    db.insert(schema.auditLogs)
+    await db.insert(schema.auditLogs)
       .values({
         id: generateId("aud"),
         organizationId: orgId,

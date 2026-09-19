@@ -17,7 +17,7 @@ upiRouter.use("*", requireAuth);
 upiRouter.get("/:orgId/upi", requireTenant, requirePermission("upi.read"), async (c) => {
   const orgId = c.get("organizationId");
 
-  const upiList = db
+  const upiList = await db
     .select({
       id: schema.upiAccounts.id,
       vpa: schema.upiAccounts.vpa,
@@ -56,7 +56,7 @@ upiRouter.post("/:orgId/upi", requireTenant, requirePermission("upi.manage"), as
 
   // If set to default, unset other defaults in this organization
   if (data.isDefault) {
-    db.update(schema.upiAccounts)
+    await db.update(schema.upiAccounts)
       .set({ isDefault: false })
       .where(eq(schema.upiAccounts.organizationId, orgId))
       .run();
@@ -65,7 +65,7 @@ upiRouter.post("/:orgId/upi", requireTenant, requirePermission("upi.manage"), as
   const now = new Date();
   const upiId = generateId("upi");
 
-  db.insert(schema.upiAccounts)
+  await db.insert(schema.upiAccounts)
     .values({
       id: upiId,
       organizationId: orgId,
@@ -91,7 +91,7 @@ upiRouter.post("/:orgId/upi", requireTenant, requirePermission("upi.manage"), as
   });
   const upiUri = `upi://pay?${params.toString()}`;
 
-  db.insert(schema.qrCodes)
+  await db.insert(schema.qrCodes)
     .values({
       id: qrId,
       organizationId: orgId,
@@ -106,7 +106,7 @@ upiRouter.post("/:orgId/upi", requireTenant, requirePermission("upi.manage"), as
     .run();
 
   // Audit log
-  db.insert(schema.auditLogs)
+  await db.insert(schema.auditLogs)
     .values({
       id: generateId("aud"),
       organizationId: orgId,
@@ -120,7 +120,7 @@ upiRouter.post("/:orgId/upi", requireTenant, requirePermission("upi.manage"), as
     .run();
 
   // Outbox event for delta-sync
-  db.insert(schema.outboxEvents)
+  await db.insert(schema.outboxEvents)
     .values({
       id: generateId("evt"),
       organizationId: orgId,
@@ -166,7 +166,7 @@ upiRouter.patch(
     const upiId = c.req.param("upiId");
     const now = new Date();
 
-    const target = db
+    const target = await db
       .select()
       .from(schema.upiAccounts)
       .where(and(eq(schema.upiAccounts.id, upiId), eq(schema.upiAccounts.organizationId, orgId)))
@@ -177,19 +177,19 @@ upiRouter.patch(
     }
 
     // Unset current default
-    db.update(schema.upiAccounts)
+    await db.update(schema.upiAccounts)
       .set({ isDefault: false })
       .where(eq(schema.upiAccounts.organizationId, orgId))
       .run();
 
     // Set new default
-    db.update(schema.upiAccounts)
+    await db.update(schema.upiAccounts)
       .set({ isDefault: true, updatedAt: now })
       .where(eq(schema.upiAccounts.id, upiId))
       .run();
 
     // Outbox event for delta-sync
-    db.insert(schema.outboxEvents)
+    await db.insert(schema.outboxEvents)
       .values({
         id: generateId("evt"),
         organizationId: orgId,

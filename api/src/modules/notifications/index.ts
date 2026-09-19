@@ -13,7 +13,7 @@ notificationsRouter.get("/", async (c) => {
   const userId = c.get("userId");
   const limit = Math.min(Number(c.req.query("limit")) || 20, 50);
 
-  const notifs = db
+  const notifs = await db
     .select()
     .from(schema.notifications)
     .where(eq(schema.notifications.userId, userId))
@@ -28,7 +28,7 @@ notificationsRouter.patch("/:id/read", async (c) => {
   const userId = c.get("userId");
   const id = c.req.param("id");
 
-  db.update(schema.notifications)
+  await db.update(schema.notifications)
     .set({ isRead: true })
     .where(and(eq(schema.notifications.id, id), eq(schema.notifications.userId, userId)))
     .run();

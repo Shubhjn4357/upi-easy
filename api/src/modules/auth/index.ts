@@ -64,7 +64,7 @@ authRouter.post("/google", async (c) => {
 
   // 2. Account Linking Policy:
   // First, look up by stable google.sub
-  let user = db
+  let user = await db
     .select()
     .from(schema.users)
     .where(eq(schema.users.googleId, googleSub))
@@ -72,7 +72,7 @@ authRouter.post("/google", async (c) => {
 
   // Second, look up by verified email if not already linked to a Google ID
   if (!user) {
-    user = db
+    user = await db
       .select()
       .from(schema.users)
       .where(eq(schema.users.email, verifiedEmail))
@@ -80,7 +80,7 @@ authRouter.post("/google", async (c) => {
 
     if (user) {
       // Link verified Google identity to existing user
-      db.update(schema.users)
+      await db.update(schema.users)
         .set({
           googleId: googleSub,
           fullName: user.fullName || displayName,
@@ -95,7 +95,7 @@ authRouter.post("/google", async (c) => {
   // Third, create new user if neither google.sub nor email exists
   if (!user) {
     const userId = generateId("usr");
-    db.insert(schema.users)
+    await db.insert(schema.users)
       .values({
         id: userId,
         googleId: googleSub,
@@ -108,11 +108,11 @@ authRouter.post("/google", async (c) => {
         updatedAt: now,
       })
       .run();
-    user = db.select().from(schema.users).where(eq(schema.users.id, userId)).get()!;
+    user = (await db.select().from(schema.users).where(eq(schema.users.id, userId)).get())!;
   }
 
   // Register device
-  let device = db
+  let device = await db
     .select()
     .from(schema.devices)
     .where(and(eq(schema.devices.userId, user.id), eq(schema.devices.deviceId, data.deviceId)))
@@ -120,7 +120,7 @@ authRouter.post("/google", async (c) => {
 
   if (!device) {
     const newDeviceId = generateId("dev");
-    db.insert(schema.devices)
+    await db.insert(schema.devices)
       .values({
         id: newDeviceId,
         userId: user.id,
@@ -133,14 +133,14 @@ authRouter.post("/google", async (c) => {
         createdAt: now,
       })
       .run();
-    device = db.select().from(schema.devices).where(eq(schema.devices.id, newDeviceId)).get()!;
+    device = (await db.select().from(schema.devices).where(eq(schema.devices.id, newDeviceId)).get())!;
   }
 
   // Create session
   const sessionId = generateId("sess");
   const sessionExpires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
-  db.insert(schema.sessions)
+  await db.insert(schema.sessions)
     .values({
       id: sessionId,
       userId: user.id,
@@ -163,7 +163,7 @@ authRouter.post("/google", async (c) => {
   const refreshToken = await createRefreshToken(user.id, sessionId);
 
   // Check if setup (organization + mobile + upi) is completed
-  const memberships = db
+  const memberships = await db
     .select()
     .from(schema.organizationMembers)
     .where(and(eq(schema.organizationMembers.userId, user.id), eq(schema.organizationMembers.status, "ACTIVE")))
@@ -173,7 +173,7 @@ authRouter.post("/google", async (c) => {
 
   let defaultOrg = null;
   if (memberships.length > 0) {
-    const org = db
+    const org = await db
       .select()
       .from(schema.organizations)
       .where(eq(schema.organizations.id, memberships[0].organizationId))
@@ -224,7 +224,7 @@ authRouter.post("/refresh", async (c) => {
     throw new UnauthorizedError("Invalid token type");
   }
 
-  const session = db
+  const session = await db
     .select()
     .from(schema.sessions)
     .where(and(eq(schema.sessions.id, payload.sessionId), eq(schema.sessions.isRevoked, false)))
@@ -234,7 +234,7 @@ authRouter.post("/refresh", async (c) => {
     throw new UnauthorizedError("Session has been revoked");
   }
 
-  const user = db.select().from(schema.users).where(eq(schema.users.id, session.userId)).get();
+  const user = await db.select().from(schema.users).where(eq(schema.users.id, session.userId)).get();
   if (!user || user.status !== "ACTIVE") {
     throw new UnauthorizedError("User is suspended or inactive");
   }
@@ -257,7 +257,7 @@ authRouter.post("/refresh", async (c) => {
 
 authRouter.post("/logout", requireAuth, async (c) => {
   const sessionId = c.get("sessionId");
-  db.update(schema.sessions)
+  await db.update(schema.sessions)
     .set({ isRevoked: true, updatedAt: new Date() })
     .where(eq(schema.sessions.id, sessionId))
     .run();

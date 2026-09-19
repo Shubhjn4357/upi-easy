@@ -22,7 +22,7 @@ export const requireAuth: MiddlewareHandler<AppEnv> = async (c, next) => {
   }
 
   // Verify session in database
-  const session = db
+  const session = await db
     .select()
     .from(schema.sessions)
     .where(

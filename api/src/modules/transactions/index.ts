@@ -53,7 +53,7 @@ transactionsRouter.get(
       );
     }
 
-    const txns = db
+    const txns = await db
       .select()
       .from(schema.transactions)
       .where(and(...conditions))
@@ -62,11 +62,11 @@ transactionsRouter.get(
       .offset(offset)
       .all();
 
-    const totalCount = db
+    const totalCount = (await db
       .select({ count: sql<number>`count(*)` })
       .from(schema.transactions)
       .where(and(...conditions))
-      .get()?.count ?? 0;
+      .get())?.count ?? 0;
 
     return c.json({
       success: true,
@@ -89,7 +89,7 @@ transactionsRouter.get(
     const orgId = c.get("organizationId");
     const id = c.req.param("id");
 
-    const txn = db
+    const txn = await db
       .select()
       .from(schema.transactions)
       .where(and(eq(schema.transactions.id, id), eq(schema.transactions.organizationId, orgId)))
@@ -100,14 +100,14 @@ transactionsRouter.get(
     }
 
     // Fetch related events and references
-    const events = db
+    const events = await db
       .select()
       .from(schema.transactionEvents)
       .where(eq(schema.transactionEvents.transactionId, id))
       .orderBy(desc(schema.transactionEvents.createdAt))
       .all();
 
-    const references = db
+    const references = await db
       .select()
       .from(schema.transactionReferences)
       .where(eq(schema.transactionReferences.transactionId, id))
@@ -158,7 +158,7 @@ transactionsRouter.post(
     // Local payment requests or intent initiations start as PENDING.
     const initialStatus = "PENDING";
 
-    db.insert(schema.transactions)
+    await db.insert(schema.transactions)
       .values({
         id: txnId,
         organizationId: orgId,
@@ -186,7 +186,7 @@ transactionsRouter.post(
       .run();
 
     // Record initial transaction event
-    db.insert(schema.transactionEvents)
+    await db.insert(schema.transactionEvents)
       .values({
         id: generateId("txnev"),
         transactionId: txnId,
@@ -201,7 +201,7 @@ transactionsRouter.post(
 
     // Increment UPI transaction count if associated
     if (data.upiAccountId) {
-      db.update(schema.upiAccounts)
+      await db.update(schema.upiAccounts)
         .set({
           transactionCount: sql`${schema.upiAccounts.transactionCount} + 1`,
           updatedAt: now,
@@ -211,7 +211,7 @@ transactionsRouter.post(
     }
 
     // Outbox event for background notification and delta sync worker
-    db.insert(schema.outboxEvents)
+    await db.insert(schema.outboxEvents)
       .values({
         id: generateId("evt"),
         organizationId: orgId,
@@ -243,7 +243,7 @@ transactionsRouter.post(
       .run();
 
     // Broadcast notification to all connected staff contacts
-    notifyOrganizationPayment(orgId, {
+    await notifyOrganizationPayment(orgId, {
       transactionId: txnId,
       amount: data.amount,
       direction: data.direction,
@@ -291,7 +291,7 @@ transactionsRouter.patch(
     const data = validator.parse(body);
     const now = new Date();
 
-    const txn = db
+    const txn = await db
       .select()
       .from(schema.transactions)
       .where(and(eq(schema.transactions.id, txnId), eq(schema.transactions.organizationId, orgId)))
@@ -303,7 +303,7 @@ transactionsRouter.patch(
 
     const previousStatus = txn.status;
 
-    db.update(schema.transactions)
+    await db.update(schema.transactions)
       .set({
         status: data.status,
         referenceNumber: data.referenceNumber ?? txn.referenceNumber,
@@ -314,7 +314,7 @@ transactionsRouter.patch(
       .run();
 
     // Record transaction event
-    db.insert(schema.transactionEvents)
+    await db.insert(schema.transactionEvents)
       .values({
         id: generateId("txnev"),
         transactionId: txnId,
@@ -328,7 +328,7 @@ transactionsRouter.patch(
       .run();
 
     // Outbox event for delta-sync
-    db.insert(schema.outboxEvents)
+    await db.insert(schema.outboxEvents)
       .values({
         id: generateId("evt"),
         organizationId: orgId,

@@ -16,7 +16,7 @@ organizationsRouter.use("*", requireAuth);
 organizationsRouter.get("/", async (c) => {
   const userId = c.get("userId");
 
-  const orgs = db
+  const orgs = await db
     .select({
       id: schema.organizations.id,
       name: schema.organizations.name,
@@ -61,7 +61,7 @@ organizationsRouter.post("/", async (c) => {
   const orgId = generateId("org");
 
   // Create organization
-  db.insert(schema.organizations)
+  await db.insert(schema.organizations)
     .values({
       id: orgId,
       name: data.name,
@@ -77,7 +77,7 @@ organizationsRouter.post("/", async (c) => {
     .run();
 
   // Add user as OWNER
-  db.insert(schema.organizationMembers)
+  await db.insert(schema.organizationMembers)
     .values({
       id: generateId("mem"),
       organizationId: orgId,
@@ -91,7 +91,7 @@ organizationsRouter.post("/", async (c) => {
     .run();
 
   // Initialize notification preferences
-  db.insert(schema.notificationPreferences)
+  await db.insert(schema.notificationPreferences)
     .values({
       id: generateId("notif_pref"),
       userId,
@@ -105,7 +105,7 @@ organizationsRouter.post("/", async (c) => {
     .run();
 
   // Record audit log
-  db.insert(schema.auditLogs)
+  await db.insert(schema.auditLogs)
     .values({
       id: generateId("aud"),
       organizationId: orgId,
@@ -119,7 +119,7 @@ organizationsRouter.post("/", async (c) => {
     .run();
 
   // Outbox event
-  db.insert(schema.outboxEvents)
+  await db.insert(schema.outboxEvents)
     .values({
       id: generateId("evt"),
       organizationId: orgId,
@@ -164,7 +164,7 @@ organizationsRouter.post("/setup", async (c) => {
   const orgId = generateId("org");
 
   // 1. Update user's mobile number
-  db.update(schema.users)
+  await db.update(schema.users)
     .set({
       mobileNumber: data.mobileNumber,
       updatedAt: now,
@@ -173,7 +173,7 @@ organizationsRouter.post("/setup", async (c) => {
     .run();
 
   // 2. Create organization
-  db.insert(schema.organizations)
+  await db.insert(schema.organizations)
     .values({
       id: orgId,
       name: data.businessName,
@@ -186,7 +186,7 @@ organizationsRouter.post("/setup", async (c) => {
     .run();
 
   // 3. Add user as OWNER
-  db.insert(schema.organizationMembers)
+  await db.insert(schema.organizationMembers)
     .values({
       id: generateId("mem"),
       organizationId: orgId,
@@ -204,7 +204,7 @@ organizationsRouter.post("/setup", async (c) => {
   if (data.bankName && data.accountNumber && data.ifscCode) {
     bankAccountId = generateId("bank");
     const last4 = data.accountNumber.slice(-4);
-    db.insert(schema.bankAccounts)
+    await db.insert(schema.bankAccounts)
       .values({
         id: bankAccountId,
         organizationId: orgId,
@@ -223,7 +223,7 @@ organizationsRouter.post("/setup", async (c) => {
   // 5. Create default UPI ID
   const upiId = generateId("upi");
   const normalizedVpa = data.primaryVpa.toLowerCase();
-  db.insert(schema.upiAccounts)
+  await db.insert(schema.upiAccounts)
     .values({
       id: upiId,
       organizationId: orgId,
@@ -247,7 +247,7 @@ organizationsRouter.post("/setup", async (c) => {
     cu: "INR",
   });
   const qrPayload = `upi://pay?${qrParams.toString()}`;
-  db.insert(schema.qrCodes)
+  await db.insert(schema.qrCodes)
     .values({
       id: generateId("qr"),
       organizationId: orgId,
@@ -262,7 +262,7 @@ organizationsRouter.post("/setup", async (c) => {
     .run();
 
   // 7. Initialize Notification Preferences
-  db.insert(schema.notificationPreferences)
+  await db.insert(schema.notificationPreferences)
     .values({
       id: generateId("notif_pref"),
       userId,
@@ -276,7 +276,7 @@ organizationsRouter.post("/setup", async (c) => {
     .run();
 
   // 8. Audit log
-  db.insert(schema.auditLogs)
+  await db.insert(schema.auditLogs)
     .values({
       id: generateId("aud"),
       organizationId: orgId,
@@ -290,7 +290,7 @@ organizationsRouter.post("/setup", async (c) => {
     .run();
 
   // 9. Outbox events for delta-sync
-  db.insert(schema.outboxEvents)
+  await db.insert(schema.outboxEvents)
     .values([
       {
         id: generateId("evt"),
@@ -344,7 +344,7 @@ organizationsRouter.post("/setup", async (c) => {
 
 organizationsRouter.get("/:orgId", requireTenant, async (c) => {
   const orgId = c.get("organizationId");
-  const org = db.select().from(schema.organizations).where(eq(schema.organizations.id, orgId)).get();
+  const org = await db.select().from(schema.organizations).where(eq(schema.organizations.id, orgId)).get();
 
   if (!org) {
     throw new NotFoundError("Organization not found");
@@ -361,7 +361,7 @@ organizationsRouter.get("/:orgId/dashboard", requireTenant, async (c) => {
   startOfToday.setHours(0, 0, 0, 0);
 
   // Today's received transactions
-  const receivedToday = db
+  const receivedToday = await db
     .select({
       total: sql<number>`coalesce(sum(${schema.transactions.amount}), 0)`,
       count: sql<number>`count(*)`,
@@ -378,7 +378,7 @@ organizationsRouter.get("/:orgId/dashboard", requireTenant, async (c) => {
     .get();
 
   // Today's sent transactions
-  const sentToday = db
+  const sentToday = await db
     .select({
       total: sql<number>`coalesce(sum(${schema.transactions.amount}), 0)`,
       count: sql<number>`count(*)`,
@@ -395,7 +395,7 @@ organizationsRouter.get("/:orgId/dashboard", requireTenant, async (c) => {
     .get();
 
   // Pending count
-  const pending = db
+  const pending = await db
     .select({ count: sql<number>`count(*)` })
     .from(schema.transactions)
     .where(
@@ -407,7 +407,7 @@ organizationsRouter.get("/:orgId/dashboard", requireTenant, async (c) => {
     .get();
 
   // Failed count
-  const failed = db
+  const failed = await db
     .select({ count: sql<number>`count(*)` })
     .from(schema.transactions)
     .where(
@@ -419,7 +419,7 @@ organizationsRouter.get("/:orgId/dashboard", requireTenant, async (c) => {
     .get();
 
   // Active UPI IDs count
-  const activeUpi = db
+  const activeUpi = await db
     .select({ count: sql<number>`count(*)` })
     .from(schema.upiAccounts)
     .where(
@@ -431,7 +431,7 @@ organizationsRouter.get("/:orgId/dashboard", requireTenant, async (c) => {
     .get();
 
   // Recent 5 transactions
-  const recentTransactions = db
+  const recentTransactions = await db
     .select()
     .from(schema.transactions)
     .where(eq(schema.transactions.organizationId, orgId))

@@ -15,7 +15,7 @@ export const handleIdempotency: MiddlewareHandler<AppEnv> = async (c, next) => {
   const operation = `${c.req.method} ${c.req.path}`;
 
   // Check if this key was already processed
-  const existing = db
+  const existing = await db
     .select()
     .from(schema.idempotencyKeys)
     .where(eq(schema.idempotencyKeys.idempotencyKey, idempotencyKey))
@@ -50,7 +50,7 @@ export const handleIdempotency: MiddlewareHandler<AppEnv> = async (c, next) => {
       const clonedRes = c.res.clone();
       const responseBody = await clonedRes.text();
 
-      db.insert(schema.idempotencyKeys)
+      await db.insert(schema.idempotencyKeys)
         .values({
           id: generateId("idem"),
           idempotencyKey,

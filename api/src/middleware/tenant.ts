@@ -14,7 +14,7 @@ export const requireTenant: MiddlewareHandler<AppEnv> = async (c, next) => {
   }
 
   // Check membership
-  const member = db
+  const member = await db
     .select({
       memberId: schema.organizationMembers.id,
       organizationId: schema.organizationMembers.organizationId,
@@ -39,15 +39,16 @@ export const requireTenant: MiddlewareHandler<AppEnv> = async (c, next) => {
   }
 
   // Fetch permissions for this role
-  const permissions = db
+  const permissionsRows = await db
     .select({
       name: schema.permissions.name,
     })
     .from(schema.rolePermissions)
     .innerJoin(schema.permissions, eq(schema.rolePermissions.permissionId, schema.permissions.id))
     .where(eq(schema.rolePermissions.roleId, member.roleId))
-    .all()
-    .map((p: any) => p.name);
+    .all();
+
+  const permissions = permissionsRows.map((p: any) => p.name);
 
   c.set("organizationId", orgId);
   c.set("memberId", member.memberId);

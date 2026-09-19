@@ -15,7 +15,7 @@ accountsRouter.use("*", requireAuth);
 
 accountsRouter.get("/:orgId/accounts", requireTenant, requirePermission("accounts.read"), async (c) => {
   const orgId = c.get("organizationId");
-  const accounts = db
+  const accounts = await db
     .select()
     .from(schema.bankAccounts)
     .where(eq(schema.bankAccounts.organizationId, orgId))
@@ -49,7 +49,7 @@ accountsRouter.post(
     const now = new Date();
     const accountId = generateId("bank");
 
-    db.insert(schema.bankAccounts)
+    await db.insert(schema.bankAccounts)
       .values({
         id: accountId,
         organizationId: orgId,
@@ -65,7 +65,7 @@ accountsRouter.post(
       .run();
 
     // Audit log
-    db.insert(schema.auditLogs)
+    await db.insert(schema.auditLogs)
       .values({
         id: generateId("aud"),
         organizationId: orgId,
