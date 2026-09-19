@@ -53,7 +53,11 @@ fun GoogleSignInScreen(
 
         scope.launch {
             try {
-                val webClientId = BuildConfig.GOOGLE_WEB_CLIENT_ID
+                val webClientId = if (BuildConfig.GOOGLE_WEB_CLIENT_ID.isNotBlank()) {
+                    BuildConfig.GOOGLE_WEB_CLIENT_ID
+                } else {
+                    context.getString(com.aerotech.upieasy.R.string.default_web_client_id)
+                }
                 val authResult = googleSignInManager.signIn(context, webClientId)
 
                 authResult.fold(

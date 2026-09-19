@@ -1,3 +1,4 @@
 {
-    "compilets.autoStart": true
+    "compilets.autoStart": true,
+    "java.configuration.updateBuildConfiguration": "interactive"
 }

@@ -20,7 +20,7 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
-        buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"763162383806-qj95f9c9j02t1bcvd1d9r3l1k5u9h6h2.apps.googleusercontent.com\"")
+        buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"332345540842-ks8bq4csr4lklkvv3tesgkig2b221m23.apps.googleusercontent.com\"")
     }
 
     buildTypes {
