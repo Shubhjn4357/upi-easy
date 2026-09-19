@@ -22,9 +22,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.fragment.app.FragmentActivity
 import com.aerotech.upieasy.core.database.AppDatabase
 import com.aerotech.upieasy.core.network.NetworkClient
+import com.aerotech.upieasy.core.network.UpdateProfileRequest
 import com.aerotech.upieasy.core.security.SessionManager
+import com.aerotech.upieasy.core.util.BiometricPromptHelper
 import com.aerotech.upieasy.ui.theme.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -49,7 +52,9 @@ fun SettingsScreen(
     val soundNotifications by sessionManager.soundNotificationsFlow.collectAsState(initial = true)
     val biometricLock by sessionManager.biometricLockFlow.collectAsState(initial = false)
     val highValueAlert by sessionManager.highValueAlertFlow.collectAsState(initial = true)
+    val themeMode by sessionManager.themeModeFlow.collectAsState(initial = "SYSTEM")
 
+    var showEditProfileBottomSheet by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     var isDeletingAccount by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -58,10 +63,10 @@ fun SettingsScreen(
         topBar = {
             TopAppBar(
                 title = { Text("Settings & Preferences", fontWeight = FontWeight.Bold) },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = BackgroundLight)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
             )
         },
-        containerColor = BackgroundLight
+        containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
         Column(
             modifier = Modifier
@@ -75,21 +80,24 @@ fun SettingsScreen(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(containerColor = SurfaceLight),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
                 Column(modifier = Modifier.padding(18.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Box(
                             modifier = Modifier
                                 .size(48.dp)
                                 .clip(CircleShape)
-                                .background(BrandPrimary),
+                                .background(MaterialTheme.colorScheme.primary),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
                                 text = (userName?.take(1) ?: userEmail?.take(1) ?: "M").uppercase(),
-                                color = SurfaceLight,
+                                color = MaterialTheme.colorScheme.onPrimary,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 20.sp
                             )
@@ -100,12 +108,12 @@ fun SettingsScreen(
                                 text = userName ?: "Verified Merchant",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = TextPrimary
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
                                 text = userEmail ?: "Google Account Linked",
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = TextSecondary,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 13.sp
                             )
                         }
@@ -123,7 +131,19 @@ fun SettingsScreen(
                         }
                     }
 
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 14.dp), color = DividerColor)
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    OutlinedButton(
+                        onClick = { showEditProfileBottomSheet = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Edit Profile Information", fontWeight = FontWeight.SemiBold)
+                    }
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 14.dp), color = MaterialTheme.colorScheme.outlineVariant)
 
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
@@ -136,15 +156,68 @@ fun SettingsScreen(
                         Text(
                             text = "Business Store:",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = TextSecondary
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = currentOrgName ?: "Default Store",
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.SemiBold,
-                            color = TextPrimary
+                            color = MaterialTheme.colorScheme.onSurface
                         )
+                    }
+                }
+            }
+
+            // Theme & Display Settings Card
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+            ) {
+                Column(modifier = Modifier.padding(18.dp)) {
+                    Text(
+                        text = "Appearance & Theme",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    val themes = listOf(
+                        Triple("SYSTEM", "System", Icons.Default.BrightnessAuto),
+                        Triple("LIGHT", "Light", Icons.Default.LightMode),
+                        Triple("DARK", "Dark", Icons.Default.DarkMode)
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        themes.forEach { (mode, label, icon) ->
+                            val isSelected = themeMode == mode
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = {
+                                    scope.launch { sessionManager.setThemeMode(mode) }
+                                },
+                                label = { Text(label) },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = icon,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(20.dp),
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            )
+                        }
                     }
                 }
             }
@@ -153,15 +226,15 @@ fun SettingsScreen(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(containerColor = SurfaceLight),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
             ) {
                 Column(modifier = Modifier.padding(18.dp)) {
                     Text(
-                        text = "Notification & Sound Preferences",
+                        text = "Notification & Security Preferences",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = TextPrimary
+                        color = MaterialTheme.colorScheme.onSurface
                     )
 
                     Spacer(modifier = Modifier.height(14.dp))
@@ -174,7 +247,7 @@ fun SettingsScreen(
                         onCheckedChange = { scope.launch { sessionManager.setSoundNotifications(it) } }
                     )
 
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = DividerColor)
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.outlineVariant)
 
                     SettingToggleRow(
                         icon = Icons.Default.NotificationsActive,
@@ -184,14 +257,33 @@ fun SettingsScreen(
                         onCheckedChange = { scope.launch { sessionManager.setHighValueAlert(it) } }
                     )
 
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = DividerColor)
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.outlineVariant)
 
                     SettingToggleRow(
                         icon = Icons.Default.Fingerprint,
                         title = "Biometric Lock",
-                        subtitle = "Require fingerprint/face unlock to open app",
+                        subtitle = "Require fingerprint or face unlock to open app",
                         checked = biometricLock,
-                        onCheckedChange = { scope.launch { sessionManager.setBiometricLock(it) } }
+                        onCheckedChange = { enable ->
+                            val activity = context as? FragmentActivity
+                            if (activity == null || !BiometricPromptHelper.isBiometricAvailable(context)) {
+                                Toast.makeText(context, "Biometric authentication is not available or enrolled on this device", Toast.LENGTH_LONG).show()
+                                return@SettingToggleRow
+                            }
+
+                            BiometricPromptHelper.showBiometricPrompt(
+                                activity = activity,
+                                title = if (enable) "Enable Biometric Lock" else "Disable Biometric Lock",
+                                subtitle = "Authenticate to confirm security setting",
+                                onSuccess = {
+                                    scope.launch { sessionManager.setBiometricLock(enable) }
+                                    Toast.makeText(context, if (enable) "Biometric lock enabled" else "Biometric lock disabled", Toast.LENGTH_SHORT).show()
+                                },
+                                onError = { errorMsg ->
+                                    Toast.makeText(context, errorMsg, Toast.LENGTH_SHORT).show()
+                                }
+                            )
+                        }
                     )
                 }
             }
@@ -200,7 +292,7 @@ fun SettingsScreen(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(containerColor = SurfaceLight),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
             ) {
                 Column(modifier = Modifier.padding(18.dp)) {
@@ -208,7 +300,7 @@ fun SettingsScreen(
                         text = "Data & Synchronization",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = TextPrimary
+                        color = MaterialTheme.colorScheme.onSurface
                     )
 
                     Spacer(modifier = Modifier.height(14.dp))
@@ -217,11 +309,20 @@ fun SettingsScreen(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Icons.Default.CloudSync, contentDescription = null, tint = BrandPrimary)
+                        Icon(Icons.Default.CloudSync, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                         Spacer(modifier = Modifier.width(12.dp))
                         Column(modifier = Modifier.weight(1f)) {
-                            Text("Offline Room Database Sync", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
-                            Text("Automatic reconciliation when device reconnects", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                            Text(
+                                "Offline Database Sync",
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                "Automatic reconciliation when device reconnects",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                         Text("Active", color = SuccessGreen, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                     }
@@ -261,14 +362,14 @@ fun SettingsScreen(
                     .fillMaxWidth()
                     .height(52.dp),
                 shape = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = TextPrimary)
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface)
             ) {
                 Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Sign Out", fontWeight = FontWeight.Bold)
             }
 
-            // Delete Account Button (Google Play Compliance & User Self-Service)
+            // Delete Account Button
             Button(
                 onClick = { showDeleteDialog = true },
                 modifier = Modifier
@@ -283,7 +384,114 @@ fun SettingsScreen(
                 Text("Delete Account & Data", fontWeight = FontWeight.Bold, color = FailedRed)
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(96.dp))
+        }
+    }
+
+    // Edit Profile Bottom Sheet
+    if (showEditProfileBottomSheet) {
+        var editedName by remember { mutableStateOf(userName ?: "") }
+        var editedEmail by remember { mutableStateOf(userEmail ?: "") }
+        var isUpdating by remember { mutableStateOf(false) }
+        var updateError by remember { mutableStateOf<String?>(null) }
+
+        ModalBottomSheet(
+            onDismissRequest = { showEditProfileBottomSheet = false },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            containerColor = MaterialTheme.colorScheme.surface
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 16.dp)
+                    .navigationBarsPadding(),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text(
+                    text = "Edit Profile",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+
+                OutlinedTextField(
+                    value = editedName,
+                    onValueChange = {
+                        editedName = it
+                        updateError = null
+                    },
+                    label = { Text("Full Name") },
+                    placeholder = { Text("Your Name") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                OutlinedTextField(
+                    value = editedEmail,
+                    onValueChange = {
+                        editedEmail = it.trim()
+                        updateError = null
+                    },
+                    label = { Text("Email Address") },
+                    placeholder = { Text("name@example.com") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                if (updateError != null) {
+                    Text(text = updateError!!, color = FailedRed, style = MaterialTheme.typography.bodySmall)
+                }
+
+                Button(
+                    onClick = {
+                        if (editedName.trim().isBlank()) {
+                            updateError = "Full name cannot be empty"
+                            return@Button
+                        }
+                        if (editedEmail.isNotBlank() && !editedEmail.contains("@")) {
+                            updateError = "Please enter a valid email address"
+                            return@Button
+                        }
+
+                        isUpdating = true
+                        scope.launch {
+                            try {
+                                val res = apiService.updateProfile(
+                                    UpdateProfileRequest(
+                                        fullName = editedName.trim(),
+                                        email = editedEmail.trim().ifBlank { null }
+                                    )
+                                )
+                                if (res.isSuccessful && res.body()?.success == true) {
+                                    sessionManager.updateProfile(editedName.trim(), editedEmail.trim().ifBlank { null })
+                                    Toast.makeText(context, "Profile updated successfully", Toast.LENGTH_SHORT).show()
+                                    showEditProfileBottomSheet = false
+                                } else {
+                                    updateError = res.body()?.message ?: "Failed to update profile"
+                                }
+                            } catch (e: Exception) {
+                                updateError = e.localizedMessage ?: "Network error"
+                            } finally {
+                                isUpdating = false
+                            }
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    enabled = !isUpdating
+                ) {
+                    if (isUpdating) {
+                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                    } else {
+                        Text("Save Changes", fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+            }
         }
     }
 
@@ -303,14 +511,14 @@ fun SettingsScreen(
                 Text(
                     text = "Permanently Delete Account?",
                     fontWeight = FontWeight.Bold,
-                    color = TextPrimary
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             },
             text = {
                 Text(
                     text = "This action is irreversible. All your sessions, organization memberships, and stored credentials will be deleted permanently from UPI-Easy servers and your device.",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = TextSecondary
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             },
             confirmButton = {
@@ -356,7 +564,7 @@ fun SettingsScreen(
                     onClick = { showDeleteDialog = false },
                     enabled = !isDeletingAccount
                 ) {
-                    Text("Cancel", color = TextSecondary)
+                    Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         )
@@ -384,13 +592,13 @@ private fun SettingToggleRow(
                 modifier = Modifier
                     .size(36.dp)
                     .clip(CircleShape)
-                    .background(BrandPrimary.copy(alpha = 0.08f)),
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = BrandPrimary,
+                    tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -400,12 +608,12 @@ private fun SettingToggleRow(
                     text = title,
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.SemiBold,
-                    color = TextPrimary
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodySmall,
-                    color = TextSecondary,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 12.sp
                 )
             }
@@ -416,7 +624,7 @@ private fun SettingToggleRow(
             onCheckedChange = onCheckedChange,
             colors = SwitchDefaults.colors(
                 checkedThumbColor = Color.White,
-                checkedTrackColor = BrandAccent
+                checkedTrackColor = MaterialTheme.colorScheme.primary
             )
         )
     }

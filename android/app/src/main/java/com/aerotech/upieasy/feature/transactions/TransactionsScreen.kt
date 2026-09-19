@@ -1,5 +1,9 @@
-﻿package com.aerotech.upieasy.feature.transactions
+package com.aerotech.upieasy.feature.transactions
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -8,12 +12,14 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -25,7 +31,6 @@ import com.aerotech.upieasy.domain.model.Transaction
 import com.aerotech.upieasy.ui.components.StatusBadge
 import com.aerotech.upieasy.ui.components.TransactionRow
 import com.aerotech.upieasy.ui.theme.*
-import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -33,7 +38,7 @@ fun TransactionsScreen(
     sessionManager: SessionManager,
     database: AppDatabase
 ) {
-    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     val apiService = remember { NetworkClient.getApiService(sessionManager) }
     val repository = remember { TransactionRepository(apiService, database) }
 
@@ -42,7 +47,10 @@ fun TransactionsScreen(
     var searchQuery by remember { mutableStateOf("") }
     var selectedStatus by remember { mutableStateOf<String?>(null) }
     var selectedTransaction by remember { mutableStateOf<Transaction?>(null) }
-    var isRefreshing by remember { mutableStateOf(false) }
+
+    // Multi-select contextual state
+    var isSelectionMode by remember { mutableStateOf(false) }
+    var selectedTxnIds by remember { mutableStateOf(setOf<String>()) }
 
     val transactionsList by repository.getTransactionsFlow(currentOrgId ?: "").collectAsState(initial = emptyList())
 
@@ -64,20 +72,70 @@ fun TransactionsScreen(
         }
     }
 
+    val selectedTransactions = remember(transactionsList, selectedTxnIds) {
+        transactionsList.filter { selectedTxnIds.contains(it.id) }
+    }
+    val selectedTotalAmount = remember(selectedTransactions) {
+        selectedTransactions.sumOf { it.amount }
+    }
+
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        "Transaction Ledger",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
-                    )
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = BackgroundLight)
-            )
+            if (isSelectionMode) {
+                TopAppBar(
+                    title = {
+                        Column {
+                            Text(
+                                "${selectedTxnIds.size} Selected",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                "Total: ₹${String.format("%,.2f", selectedTotalAmount)}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = SuccessGreen
+                            )
+                        }
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = {
+                            isSelectionMode = false
+                            selectedTxnIds = emptySet()
+                        }) {
+                            Icon(Icons.Default.Close, contentDescription = "Exit Selection")
+                        }
+                    },
+                    actions = {
+                        IconButton(
+                            onClick = {
+                                val textToCopy = selectedTransactions.joinToString("\n") {
+                                    "${it.payeeName} | ₹${it.amount} | Ref: ${it.referenceNumber ?: it.id}"
+                                }
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                val clip = ClipData.newPlainText("Transactions", textToCopy)
+                                clipboard.setPrimaryClip(clip)
+                                Toast.makeText(context, "Copied ${selectedTxnIds.size} transactions", Toast.LENGTH_SHORT).show()
+                            }
+                        ) {
+                            Icon(Icons.Default.ContentCopy, contentDescription = "Copy IDs")
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                )
+            } else {
+                TopAppBar(
+                    title = {
+                        Text(
+                            "Transaction Ledger",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
+                )
+            }
         },
-        containerColor = BackgroundLight
+        containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
         Column(
             modifier = Modifier
@@ -85,51 +143,53 @@ fun TransactionsScreen(
                 .padding(padding)
                 .padding(horizontal = 16.dp)
         ) {
-            // Search Bar
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("Search by VPA, RRN, or Note...") },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextSecondary) },
-                trailingIcon = {
-                    if (searchQuery.isNotEmpty()) {
-                        IconButton(onClick = { searchQuery = "" }) {
-                            Icon(Icons.Default.Close, contentDescription = "Clear")
+            if (!isSelectionMode) {
+                // Search Bar
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = { Text("Search by VPA, RRN, or Note...") },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
+                    trailingIcon = {
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(onClick = { searchQuery = "" }) {
+                                Icon(Icons.Default.Close, contentDescription = "Clear")
+                            }
                         }
-                    }
-                },
-                singleLine = true,
-                shape = RoundedCornerShape(12.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = SurfaceLight,
-                    unfocusedContainerColor = SurfaceLight
-                )
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Filter Chips
-            val statusFilters = listOf("ALL", "SUCCESS", "PENDING", "FAILED")
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(statusFilters) { status ->
-                    val isSelected = (status == "ALL" && selectedStatus == null) || (selectedStatus == status)
-                    FilterChip(
-                        selected = isSelected,
-                        onClick = {
-                            selectedStatus = if (status == "ALL") null else status
-                        },
-                        label = { Text(status) },
-                        shape = RoundedCornerShape(20.dp),
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = BrandPrimary,
-                            selectedLabelColor = SurfaceLight
-                        )
+                    },
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = MaterialTheme.colorScheme.surface,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surface
                     )
-                }
-            }
+                )
 
-            Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Filter Chips
+                val statusFilters = listOf("ALL", "SUCCESS", "PENDING", "FAILED")
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(statusFilters) { status ->
+                        val isSelected = (status == "ALL" && selectedStatus == null) || (selectedStatus == status)
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = {
+                                selectedStatus = if (status == "ALL") null else status
+                            },
+                            label = { Text(status) },
+                            shape = RoundedCornerShape(20.dp),
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+            }
 
             // Transactions List
             if (filteredTransactions.isEmpty()) {
@@ -141,22 +201,46 @@ fun TransactionsScreen(
                         Text(
                             text = "No matching transactions found",
                             style = MaterialTheme.typography.titleMedium,
-                            color = TextSecondary
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
             } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    contentPadding = PaddingValues(bottom = 96.dp)
                 ) {
                     items(filteredTransactions, key = { it.id }) { txn ->
+                        val isSelected = selectedTxnIds.contains(txn.id)
                         TransactionRow(
                             transaction = txn,
-                            onClick = { selectedTransaction = txn }
+                            onClick = {
+                                if (isSelectionMode) {
+                                    selectedTxnIds = if (isSelected) {
+                                        selectedTxnIds - txn.id
+                                    } else {
+                                        selectedTxnIds + txn.id
+                                    }
+                                    if (selectedTxnIds.isEmpty()) isSelectionMode = false
+                                } else {
+                                    selectedTransaction = txn
+                                }
+                            },
+                            onLongClick = {
+                                if (!isSelectionMode) {
+                                    isSelectionMode = true
+                                    selectedTxnIds = setOf(txn.id)
+                                }
+                            },
+                            isSelected = isSelected,
+                            isSelectionMode = isSelectionMode,
+                            onCheckedChange = { checked ->
+                                selectedTxnIds = if (checked) selectedTxnIds + txn.id else selectedTxnIds - txn.id
+                                if (selectedTxnIds.isEmpty()) isSelectionMode = false
+                            }
                         )
                     }
-                    item { Spacer(modifier = Modifier.height(24.dp)) }
                 }
             }
         }
@@ -167,12 +251,13 @@ fun TransactionsScreen(
         ModalBottomSheet(
             onDismissRequest = { selectedTransaction = null },
             shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
-            containerColor = SurfaceLight
+            containerColor = MaterialTheme.colorScheme.surface
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(24.dp)
+                    .navigationBarsPadding()
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -182,7 +267,8 @@ fun TransactionsScreen(
                     Text(
                         text = "Transaction Details",
                         style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     StatusBadge(status = txn.status)
                 }
@@ -193,7 +279,7 @@ fun TransactionsScreen(
                     text = "₹${String.format("%,.2f", txn.amount)}",
                     style = MaterialTheme.typography.headlineLarge,
                     fontWeight = FontWeight.Bold,
-                    color = if (txn.direction == "RECEIVED") SuccessGreen else TextPrimary
+                    color = if (txn.direction == "RECEIVED") SuccessGreen else MaterialTheme.colorScheme.onSurface
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -212,11 +298,10 @@ fun TransactionsScreen(
 
                 Button(
                     onClick = { selectedTransaction = null },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text("Close")
+                    Text("Close", fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -231,7 +316,7 @@ private fun DetailItem(label: String, value: String) {
             .padding(vertical = 6.dp),
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Text(text = label, style = MaterialTheme.typography.bodyMedium, color = TextSecondary)
-        Text(text = value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = TextPrimary)
+        Text(text = label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(text = value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
     }
 }

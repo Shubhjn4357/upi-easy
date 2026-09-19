@@ -1,27 +1,32 @@
-﻿package com.aerotech.upieasy.feature.qr
+package com.aerotech.upieasy.feature.qr
 
 import android.content.Intent
 import android.widget.Toast
 import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.FlashlightOff
-import androidx.compose.material.icons.filled.FlashlightOn
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import com.google.mlkit.vision.barcode.BarcodeScanning
@@ -42,7 +47,18 @@ fun QrScannerScreen(
 
     var scannedDetails by remember { mutableStateOf<UpiPaymentDetails?>(null) }
     var scannedRawUri by remember { mutableStateOf<String?>(null) }
-    var hasCameraPermission by remember { mutableStateOf(true) }
+
+    // Infinite transition for the animated laser scanning line
+    val infiniteTransition = rememberInfiniteTransition(label = "scanner_laser")
+    val laserProgress by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 2000, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "laser_y"
+    )
 
     Scaffold(
         topBar = {
@@ -53,10 +69,12 @@ fun QrScannerScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = BackgroundLight)
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background.copy(alpha = 0.9f)
+                )
             )
         },
-        containerColor = BackgroundLight
+        containerColor = Color.Black
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
             // Camera Preview
@@ -118,28 +136,117 @@ fun QrScannerScreen(
                 modifier = Modifier.fillMaxSize()
             )
 
-            // Reticle overlay
+            // Dynamic Reticle Overlay with animated scanning laser
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(36.dp),
+                    .padding(32.dp),
                 contentAlignment = Alignment.Center
             ) {
+                val boxSize = 270.dp
                 Box(
                     modifier = Modifier
-                        .size(260.dp)
-                        .clip(RoundedCornerShape(24.dp))
-                        .background(Color.White.copy(alpha = 0.1f))
-                )
+                        .size(boxSize)
+                        .clip(RoundedCornerShape(20.dp))
+                        .border(1.5.dp, Color.White.copy(alpha = 0.3f), RoundedCornerShape(20.dp))
+                ) {
+                    // Animated laser line
+                    val laserColor = MaterialTheme.colorScheme.primary
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        val currentY = size.height * laserProgress
+                        // Laser line
+                        drawLine(
+                            brush = Brush.horizontalGradient(
+                                colors = listOf(
+                                    Color.Transparent,
+                                    laserColor.copy(alpha = 0.8f),
+                                    Color.White,
+                                    laserColor.copy(alpha = 0.8f),
+                                    Color.Transparent
+                                )
+                            ),
+                            start = Offset(0f, currentY),
+                            end = Offset(size.width, currentY),
+                            strokeWidth = 4.dp.toPx()
+                        )
+
+                        // Laser subtle glow gradient
+                        drawRect(
+                            brush = Brush.verticalGradient(
+                                colors = listOf(
+                                    laserColor.copy(alpha = 0.25f),
+                                    Color.Transparent
+                                ),
+                                startY = currentY,
+                                endY = (currentY - 40.dp.toPx()).coerceAtLeast(0f)
+                            ),
+                            topLeft = Offset(0f, (currentY - 40.dp.toPx()).coerceAtLeast(0f)),
+                            size = androidx.compose.ui.geometry.Size(size.width, 40.dp.toPx())
+                        )
+                    }
+
+                    // Corner brackets
+                    val cornerLength = 28.dp
+                    val strokeW = 4.dp
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        val cLen = cornerLength.toPx()
+                        val sw = strokeW.toPx()
+                        val col = laserColor
+
+                        // Top-Left
+                        drawLine(col, Offset(0f, 0f), Offset(cLen, 0f), sw)
+                        drawLine(col, Offset(0f, 0f), Offset(0f, cLen), sw)
+
+                        // Top-Right
+                        drawLine(col, Offset(size.width, 0f), Offset(size.width - cLen, 0f), sw)
+                        drawLine(col, Offset(size.width, 0f), Offset(size.width, cLen), sw)
+
+                        // Bottom-Left
+                        drawLine(col, Offset(0f, size.height), Offset(cLen, size.height), sw)
+                        drawLine(col, Offset(0f, size.height), Offset(0f, size.height - cLen), sw)
+
+                        // Bottom-Right
+                        drawLine(col, Offset(size.width, size.height), Offset(size.width - cLen, size.height), sw)
+                        drawLine(col, Offset(size.width, size.height), Offset(size.width, size.height - cLen), sw)
+                    }
+                }
+            }
+
+            // Bottom guide text
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(bottom = 60.dp),
+                contentAlignment = Alignment.BottomCenter
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = Color.Black.copy(alpha = 0.65f)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.QrCodeScanner, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Align QR code inside the frame to scan",
+                            color = Color.White,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
             }
         }
 
-        // Payment Confirmation Sheet
+        // Payment Confirmation Bottom Sheet
         scannedDetails?.let { details ->
             ModalBottomSheet(
                 onDismissRequest = { scannedDetails = null; scannedRawUri = null },
-                containerColor = SurfaceLight,
-                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+                containerColor = MaterialTheme.colorScheme.surface,
+                shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
             ) {
                 Column(
                     modifier = Modifier
@@ -150,7 +257,7 @@ fun QrScannerScreen(
                         text = "Payee Verified",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
-                        color = TextPrimary
+                        color = MaterialTheme.colorScheme.onSurface
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
@@ -159,13 +266,14 @@ fun QrScannerScreen(
                         text = details.payeeName,
                         style = MaterialTheme.typography.headlineMedium,
                         fontWeight = FontWeight.Bold,
-                        color = TextPrimary
+                        color = MaterialTheme.colorScheme.onSurface
                     )
 
                     Text(
                         text = details.payeeVpa,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = BrandAccent
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.SemiBold
                     )
 
                     details.amount?.let { amt ->
@@ -173,7 +281,7 @@ fun QrScannerScreen(
                         Text(
                             text = "₹${String.format("%,.2f", amt)}",
                             style = MaterialTheme.typography.headlineLarge,
-                            fontWeight = FontWeight.Bold,
+                            fontWeight = FontWeight.ExtraBold,
                             color = SuccessGreen
                         )
                     }
@@ -183,7 +291,7 @@ fun QrScannerScreen(
                         Text(
                             text = "Note: $note",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = TextSecondary
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
 
@@ -198,17 +306,19 @@ fun QrScannerScreen(
                                 scannedDetails = null
                                 onNavigateBack()
                             } catch (e: Exception) {
-                                Toast.makeText(context, "No UPI application found", Toast.LENGTH_LONG).show()
+                                Toast.makeText(context, "No UPI application found on device", Toast.LENGTH_LONG).show()
                             }
                         },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(52.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)
+                            .height(54.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                     ) {
-                        Text("Pay via Authorized UPI App", style = MaterialTheme.typography.labelLarge)
+                        Text("Pay via Authorized UPI App", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
                     }
+
+                    Spacer(modifier = Modifier.height(16.dp))
                 }
             }
         }

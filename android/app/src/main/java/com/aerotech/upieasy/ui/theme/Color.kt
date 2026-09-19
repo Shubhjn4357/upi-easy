@@ -1,4 +1,4 @@
-﻿package com.aerotech.upieasy.ui.theme
+package com.aerotech.upieasy.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
@@ -24,3 +24,13 @@ val TextPrimary = Color(0xFF0F172A)
 val TextSecondary = Color(0xFF64748B)
 val TextTertiary = Color(0xFF94A3B8)
 val DividerColor = Color(0xFFE2E8F0)
+
+// Dark Theme Surfaces & Neutrals
+val BackgroundDark = Color(0xFF090D16)
+val SurfaceDark = Color(0xFF111827)
+val SurfaceCardDark = Color(0xFF1E293B)
+val TextPrimaryDark = Color(0xFFF8FAFC)
+val TextSecondaryDark = Color(0xFF94A3B8)
+val TextTertiaryDark = Color(0xFF64748B)
+val DividerColorDark = Color(0xFF334155)
+

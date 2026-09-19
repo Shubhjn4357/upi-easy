@@ -1,5 +1,6 @@
 package com.aerotech.upieasy.feature.dashboard
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -83,10 +84,10 @@ fun DashboardScreen(
                         Icon(Icons.Default.QrCodeScanner, contentDescription = "Scan QR", tint = BrandAccent)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = BackgroundLight)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
             )
         },
-        containerColor = BackgroundLight
+        containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
         if (isLoading) {
             Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
@@ -98,7 +99,8 @@ fun DashboardScreen(
                     .fillMaxSize()
                     .padding(padding)
                     .padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                contentPadding = PaddingValues(bottom = 96.dp)
             ) {
                 // Primary Collection Card
                 item {
@@ -156,53 +158,59 @@ fun DashboardScreen(
                             ) {
                                 Button(
                                     onClick = onNavigateToQr,
-                                    modifier = Modifier.weight(1f),
-                                    shape = RoundedCornerShape(12.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = BrandAccent)
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(48.dp),
+                                    shape = RoundedCornerShape(14.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = BrandAccent, contentColor = Color.White)
                                 ) {
-                                    Icon(Icons.Default.QrCode, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Icon(Icons.Default.QrCode, contentDescription = null, modifier = Modifier.size(20.dp))
                                     Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Show QR")
+                                    Text("Show QR", fontWeight = FontWeight.Bold)
                                 }
 
                                 OutlinedButton(
                                     onClick = onNavigateToScan,
-                                    modifier = Modifier.weight(1f),
-                                    shape = RoundedCornerShape(12.dp),
-                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = SurfaceLight),
-                                    border = ButtonDefaults.outlinedButtonBorder.copy(brush = androidx.compose.ui.graphics.SolidColor(SurfaceLight.copy(alpha = 0.4f)))
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(48.dp),
+                                    shape = RoundedCornerShape(14.dp),
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+                                    border = BorderStroke(1.5.dp, Color.White.copy(alpha = 0.6f))
                                 ) {
-                                    Icon(Icons.Default.CameraAlt, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Icon(Icons.Default.QrCodeScanner, contentDescription = null, modifier = Modifier.size(20.dp))
                                     Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Scan Pay")
+                                    Text("Scan Pay", fontWeight = FontWeight.Bold)
                                 }
                             }
                         }
                     }
                 }
 
-                // Grid Metrics (Pending, Failed, Active UPI)
+                // Grid Metrics (Pending, Failed, Active UPI) - Balanced and Strictly Aligned
                 item {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         MetricCard(
                             title = "Pending",
                             value = "${dashboardData?.pendingCount ?: 0}",
-                            subtitle = "Awaiting verification",
+                            subtitle = "In Review",
                             icon = Icons.Default.HourglassEmpty,
                             iconTint = PendingAmber,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
+                            onClick = onNavigateToTransactions
                         )
 
                         MetricCard(
                             title = "Failed",
                             value = "${dashboardData?.failedCount ?: 0}",
-                            subtitle = "Needs reconciliation",
+                            subtitle = "Disputed",
                             icon = Icons.Default.Cancel,
                             iconTint = FailedRed,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
+                            onClick = onNavigateToTransactions
                         )
 
                         MetricCard(
@@ -211,7 +219,8 @@ fun DashboardScreen(
                             subtitle = "Linked VPAs",
                             icon = Icons.Default.AccountBalanceWallet,
                             iconTint = BrandSecondary,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
+                            onClick = onNavigateToUpi
                         )
                     }
                 }

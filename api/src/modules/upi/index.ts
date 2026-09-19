@@ -208,3 +208,68 @@ upiRouter.patch(
     return c.json({ success: true, message: "Default UPI ID updated" });
   }
 );
+
+upiRouter.delete(
+  "/:orgId/upi/:upiId",
+  requireTenant,
+  requirePermission("upi.manage"),
+  async (c) => {
+    const orgId = c.get("organizationId");
+    const actorId = c.get("userId");
+    const upiId = c.req.param("upiId");
+    const now = new Date();
+
+    const target = await db
+      .select()
+      .from(schema.upiAccounts)
+      .where(and(eq(schema.upiAccounts.id, upiId), eq(schema.upiAccounts.organizationId, orgId)))
+      .get();
+
+    if (!target) {
+      throw new NotFoundError("UPI Account not found");
+    }
+
+    // Delete associated QR codes
+    await db.delete(schema.qrCodes)
+      .where(eq(schema.qrCodes.upiAccountId, upiId))
+      .run();
+
+    // Delete UPI account
+    await db.delete(schema.upiAccounts)
+      .where(eq(schema.upiAccounts.id, upiId))
+      .run();
+
+    // Audit log
+    await db.insert(schema.auditLogs)
+      .values({
+        id: generateId("aud"),
+        organizationId: orgId,
+        actorId,
+        action: "upi.deleted",
+        resourceType: "upi_account",
+        resourceId: upiId,
+        metadataJson: JSON.stringify({ vpa: target.vpa }),
+        createdAt: now,
+      })
+      .run();
+
+    // Outbox event for delta-sync
+    await db.insert(schema.outboxEvents)
+      .values({
+        id: generateId("evt"),
+        organizationId: orgId,
+        eventType: "upi.deleted",
+        payloadJson: JSON.stringify({
+          organizationId: orgId,
+          upiId,
+          vpa: target.vpa,
+          deletedAt: now.getTime(),
+        }),
+        status: "PENDING",
+        createdAt: now,
+      })
+      .run();
+
+    return c.json({ success: true, message: "UPI ID and associated QR codes deleted successfully" });
+  }
+);

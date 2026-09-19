@@ -26,18 +26,32 @@ class SessionManager(private val context: Context) {
         private val KEY_SOUND_NOTIFICATIONS = androidx.datastore.preferences.core.booleanPreferencesKey("sound_notifications")
         private val KEY_BIOMETRIC_LOCK = androidx.datastore.preferences.core.booleanPreferencesKey("biometric_lock")
         private val KEY_HIGH_VALUE_ALERT = androidx.datastore.preferences.core.booleanPreferencesKey("high_value_alert")
+        private val KEY_THEME_MODE = stringPreferencesKey("theme_mode")
     }
 
     val accessTokenFlow: Flow<String?> = context.dataStore.data.map { it[KEY_ACCESS_TOKEN] }
     val currentOrgIdFlow: Flow<String?> = context.dataStore.data.map { it[KEY_CURRENT_ORG_ID] }
     val currentOrgNameFlow: Flow<String?> = context.dataStore.data.map { it[KEY_CURRENT_ORG_NAME] }
     val userRoleFlow: Flow<String?> = context.dataStore.data.map { it[KEY_USER_ROLE] }
+    val mobileNumberFlow: Flow<String?> = context.dataStore.data.map { it[KEY_MOBILE_NUMBER] }
     val userEmailFlow: Flow<String?> = context.dataStore.data.map { it[KEY_USER_EMAIL] }
     val userNameFlow: Flow<String?> = context.dataStore.data.map { it[KEY_USER_NAME] }
     val isSetupCompleteFlow: Flow<Boolean> = context.dataStore.data.map { it[KEY_IS_SETUP_COMPLETE] ?: false }
     val soundNotificationsFlow: Flow<Boolean> = context.dataStore.data.map { it[KEY_SOUND_NOTIFICATIONS] ?: true }
     val biometricLockFlow: Flow<Boolean> = context.dataStore.data.map { it[KEY_BIOMETRIC_LOCK] ?: false }
     val highValueAlertFlow: Flow<Boolean> = context.dataStore.data.map { it[KEY_HIGH_VALUE_ALERT] ?: true }
+    val themeModeFlow: Flow<String> = context.dataStore.data.map { it[KEY_THEME_MODE] ?: "SYSTEM" }
+
+    suspend fun setThemeMode(mode: String) {
+        context.dataStore.edit { it[KEY_THEME_MODE] = mode }
+    }
+
+    suspend fun updateProfile(name: String?, email: String?) {
+        context.dataStore.edit { prefs ->
+            if (name != null) prefs[KEY_USER_NAME] = name
+            if (email != null) prefs[KEY_USER_EMAIL] = email
+        }
+    }
 
     suspend fun setSoundNotifications(enabled: Boolean) {
         context.dataStore.edit { it[KEY_SOUND_NOTIFICATIONS] = enabled }

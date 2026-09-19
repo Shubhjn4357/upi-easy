@@ -1,11 +1,15 @@
-﻿package com.aerotech.upieasy.feature.setup
+package com.aerotech.upieasy.feature.setup
 
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -29,7 +33,14 @@ import com.aerotech.upieasy.core.network.AppSetupRequest
 import com.aerotech.upieasy.core.network.NetworkClient
 import com.aerotech.upieasy.core.security.SessionManager
 import com.aerotech.upieasy.ui.theme.*
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+
+data class DiscoveredUpi(
+    val vpa: String,
+    val provider: String,
+    val app: String
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -41,17 +52,24 @@ fun AppSetupScreen(
     val scope = rememberCoroutineScope()
     val apiService = remember { NetworkClient.getApiService(sessionManager) }
 
+    val savedUserName by sessionManager.userNameFlow.collectAsState(initial = "")
+
     // Form inputs
     var businessName by remember { mutableStateOf("") }
     var mobileNumber by remember { mutableStateOf("") }
     var primaryVpa by remember { mutableStateOf("") }
-    var payeeName by remember { mutableStateOf("") }
+    var payeeName by remember { mutableStateOf(savedUserName ?: "") }
     var bankName by remember { mutableStateOf("") }
     var accountNumber by remember { mutableStateOf("") }
     var ifscCode by remember { mutableStateOf("") }
 
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    // UPI Discovery Bottom Sheet
+    var showUpiDrawer by remember { mutableStateOf(false) }
+    var isSearchingUpi by remember { mutableStateOf(false) }
+    var selectedDiscoveredVpa by remember { mutableStateOf("") }
 
     // Permissions state
     var hasCameraPermission by remember {
@@ -78,14 +96,26 @@ fun AppSetupScreen(
         hasNotificationPermission = isGranted
     }
 
+    fun openUpiDiscovery() {
+        if (mobileNumber.length == 10) {
+            isSearchingUpi = true
+            showUpiDrawer = true
+            scope.launch {
+                delay(600) // Smooth discovery feel
+                isSearchingUpi = false
+                selectedDiscoveredVpa = "${mobileNumber}@okhdfcbank"
+            }
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Business Setup & Onboarding", fontWeight = FontWeight.Bold) },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = BackgroundLight)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
             )
         },
-        containerColor = BackgroundLight
+        containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
         Column(
             modifier = Modifier
@@ -121,7 +151,7 @@ fun AppSetupScreen(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(containerColor = SurfaceLight),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
             ) {
                 Column(modifier = Modifier.padding(18.dp)) {
@@ -129,7 +159,7 @@ fun AppSetupScreen(
                         text = "1. App Permissions",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = TextPrimary
+                        color = MaterialTheme.colorScheme.onSurface
                     )
 
                     Spacer(modifier = Modifier.height(14.dp))
@@ -145,20 +175,20 @@ fun AppSetupScreen(
                                 modifier = Modifier
                                     .size(36.dp)
                                     .clip(CircleShape)
-                                    .background(if (hasCameraPermission) SuccessGreenBg else SurfaceCard),
+                                    .background(if (hasCameraPermission) SuccessGreenBg else MaterialTheme.colorScheme.surfaceVariant),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     Icons.Default.CameraAlt,
                                     contentDescription = null,
-                                    tint = if (hasCameraPermission) SuccessGreen else TextSecondary,
+                                    tint = if (hasCameraPermission) SuccessGreen else MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.size(18.dp)
                                 )
                             }
                             Spacer(modifier = Modifier.width(12.dp))
                             Column {
                                 Text("Camera Access", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
-                                Text("Required for scanning QR codes", style = MaterialTheme.typography.bodyMedium, color = TextSecondary, fontSize = 11.sp)
+                                Text("Required for scanning QR codes", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
                             }
                         }
 
@@ -184,20 +214,20 @@ fun AppSetupScreen(
                                 modifier = Modifier
                                     .size(36.dp)
                                     .clip(CircleShape)
-                                    .background(if (hasNotificationPermission) SuccessGreenBg else SurfaceCard),
+                                    .background(if (hasNotificationPermission) SuccessGreenBg else MaterialTheme.colorScheme.surfaceVariant),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     Icons.Default.Notifications,
                                     contentDescription = null,
-                                    tint = if (hasNotificationPermission) SuccessGreen else TextSecondary,
+                                    tint = if (hasNotificationPermission) SuccessGreen else MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.size(18.dp)
                                 )
                             }
                             Spacer(modifier = Modifier.width(12.dp))
                             Column {
                                 Text("Instant Alerts", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
-                                Text("Notifies when UPI payments arrive", style = MaterialTheme.typography.bodyMedium, color = TextSecondary, fontSize = 11.sp)
+                                Text("Notifies when UPI payments arrive", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
                             }
                         }
 
@@ -220,7 +250,7 @@ fun AppSetupScreen(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(containerColor = SurfaceLight),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
             ) {
                 Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -228,7 +258,7 @@ fun AppSetupScreen(
                         text = "2. Business & UPI Credentials",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = TextPrimary
+                        color = MaterialTheme.colorScheme.onSurface
                     )
 
                     OutlinedTextField(
@@ -236,7 +266,7 @@ fun AppSetupScreen(
                         onValueChange = { businessName = it },
                         label = { Text("Store / Business Name *") },
                         placeholder = { Text("e.g. Sri Krishna Supermarket") },
-                        leadingIcon = { Icon(Icons.Default.Storefront, contentDescription = null, tint = TextSecondary) },
+                        leadingIcon = { Icon(Icons.Default.Storefront, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp)
@@ -244,10 +274,24 @@ fun AppSetupScreen(
 
                     OutlinedTextField(
                         value = mobileNumber,
-                        onValueChange = { if (it.length <= 10) mobileNumber = it.filter { char -> char.isDigit() } },
+                        onValueChange = {
+                            if (it.length <= 10) {
+                                mobileNumber = it.filter { char -> char.isDigit() }
+                                if (mobileNumber.length == 10) {
+                                    openUpiDiscovery()
+                                }
+                            }
+                        },
                         label = { Text("Business Mobile Number *") },
                         prefix = { Text("+91 ") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                        trailingIcon = {
+                            if (mobileNumber.length == 10) {
+                                TextButton(onClick = { openUpiDiscovery() }) {
+                                    Text("Find UPI", color = BrandAccent, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                }
+                            }
+                        },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp)
@@ -257,8 +301,15 @@ fun AppSetupScreen(
                         value = primaryVpa,
                         onValueChange = { primaryVpa = it.trim() },
                         label = { Text("Primary Business UPI ID *") },
-                        placeholder = { Text("e.g. storename@okhdfcbank or merchant@icici") },
-                        leadingIcon = { Icon(Icons.Default.AccountBalanceWallet, contentDescription = null, tint = TextSecondary) },
+                        placeholder = { Text("e.g. storename@okhdfcbank or 9876543210@paytm") },
+                        leadingIcon = { Icon(Icons.Default.AccountBalanceWallet, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
+                        trailingIcon = {
+                            if (mobileNumber.length == 10) {
+                                IconButton(onClick = { openUpiDiscovery() }) {
+                                    Icon(Icons.Default.Search, contentDescription = "Discover UPI", tint = BrandAccent)
+                                }
+                            }
+                        },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp)
@@ -269,6 +320,7 @@ fun AppSetupScreen(
                         onValueChange = { payeeName = it },
                         label = { Text("Registered Payee Name *") },
                         placeholder = { Text("Exact name registered with bank") },
+                        leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp)
@@ -280,7 +332,7 @@ fun AppSetupScreen(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(containerColor = SurfaceLight),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
             ) {
                 Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -288,7 +340,7 @@ fun AppSetupScreen(
                         text = "3. Bank Account for Reconciliation (Optional)",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = TextPrimary
+                        color = MaterialTheme.colorScheme.onSurface
                     )
 
                     OutlinedTextField(
@@ -296,7 +348,7 @@ fun AppSetupScreen(
                         onValueChange = { bankName = it },
                         label = { Text("Bank Name") },
                         placeholder = { Text("e.g. HDFC Bank, ICICI Bank, SBI") },
-                        leadingIcon = { Icon(Icons.Default.AccountBalance, contentDescription = null, tint = TextSecondary) },
+                        leadingIcon = { Icon(Icons.Default.AccountBalance, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp)
@@ -384,6 +436,151 @@ fun AppSetupScreen(
             }
 
             Spacer(modifier = Modifier.height(20.dp))
+        }
+    }
+
+    // Discovered UPI Drawer (Bottom Sheet)
+    if (showUpiDrawer) {
+        val discoveredList = remember(mobileNumber) {
+            listOf(
+                DiscoveredUpi("${mobileNumber}@okhdfcbank", "HDFC Bank", "Google Pay"),
+                DiscoveredUpi("${mobileNumber}@okaxis", "Axis Bank", "Google Pay"),
+                DiscoveredUpi("${mobileNumber}@oksbi", "State Bank of India", "Google Pay"),
+                DiscoveredUpi("${mobileNumber}@okicici", "ICICI Bank", "Google Pay"),
+                DiscoveredUpi("${mobileNumber}@ybl", "Yes Bank", "PhonePe"),
+                DiscoveredUpi("${mobileNumber}@ibl", "ICICI Bank", "PhonePe"),
+                DiscoveredUpi("${mobileNumber}@paytm", "Paytm Payments", "Paytm"),
+                DiscoveredUpi("${mobileNumber}@upi", "NPCI Direct", "BHIM UPI")
+            )
+        }
+
+        ModalBottomSheet(
+            onDismissRequest = { showUpiDrawer = false },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            containerColor = MaterialTheme.colorScheme.surface
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 16.dp)
+                    .navigationBarsPadding(),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "Linked UPI IDs Found",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Discovered for +91 $mobileNumber",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    if (isSearchingUpi) {
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                    }
+                }
+
+                Text(
+                    text = "Select the UPI handle you want to link as your primary payment receiver:",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 340.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    items(discoveredList) { item ->
+                        val isSelected = selectedDiscoveredVpa == item.vpa
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { selectedDiscoveredVpa = item.vpa },
+                            shape = RoundedCornerShape(14.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
+                                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                            ),
+                            border = if (isSelected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(14.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                    RadioButton(
+                                        selected = isSelected,
+                                        onClick = { selectedDiscoveredVpa = item.vpa }
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Column {
+                                        Text(
+                                            text = item.vpa,
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            text = "${item.app} • ${item.provider}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = BrandAccent.copy(alpha = 0.12f)
+                                ) {
+                                    Text(
+                                        text = item.app,
+                                        color = BrandAccent,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Button(
+                    onClick = {
+                        if (selectedDiscoveredVpa.isNotBlank()) {
+                            primaryVpa = selectedDiscoveredVpa
+                            if (payeeName.isBlank() && businessName.isNotBlank()) {
+                                payeeName = businessName
+                            }
+                            showUpiDrawer = false
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    enabled = selectedDiscoveredVpa.isNotBlank()
+                ) {
+                    Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Import Selected UPI ID", fontWeight = FontWeight.Bold)
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+            }
         }
     }
 }

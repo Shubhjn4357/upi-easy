@@ -1,13 +1,19 @@
 package com.aerotech.upieasy
 
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.filled.*
@@ -15,8 +21,13 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.fragment.app.FragmentActivity
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.*
 import com.aerotech.upieasy.core.database.AppDatabase
@@ -33,7 +44,6 @@ import com.aerotech.upieasy.feature.transactions.TransactionsScreen
 import com.aerotech.upieasy.feature.upi.UpiScreen
 import com.aerotech.upieasy.ui.theme.BackgroundLight
 import com.aerotech.upieasy.ui.theme.BrandAccent
-import com.aerotech.upieasy.ui.theme.SurfaceLight
 import com.aerotech.upieasy.ui.theme.UPIEasyTheme
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -46,7 +56,7 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector)
     data object Settings : Screen("settings", "More", Icons.Default.Settings)
 }
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -55,14 +65,20 @@ class MainActivity : ComponentActivity() {
         val database by lazy { AppDatabase.getInstance(applicationContext) }
 
         setContent {
-            UPIEasyTheme {
+            val themeMode by sessionManager.themeModeFlow.collectAsState(initial = "SYSTEM")
+            val darkTheme = when (themeMode) {
+                "LIGHT" -> false
+                "DARK" -> true
+                else -> isSystemInDarkTheme()
+            }
+
+            UPIEasyTheme(darkTheme = darkTheme) {
                 val navController = rememberNavController()
                 val scope = rememberCoroutineScope()
 
                 var isInitialized by remember { mutableStateOf(false) }
                 var resolvedStartDestination by remember { mutableStateOf("auth") }
 
-                // Resolve initial destination once before building NavHost to avoid recomposition graph crash
                 LaunchedEffect(Unit) {
                     try {
                         val token = sessionManager.getAccessToken()
@@ -83,7 +99,7 @@ class MainActivity : ComponentActivity() {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .background(BackgroundLight),
+                            .background(MaterialTheme.colorScheme.background),
                         contentAlignment = Alignment.Center
                     ) {
                         CircularProgressIndicator(color = BrandAccent)
@@ -92,7 +108,6 @@ class MainActivity : ComponentActivity() {
                     val token by sessionManager.accessTokenFlow.collectAsState(initial = null)
                     val currentOrgId by sessionManager.currentOrgIdFlow.collectAsState(initial = null)
 
-                    // If user is logged in but hasn't selected an organization, fetch and set first org
                     LaunchedEffect(token, currentOrgId) {
                         if (!token.isNullOrBlank() && currentOrgId.isNullOrBlank()) {
                             try {
@@ -199,7 +214,7 @@ fun MainAppContent(
 ) {
     val bottomNavController = rememberNavController()
     val navBackStackEntry by bottomNavController.currentBackStackEntryAsState()
-    val currentRoute = navBackStackEntry?.destination?.route
+    val currentRoute = navBackStackEntry?.destination?.route ?: Screen.Dashboard.route
 
     val items = listOf(
         Screen.Dashboard,
@@ -210,36 +225,24 @@ fun MainAppContent(
     )
 
     Scaffold(
+        contentWindowInsets = WindowInsets(0.dp),
         bottomBar = {
-            NavigationBar(
-                containerColor = SurfaceLight,
-                tonalElevation = 8.dp
-            ) {
-                items.forEach { screen ->
-                    val selected = currentRoute == screen.route
-                    NavigationBarItem(
-                        icon = { Icon(screen.icon, contentDescription = screen.title) },
-                        label = { Text(screen.title) },
-                        selected = selected,
-                        onClick = {
-                            if (currentRoute != screen.route) {
-                                bottomNavController.navigate(screen.route) {
-                                    popUpTo(bottomNavController.graph.findStartDestination().id) {
-                                        saveState = true
-                                    }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
+            FloatingGlassBottomBar(
+                items = items,
+                currentRoute = currentRoute,
+                onNavigateToScan = onNavigateToScan,
+                onItemClick = { screen ->
+                    if (currentRoute != screen.route) {
+                        bottomNavController.navigate(screen.route) {
+                            popUpTo(bottomNavController.graph.findStartDestination().id) {
+                                saveState = true
                             }
-                        },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = BrandAccent,
-                            selectedTextColor = BrandAccent,
-                            indicatorColor = BrandAccent.copy(alpha = 0.15f)
-                        )
-                    )
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    }
                 }
-            }
+            )
         }
     ) { innerPadding ->
         NavHost(
@@ -280,3 +283,110 @@ fun MainAppContent(
         }
     }
 }
+
+@Composable
+fun FloatingGlassBottomBar(
+    items: List<Screen>,
+    currentRoute: String,
+    onNavigateToScan: () -> Unit,
+    onItemClick: (Screen) -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Surface(
+            shape = RoundedCornerShape(32.dp),
+            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+            tonalElevation = 8.dp,
+            shadowElevation = 12.dp,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.18f)),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                items.forEach { screen ->
+                    val isSelected = currentRoute == screen.route
+                    val isHomeScreen = screen == Screen.Dashboard
+
+                    // If we're on the dashboard and looking at the home tab, change to Scan QR button style
+                    val showScanButton = isHomeScreen && isSelected
+
+                    val icon = if (showScanButton) Icons.Default.QrCodeScanner else screen.icon
+                    val title = if (showScanButton) "Scan QR" else screen.title
+
+                    val iconColor by animateColorAsState(
+                        targetValue = when {
+                            showScanButton -> Color.White
+                            isSelected -> MaterialTheme.colorScheme.primary
+                            else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                        },
+                        animationSpec = tween(250),
+                        label = "iconColor"
+                    )
+
+                    val pillBgColor by animateColorAsState(
+                        targetValue = when {
+                            showScanButton -> BrandAccent
+                            isSelected -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+                            else -> Color.Transparent
+                        },
+                        animationSpec = tween(250),
+                        label = "pillBgColor"
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(24.dp))
+                            .background(pillBgColor)
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null
+                            ) {
+                                if (showScanButton) {
+                                    onNavigateToScan()
+                                } else {
+                                    onItemClick(screen)
+                                }
+                            }
+                            .padding(
+                                horizontal = if (isSelected || showScanButton) 14.dp else 10.dp,
+                                vertical = 8.dp
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                imageVector = icon,
+                                contentDescription = title,
+                                tint = iconColor,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            AnimatedVisibility(visible = isSelected || showScanButton) {
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = title,
+                                    fontSize = 12.sp,
+                                    fontWeight = if (isSelected || showScanButton) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (showScanButton) Color.White else MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+

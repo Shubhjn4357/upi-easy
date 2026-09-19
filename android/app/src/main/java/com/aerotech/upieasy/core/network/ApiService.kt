@@ -144,7 +144,8 @@ data class StaffMemberDto(
 )
 
 data class InviteStaffRequest(
-    val mobileNumber: String,
+    val mobileNumber: String? = null,
+    val email: String? = null,
     val fullName: String? = null,
     val role: String
 )
@@ -261,6 +262,12 @@ interface ApiService {
         @Path("upiId") upiId: String
     ): Response<ApiResponse<Any>>
 
+    @DELETE("api/v1/organizations/{orgId}/upi/{upiId}")
+    suspend fun deleteUpiAccount(
+        @Path("orgId") orgId: String,
+        @Path("upiId") upiId: String
+    ): Response<ApiResponse<Any>>
+
     @GET("api/v1/organizations/{orgId}/staff")
     suspend fun getStaff(@Path("orgId") orgId: String): Response<StaffListResponse>
 
@@ -268,6 +275,12 @@ interface ApiService {
     suspend fun inviteStaff(
         @Path("orgId") orgId: String,
         @Body request: InviteStaffRequest
+    ): Response<ApiResponse<Any>>
+
+    @DELETE("api/v1/organizations/{orgId}/staff/{memberId}")
+    suspend fun deleteStaff(
+        @Path("orgId") orgId: String,
+        @Path("memberId") memberId: String
     ): Response<ApiResponse<Any>>
 
     @GET("api/v1/organizations/{orgId}/sync")
