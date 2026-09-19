@@ -94,7 +94,7 @@ describe("Database Events & Dataset Seeding Tests", () => {
       .from(schema.outboxEvents)
       .where(eq(schema.outboxEvents.organizationId, orgId))
       .all()
-      .find((e) => e.eventType === "transaction.created" && e.payloadJson.includes(newTxnId));
+      .find((e:typeof schema.outboxEvents.$inferSelect) => e.eventType === "transaction.created" && e.payloadJson.includes(newTxnId));
 
     expect(event).toBeDefined();
     const payload = JSON.parse(event!.payloadJson);
@@ -129,7 +129,7 @@ describe("Database Events & Dataset Seeding Tests", () => {
       .from(schema.outboxEvents)
       .where(eq(schema.outboxEvents.organizationId, orgId))
       .all()
-      .find((e) => e.eventType === "transaction.status_changed" && e.payloadJson.includes(txn.id));
+      .find((e:typeof schema.outboxEvents.$inferSelect) => e.eventType === "transaction.status_changed" && e.payloadJson.includes(txn.id));
 
     expect(event).toBeDefined();
     const payload = JSON.parse(event!.payloadJson);
@@ -161,7 +161,7 @@ describe("Database Events & Dataset Seeding Tests", () => {
       .from(schema.outboxEvents)
       .where(eq(schema.outboxEvents.organizationId, orgId))
       .all()
-      .find((e) => e.eventType === "upi.created" && e.payloadJson.includes(upiId));
+      .find((e:typeof schema.outboxEvents.$inferSelect) => e.eventType === "upi.created" && e.payloadJson.includes(upiId));
 
     expect(event).toBeDefined();
     const payload = JSON.parse(event!.payloadJson);
@@ -200,7 +200,7 @@ describe("Database Events & Dataset Seeding Tests", () => {
       .all();
 
     const paymentNotif = cashierNotifs.find(
-      (n) => n.title.includes("3,000") || n.message.includes("3,000")
+      (n:typeof schema.notifications.$inferSelect) => n.title.includes("3,000") || n.message.includes("3,000")
     );
     expect(paymentNotif).toBeDefined();
     expect(paymentNotif?.type).toBe("payment.received");
