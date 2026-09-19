@@ -18,9 +18,19 @@ import { notificationsRouter } from "./modules/notifications/index.js";
 import { webhooksRouter } from "./modules/webhooks/index.js";
 import { seedDemoMerchantData } from "./db/seed.js";
 import { renderDashboardHtml } from "./dashboard/html.js";
+import { setD1Database } from "./db/index.js";
 import type { AppEnv } from "./types/hono.js";
 
 export const app = new Hono<AppEnv>();
+
+// Initialize Cloudflare D1 database if present in environment
+app.use("*", async (c, next) => {
+  const d1 = (c.env as any)?.upi_easy_db || (c.env as any)?.DB;
+  if (d1) {
+    setD1Database(d1);
+  }
+  await next();
+});
 
 // Global Middlewares
 app.use("*", secureHeaders());

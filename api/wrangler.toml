@@ -8,9 +8,6 @@ NODE_ENV = "production"
 JWT_EXPIRY = "15m"
 REFRESH_TOKEN_EXPIRY = "30d"
 GOOGLE_WEB_CLIENT_ID = "332345540842-ks8bq4csr4lklkvv3tesgkig2b221m23.apps.googleusercontent.com"
-JWT_SECRET = "pSjJLq0cuJNW+4VFzp2rQmynKr/t6vsipCoq9G6Q7MA="
-REFRESH_SECRET = "pSjJLq0cuJNW+4VFzp2rQmynKr/t6vsipCoq9G6Q7MA="
-WEBHOOK_SECRET = "pSjJLq0cuJNW+4VFzp2rQmynKr/t6vsipCoq9G6Q7MA="
 
 [observability.logs]
 enabled = true
@@ -22,3 +19,8 @@ persist = true
 enabled = true
 head_sampling_rate = 1
 persist = true
+
+[[d1_databases]]
+binding = "upi_easy_db"
+database_name = "upi-easy-db"
+database_id = "6daf6ea6-2c17-4f6d-8d6f-a129f1c69716"
