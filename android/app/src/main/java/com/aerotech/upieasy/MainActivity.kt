@@ -3,9 +3,8 @@ package com.aerotech.upieasy
 import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -13,6 +12,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import com.aerotech.upieasy.core.util.HapticHelper
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -30,6 +32,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.fragment.app.FragmentActivity
+import androidx.compose.ui.draw.scale
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import com.aerotech.upieasy.core.util.BiometricPromptHelper
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
 import androidx.navigation.navArgument
@@ -79,13 +85,22 @@ class MainActivity : FragmentActivity() {
                 val navController = rememberNavController()
                 val scope = rememberCoroutineScope()
 
+                var initialToken by remember { mutableStateOf<String?>(null) }
                 var isInitialized by remember { mutableStateOf(false) }
                 var resolvedStartDestination by remember { mutableStateOf("auth") }
+                var isAppLocked by remember { mutableStateOf(false) }
 
                 LaunchedEffect(Unit) {
                     try {
                         val token = sessionManager.getAccessToken()
+                        initialToken = token
                         val isComplete = sessionManager.isSetupCompleteFlow.first()
+                        val bioEnabled = sessionManager.biometricLockFlow.first()
+
+                        if (!token.isNullOrBlank() && bioEnabled) {
+                            isAppLocked = true
+                        }
+
                         resolvedStartDestination = when {
                             token.isNullOrBlank() -> "auth"
                             !isComplete -> "setup"
@@ -108,8 +123,74 @@ class MainActivity : FragmentActivity() {
                         CircularProgressIndicator(color = BrandAccent)
                     }
                 } else {
-                    val token by sessionManager.accessTokenFlow.collectAsState(initial = null)
+                    val token by sessionManager.accessTokenFlow.collectAsState(initial = initialToken)
                     val currentOrgId by sessionManager.currentOrgIdFlow.collectAsState(initial = null)
+                    val biometricLockEnabled by sessionManager.biometricLockFlow.collectAsState(initial = false)
+
+                    // Reactive Auth Guard: forcefully throw to login page only if user was logged in and token is cleared
+                    var hadValidSession by remember { mutableStateOf(!initialToken.isNullOrBlank()) }
+                    LaunchedEffect(token) {
+                        if (!token.isNullOrBlank()) {
+                            hadValidSession = true
+                        } else if (hadValidSession) {
+                            hadValidSession = false
+                            val currentRoute = navController.currentBackStackEntry?.destination?.route
+                            if (currentRoute != null && currentRoute != "auth") {
+                                navController.navigate("auth") {
+                                    popUpTo(0) { inclusive = true }
+                                }
+                            }
+                        }
+                    }
+
+                    val lifecycleOwner = LocalLifecycleOwner.current
+                    DisposableEffect(lifecycleOwner, biometricLockEnabled, token) {
+                        val observer = LifecycleEventObserver { _, event ->
+                            if (event == Lifecycle.Event.ON_STOP) {
+                                if (biometricLockEnabled && !token.isNullOrBlank()) {
+                                    isAppLocked = true
+                                }
+                            } else if (event == Lifecycle.Event.ON_RESUME) {
+                                if (isAppLocked && biometricLockEnabled && !token.isNullOrBlank()) {
+                                    if (BiometricPromptHelper.isBiometricAvailable(this@MainActivity)) {
+                                        BiometricPromptHelper.showBiometricPrompt(
+                                            activity = this@MainActivity,
+                                            title = "Unlock UPIEasy",
+                                            subtitle = "Biometric identity required to access account",
+                                            onSuccess = {
+                                                isAppLocked = false
+                                                HapticHelper.performHaptic(this@MainActivity, HapticHelper.FeedbackType.SUCCESS)
+                                            },
+                                            onError = { _ -> }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        lifecycleOwner.lifecycle.addObserver(observer)
+                        onDispose {
+                            lifecycleOwner.lifecycle.removeObserver(observer)
+                        }
+                    }
+
+                    LaunchedEffect(isAppLocked) {
+                        if (isAppLocked) {
+                            if (BiometricPromptHelper.isBiometricAvailable(this@MainActivity)) {
+                                BiometricPromptHelper.showBiometricPrompt(
+                                    activity = this@MainActivity,
+                                    title = "Unlock UPIEasy",
+                                    subtitle = "Biometric identity required to access account",
+                                    onSuccess = {
+                                        isAppLocked = false
+                                        HapticHelper.performHaptic(this@MainActivity, HapticHelper.FeedbackType.SUCCESS)
+                                    },
+                                    onError = { _ -> }
+                                )
+                            } else {
+                                isAppLocked = false
+                            }
+                        }
+                    }
 
                     LaunchedEffect(token, currentOrgId) {
                         if (!token.isNullOrBlank() && currentOrgId.isNullOrBlank()) {
@@ -160,7 +241,11 @@ class MainActivity : FragmentActivity() {
 
                     NavHost(
                         navController = navController,
-                        startDestination = resolvedStartDestination
+                        startDestination = resolvedStartDestination,
+                        enterTransition = { fadeIn(animationSpec = tween(220)) },
+                        exitTransition = { fadeOut(animationSpec = tween(180)) },
+                        popEnterTransition = { fadeIn(animationSpec = tween(220)) },
+                        popExitTransition = { fadeOut(animationSpec = tween(180)) }
                     ) {
                         composable("auth") {
                             GoogleSignInScreen(
@@ -205,6 +290,12 @@ class MainActivity : FragmentActivity() {
                                 onLogout = {
                                     scope.launch {
                                         sessionManager.clearSession()
+                                        com.aerotech.upieasy.core.util.PaymentAlertManager.clearAlertHistory()
+                                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                            try {
+                                                database.clearAllTables()
+                                            } catch (_: Exception) {}
+                                        }
                                         navController.navigate("auth") {
                                             popUpTo(0) { inclusive = true }
                                         }
@@ -250,6 +341,29 @@ class MainActivity : FragmentActivity() {
                             onDismiss = { com.aerotech.upieasy.core.util.PaymentAlertManager.dismissAlert() }
                         )
                     }
+
+                    if (isAppLocked) {
+                        BiometricLockBottomDrawer(
+                            onUnlockRequest = {
+                                if (BiometricPromptHelper.isBiometricAvailable(this@MainActivity)) {
+                                    BiometricPromptHelper.showBiometricPrompt(
+                                        activity = this@MainActivity,
+                                        title = "Unlock UPIEasy",
+                                        subtitle = "Biometric identity required to access account",
+                                        onSuccess = {
+                                            isAppLocked = false
+                                            HapticHelper.performHaptic(this@MainActivity, HapticHelper.FeedbackType.SUCCESS)
+                                        },
+                                        onError = { err ->
+                                            android.widget.Toast.makeText(this@MainActivity, err, android.widget.Toast.LENGTH_SHORT).show()
+                                        }
+                                    )
+                                } else {
+                                    isAppLocked = false
+                                }
+                            }
+                        )
+                    }
                 }
             }
         }
@@ -268,35 +382,13 @@ fun MainAppContent(
     val bottomNavController = rememberNavController()
     val navBackStackEntry by bottomNavController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route ?: Screen.Dashboard.route
+    var showHubSheet by remember { mutableStateOf(false) }
 
-    Scaffold(
-        contentWindowInsets = WindowInsets(0.dp),
-        bottomBar = {
-            FloatingGlassBottomBar(
-                currentRoute = currentRoute,
-                onNavigateToScan = onNavigateToScan,
-                onItemClick = { screen ->
-                    if (screen.route == Screen.Dashboard.route) {
-                        bottomNavController.popBackStack(Screen.Dashboard.route, inclusive = false)
-                    } else {
-                        bottomNavController.navigate(screen.route) {
-                            popUpTo(Screen.Dashboard.route) {
-                                saveState = true
-                            }
-                            launchSingleTop = true
-                            restoreState = true
-                        }
-                    }
-                }
-            )
-        }
-    ) { innerPadding ->
+    Box(modifier = Modifier.fillMaxSize()) {
         NavHost(
             navController = bottomNavController,
             startDestination = Screen.Dashboard.route,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
+            modifier = Modifier.fillMaxSize()
         ) {
             composable(Screen.Dashboard.route) {
                 DashboardScreen(
@@ -306,7 +398,9 @@ fun MainAppContent(
                     onNavigateToTransactions = { bottomNavController.navigate(Screen.Transactions.route) },
                     onNavigateToUpi = { bottomNavController.navigate(Screen.Upi.route) },
                     onNavigateToSettings = { bottomNavController.navigate(Screen.Settings.route) },
-                    onNavigateToStaff = { bottomNavController.navigate(Screen.Staff.route) }
+                    onNavigateToStaff = { bottomNavController.navigate(Screen.Staff.route) },
+                    onNavigateToLegal = onNavigateToLegal,
+                    onLogout = onLogout
                 )
             }
 
@@ -334,176 +428,607 @@ fun MainAppContent(
                 )
             }
         }
+
+        FloatingGlassBottomBar(
+            currentRoute = currentRoute,
+            onOpenHub = { showHubSheet = true },
+            onItemClick = { screen ->
+                if (screen.route == Screen.Dashboard.route) {
+                    bottomNavController.popBackStack(Screen.Dashboard.route, inclusive = false)
+                } else {
+                    bottomNavController.navigate(screen.route) {
+                        popUpTo(Screen.Dashboard.route) {
+                            saveState = true
+                        }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                }
+            },
+            modifier = Modifier.align(Alignment.BottomCenter)
+        )
+
+        BentoGridRoutesBottomDrawer(
+            visible = showHubSheet,
+            onDismiss = { showHubSheet = false },
+            onNavigateToScan = {
+                showHubSheet = false
+                onNavigateToScan()
+            },
+            onNavigateToQr = {
+                showHubSheet = false
+                onNavigateToQr(null, null)
+            },
+            onNavigateToTransactions = {
+                showHubSheet = false
+                bottomNavController.navigate(Screen.Transactions.route) {
+                    popUpTo(Screen.Dashboard.route) { saveState = true }
+                    launchSingleTop = true
+                    restoreState = true
+                }
+            },
+            onNavigateToUpi = {
+                showHubSheet = false
+                bottomNavController.navigate(Screen.Upi.route) {
+                    popUpTo(Screen.Dashboard.route) { saveState = true }
+                    launchSingleTop = true
+                    restoreState = true
+                }
+            },
+            onNavigateToStaff = {
+                showHubSheet = false
+                bottomNavController.navigate(Screen.Staff.route) {
+                    popUpTo(Screen.Dashboard.route) { saveState = true }
+                    launchSingleTop = true
+                    restoreState = true
+                }
+            },
+            onNavigateToSettings = {
+                showHubSheet = false
+                bottomNavController.navigate(Screen.Settings.route) {
+                    popUpTo(Screen.Dashboard.route) { saveState = true }
+                    launchSingleTop = true
+                    restoreState = true
+                }
+            },
+            onNavigateToLegal = {
+                showHubSheet = false
+                onNavigateToLegal()
+            }
+        )
     }
 }
 
+/**
+ * 3-button icon-based sleek floating rounded pill glassmorphism bottom bar.
+ * No text labels. Left: Home, Center: + Hub Button, Right: Settings.
+ */
 @Composable
 fun FloatingGlassBottomBar(
     currentRoute: String,
-    onNavigateToScan: () -> Unit,
-    onItemClick: (Screen) -> Unit
+    onOpenHub: () -> Unit,
+    onItemClick: (Screen) -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    val leftItems = listOf(Screen.Dashboard, Screen.Transactions)
-    val rightItems = listOf(Screen.Upi, Screen.Staff)
+    val context = LocalContext.current
 
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .navigationBarsPadding()
-            .padding(horizontal = 18.dp, vertical = 8.dp),
+            .padding(bottom = 12.dp),
         contentAlignment = Alignment.Center
     ) {
-        // Ambient soft glow pod beneath the floating bar
+        // Subtle ambient soft glow behind the floating pill
         Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .height(48.dp)
-                .padding(horizontal = 32.dp)
-                .clip(RoundedCornerShape(32.dp))
-                .background(SoftGlowIndigo.copy(alpha = 0.35f))
+                .width(224.dp)
+                .height(40.dp)
+                .clip(CircleShape)
+                .background(SoftGlowIndigo.copy(alpha = 0.32f))
         )
 
+        // Floating rounded glassmorphism pill container
         Surface(
-            shape = RoundedCornerShape(32.dp),
-            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
-            tonalElevation = 8.dp,
-            shadowElevation = 18.dp,
-            border = BorderStroke(1.dp, GlassBorderLight),
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
+            tonalElevation = 6.dp,
+            shadowElevation = 16.dp,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.38f)),
             modifier = Modifier
-                .fillMaxWidth()
-                .height(68.dp)
+                .width(228.dp)
+                .height(58.dp)
         ) {
             Row(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp),
+                    .fillMaxSize()
+                    .padding(horizontal = 14.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Left 2 items (Home, Ledger)
-                Row(
-                    modifier = Modifier.weight(1f),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically
+                // 1. Home Button
+                val isHomeSelected = currentRoute == Screen.Dashboard.route
+                val homeIconColor by animateColorAsState(
+                    targetValue = if (isHomeSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                    animationSpec = tween(200),
+                    label = "homeIconColor"
+                )
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(if (isHomeSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f) else Color.Transparent)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null
+                        ) {
+                            HapticHelper.performHaptic(context, HapticHelper.FeedbackType.LIGHT)
+                            onItemClick(Screen.Dashboard)
+                        },
+                    contentAlignment = Alignment.Center
                 ) {
-                    leftItems.forEach { screen ->
-                        BottomNavItem(
-                            screen = screen,
-                            isSelected = currentRoute == screen.route,
-                            onClick = { onItemClick(screen) }
-                        )
-                    }
+                    Icon(
+                        imageVector = Icons.Default.Home,
+                        contentDescription = "Home",
+                        tint = homeIconColor,
+                        modifier = Modifier.size(24.dp)
+                    )
                 }
 
-                // Reserved space in bar for the centered floating QR FAB
-                Spacer(modifier = Modifier.width(62.dp))
-
-                // Right 2 items (UPI, Staff)
-                Row(
-                    modifier = Modifier.weight(1f),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    rightItems.forEach { screen ->
-                        BottomNavItem(
-                            screen = screen,
-                            isSelected = currentRoute == screen.route,
-                            onClick = { onItemClick(screen) }
+                // 2. Center '+' Quick Action Hub Button
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(
+                            Brush.linearGradient(
+                                colors = listOf(BrandGradientStart, BrandGradientEnd)
+                            )
                         )
-                    }
+                        .clickable {
+                            HapticHelper.performHaptic(context, HapticHelper.FeedbackType.MEDIUM)
+                            onOpenHub()
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = "Quick Actions & Routes",
+                        tint = Color.White,
+                        modifier = Modifier.size(26.dp)
+                    )
+                }
+
+                // 3. Settings Button
+                val isSettingsSelected = currentRoute == Screen.Settings.route
+                val settingsIconColor by animateColorAsState(
+                    targetValue = if (isSettingsSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                    animationSpec = tween(200),
+                    label = "settingsIconColor"
+                )
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(if (isSettingsSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f) else Color.Transparent)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null
+                        ) {
+                            HapticHelper.performHaptic(context, HapticHelper.FeedbackType.LIGHT)
+                            onItemClick(Screen.Settings)
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Settings,
+                        contentDescription = "Settings",
+                        tint = settingsIconColor,
+                        modifier = Modifier.size(23.dp)
+                    )
                 }
             }
         }
+    }
+}
 
-        // Center Elevated QR Action Button Glow Ring
-        Box(
-            modifier = Modifier
-                .offset(y = (-16).dp)
-                .size(68.dp)
-                .clip(CircleShape)
-                .background(SoftGlowIndigo.copy(alpha = 0.45f))
-        )
-
-        // Center Elevated QR Action Button (PayOu floating glass style)
-        Surface(
-            modifier = Modifier
-                .offset(y = (-16).dp)
-                .size(58.dp)
-                .clickable { onNavigateToScan() },
-            shape = CircleShape,
-            color = Color.Transparent,
-            shadowElevation = 12.dp,
-            border = BorderStroke(3.dp, MaterialTheme.colorScheme.surface.copy(alpha = 0.96f))
+/**
+ * Bento Grid Routes Bottom Drawer displaying all destinations with glassmorphic cards.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun BentoGridRoutesBottomDrawer(
+    visible: Boolean,
+    onDismiss: () -> Unit,
+    onNavigateToScan: () -> Unit,
+    onNavigateToQr: () -> Unit,
+    onNavigateToTransactions: () -> Unit,
+    onNavigateToUpi: () -> Unit,
+    onNavigateToStaff: () -> Unit,
+    onNavigateToSettings: () -> Unit,
+    onNavigateToLegal: () -> Unit
+) {
+    if (visible) {
+        val context = LocalContext.current
+        ModalBottomSheet(
+            onDismissRequest = onDismiss,
+            containerColor = MaterialTheme.colorScheme.surface,
+            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+            dragHandle = { BottomSheetDefaults.DragHandle() },
+            windowInsets = WindowInsets.navigationBars
         ) {
-            Box(
+            Column(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.linearGradient(
-                            colors = listOf(BrandGradientStart, BrandGradientEnd)
-                        )
-                    ),
-                contentAlignment = Alignment.Center
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 24.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Default.QrCodeScanner,
-                    contentDescription = "Scan QR",
-                    tint = Color.White,
-                    modifier = Modifier.size(26.dp)
-                )
+                // Header with title and close button
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "Quick Actions & Routes",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Access all tools and modules in one tap",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    IconButton(onClick = {
+                        HapticHelper.performHaptic(context, HapticHelper.FeedbackType.LIGHT)
+                        onDismiss()
+                    }) {
+                        Icon(Icons.Default.Close, contentDescription = "Close")
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(18.dp))
+
+                // Row 1: Primary Actions (Scan & Receive)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    BentoCard(
+                        modifier = Modifier.weight(1f),
+                        title = "Scan QR",
+                        subtitle = "Pay any merchant",
+                        icon = Icons.Default.QrCodeScanner,
+                        iconBg = PastelEmeraldBg,
+                        iconTint = SuccessGreen,
+                        onClick = {
+                            HapticHelper.performHaptic(context, HapticHelper.FeedbackType.MEDIUM)
+                            onNavigateToScan()
+                        }
+                    )
+
+                    BentoCard(
+                        modifier = Modifier.weight(1f),
+                        title = "My QR Code",
+                        subtitle = "Receive payments",
+                        icon = Icons.Default.QrCode,
+                        iconBg = PastelIndigoBg,
+                        iconTint = BrandPrimary,
+                        onClick = {
+                            HapticHelper.performHaptic(context, HapticHelper.FeedbackType.MEDIUM)
+                            onNavigateToQr()
+                        }
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Row 2: Transactions & Accounts
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    BentoCard(
+                        modifier = Modifier.weight(1f),
+                        title = "Ledger History",
+                        subtitle = "Inflows & filters",
+                        icon = Icons.AutoMirrored.Filled.ReceiptLong,
+                        iconBg = PastelAmberBg,
+                        iconTint = AmberAlert,
+                        onClick = {
+                            HapticHelper.performHaptic(context, HapticHelper.FeedbackType.LIGHT)
+                            onNavigateToTransactions()
+                        }
+                    )
+
+                    BentoCard(
+                        modifier = Modifier.weight(1f),
+                        title = "UPI Accounts",
+                        subtitle = "VPAs & Bank handles",
+                        icon = Icons.Default.AccountBalanceWallet,
+                        iconBg = PastelBlueBg,
+                        iconTint = PastelBlueIcon,
+                        onClick = {
+                            HapticHelper.performHaptic(context, HapticHelper.FeedbackType.LIGHT)
+                            onNavigateToUpi()
+                        }
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Row 3: Staff & Settings
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    BentoCard(
+                        modifier = Modifier.weight(1f),
+                        title = "Team & Staff",
+                        subtitle = "Cashiers & roles",
+                        icon = Icons.Default.Group,
+                        iconBg = PastelPurpleBg,
+                        iconTint = PastelPurpleIcon,
+                        onClick = {
+                            HapticHelper.performHaptic(context, HapticHelper.FeedbackType.LIGHT)
+                            onNavigateToStaff()
+                        }
+                    )
+
+                    BentoCard(
+                        modifier = Modifier.weight(1f),
+                        title = "Settings",
+                        subtitle = "Audio, alerts & theme",
+                        icon = Icons.Default.Settings,
+                        iconBg = PastelCyan,
+                        iconTint = PastelCyanIcon,
+                        onClick = {
+                            HapticHelper.performHaptic(context, HapticHelper.FeedbackType.LIGHT)
+                            onNavigateToSettings()
+                        }
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Row 4: Legal & Compliance Slim Bento Pill
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .clickable {
+                            HapticHelper.performHaptic(context, HapticHelper.FeedbackType.LIGHT)
+                            onNavigateToLegal()
+                        }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Gavel,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Legal & NPCI Disclosures",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "RBI compliance, grievance redressal & privacy policy",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 11.5.sp
+                            )
+                        }
+                        Icon(
+                            imageVector = Icons.Default.ChevronRight,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                        )
+                    }
+                }
             }
         }
     }
 }
 
 @Composable
-private fun BottomNavItem(
-    screen: Screen,
-    isSelected: Boolean,
+private fun BentoCard(
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    iconBg: Color,
+    iconTint: Color,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val iconColor by animateColorAsState(
-        targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
-        animationSpec = tween(200),
-        label = "iconColor"
-    )
-    val pillBgColor by animateColorAsState(
-        targetValue = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else Color.Transparent,
-        animationSpec = tween(200),
-        label = "pillBgColor"
+    Surface(
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
+        modifier = modifier
+            .clip(RoundedCornerShape(18.dp))
+            .clickable { onClick() }
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(iconBg),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = iconTint,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+            Spacer(modifier = Modifier.height(10.dp))
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 11.sp,
+                maxLines = 1
+            )
+        }
+    }
+}
+
+/**
+ * Biometric lock bottom drawer displayed when app requires biometric verification.
+ */
+@Composable
+fun BiometricLockBottomDrawer(
+    onUnlockRequest: () -> Unit
+) {
+    val context = LocalContext.current
+    val infiniteTransition = rememberInfiniteTransition(label = "pulseTransition")
+    val pulseScale by infiniteTransition.animateFloat(
+        initialValue = 0.95f,
+        targetValue = 1.06f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulseScale"
     )
 
-    Column(
-        modifier = modifier
-            .clip(RoundedCornerShape(16.dp))
-            .background(pillBgColor)
-            .then(
-                if (isSelected) Modifier.border(BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.20f)), RoundedCornerShape(16.dp))
-                else Modifier
-            )
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.72f))
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null
-            ) { onClick() }
-            .padding(horizontal = 12.dp, vertical = 6.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+            ) {
+                // Tapping scrim prompts biometric unlock with haptic feedback
+                HapticHelper.performHaptic(context, HapticHelper.FeedbackType.ERROR)
+                onUnlockRequest()
+            },
+        contentAlignment = Alignment.BottomCenter
     ) {
-        Icon(
-            imageVector = screen.icon,
-            contentDescription = screen.title,
-            tint = iconColor,
-            modifier = Modifier.size(22.dp)
-        )
-        Spacer(modifier = Modifier.height(3.dp))
-        Text(
-            text = screen.title,
-            fontSize = 11.sp,
-            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-            color = iconColor,
-            maxLines = 1
-        )
+        Surface(
+            shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 10.dp,
+            shadowElevation = 24.dp,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null
+                ) { /* Catch clicks inside drawer */ }
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .padding(horizontal = 24.dp, vertical = 20.dp)
+            ) {
+                // Drawer handle pill
+                Box(
+                    modifier = Modifier
+                        .width(44.dp)
+                        .height(4.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f))
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Pulsing biometric icon
+                Surface(
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                    border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
+                    modifier = Modifier
+                        .size(80.dp)
+                        .scale(pulseScale)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.Fingerprint,
+                            contentDescription = "Biometric Lock",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(44.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                Text(
+                    text = "UPIEasy Secured",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Black,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Text(
+                    text = "Biometric lock is active. Authenticate with your fingerprint or device credential to continue.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+
+                Spacer(modifier = Modifier.height(28.dp))
+
+                Button(
+                    onClick = {
+                        HapticHelper.performHaptic(context, HapticHelper.FeedbackType.MEDIUM)
+                        onUnlockRequest()
+                    },
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp)
+                ) {
+                    Icon(Icons.Default.LockOpen, contentDescription = null, modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text("Tap to Unlock", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+        }
     }
 }
 

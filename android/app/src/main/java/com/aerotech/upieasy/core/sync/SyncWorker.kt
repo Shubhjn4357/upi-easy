@@ -5,9 +5,9 @@ import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.aerotech.upieasy.core.database.AppDatabase
-import com.aerotech.upieasy.core.database.SyncStateEntity
-import com.aerotech.upieasy.core.database.TransactionEntity
-import com.aerotech.upieasy.core.database.UpiAccountEntity
+import com.aerotech.upieasy.core.database.entity.SyncStateEntity
+import com.aerotech.upieasy.core.database.entity.TransactionEntity
+import com.aerotech.upieasy.core.database.entity.UpiAccountEntity
 import com.aerotech.upieasy.core.network.NetworkClient
 import com.aerotech.upieasy.core.security.SessionManager
 import com.google.gson.Gson
@@ -19,7 +19,9 @@ class SyncWorker(
 
     override suspend fun doWork(): Result {
         val sessionManager = SessionManager(applicationContext)
-        val orgId = sessionManager.getCurrentOrgId() ?: return Result.success()
+        val orgId = inputData.getString("organizationId")?.takeIf { it.isNotBlank() }
+            ?: sessionManager.getCurrentOrgId()
+            ?: return Result.success()
 
         val database = AppDatabase.getInstance(applicationContext)
         val apiService = NetworkClient.getApiService(sessionManager)

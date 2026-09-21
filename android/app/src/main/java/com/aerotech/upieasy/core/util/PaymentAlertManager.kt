@@ -21,6 +21,7 @@ import kotlinx.coroutines.launch
 import java.util.Locale
 
 data class PaymentAlert(
+    val id: String = java.util.UUID.randomUUID().toString(),
     val amount: Double,
     val payerName: String?,
     val referenceNumber: String?,
@@ -43,6 +44,14 @@ object PaymentAlertManager {
 
     fun clearAlertHistory() {
         _alertHistory.value = emptyList()
+    }
+
+    fun removeAlert(alertId: String) {
+        _alertHistory.value = _alertHistory.value.filter { it.id != alertId }
+    }
+
+    fun removeAlert(alert: PaymentAlert) {
+        _alertHistory.value = _alertHistory.value.filter { it.id != alert.id }
     }
 
     fun init(context: Context) {

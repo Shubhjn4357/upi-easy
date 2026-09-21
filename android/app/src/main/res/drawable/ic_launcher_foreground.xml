@@ -1,6 +1,7 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
+    android:gravity="center"
     android:viewportWidth="108"
     android:viewportHeight="108">
 
@@ -10,47 +11,6 @@
         android:strokeColor="#203056"
         android:strokeWidth="1.2"
         android:pathData="M41,25 L67,25 A16,16 0 0,1 83,41 L83,67 A16,16 0 0,1 67,83 L41,83 A16,16 0 0,1 25,67 L25,41 A16,16 0 0,1 41,25 Z" />
-
-    <!-- Soft Glow Behind Glyph -->
-    <path
-        android:fillColor="#18274D"
-        android:pathData="M44,38 A16,16 0 1,1 43.9,38 Z" />
-
-    <!-- Indian Rupee (₹) Symbol in Crisp White -->
-    <!-- Top Horizontal Crossbar -->
-    <path
-        android:strokeColor="#FFFFFF"
-        android:strokeWidth="3.6"
-        android:strokeLineCap="round"
-        android:pathData="M34,39 L53,39" />
-
-    <!-- Second Horizontal Crossbar -->
-    <path
-        android:strokeColor="#FFFFFF"
-        android:strokeWidth="3.6"
-        android:strokeLineCap="round"
-        android:pathData="M34,46.5 L49,46.5" />
-
-    <!-- Rupee Vertical Stem & Loop -->
-    <path
-        android:strokeColor="#FFFFFF"
-        android:strokeWidth="3.6"
-        android:strokeLineJoin="round"
-        android:pathData="M40,39 L40,52 C51,52 51,39 40,39" />
-
-    <!-- Rupee Diagonal Kick Leg -->
-    <path
-        android:strokeColor="#FFFFFF"
-        android:strokeWidth="3.8"
-        android:strokeLineCap="round"
-        android:pathData="M42,52 L52,69" />
-
-    <!-- Rupee Vertical Lower Stem -->
-    <path
-        android:strokeColor="#FFFFFF"
-        android:strokeWidth="3.6"
-        android:strokeLineCap="round"
-        android:pathData="M40,52 L40,69" />
 
     <!-- Dynamic UPI Forward Chevron 1: Saffron Orange -->
     <path

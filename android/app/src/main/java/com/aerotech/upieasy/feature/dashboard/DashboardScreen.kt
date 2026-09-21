@@ -6,9 +6,11 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -16,6 +18,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -23,14 +26,19 @@ import com.aerotech.upieasy.core.network.DashboardDto
 import com.aerotech.upieasy.core.network.NetworkClient
 import com.aerotech.upieasy.core.security.SessionManager
 import com.aerotech.upieasy.domain.model.Transaction
-import com.aerotech.upieasy.ui.components.PayouHeroCard
-import com.aerotech.upieasy.ui.components.PayouQuickActionButton
-import com.aerotech.upieasy.ui.components.PayouTopBar
+import com.aerotech.upieasy.ui.components.UpieasyHeroCard
+import com.aerotech.upieasy.ui.components.UpieasyPullToRefreshContainer
+import com.aerotech.upieasy.ui.components.UpieasyQuickActionButton
+import com.aerotech.upieasy.ui.components.UpieasyTopBar
 import com.aerotech.upieasy.ui.components.TransactionRow
+import com.aerotech.upieasy.ui.components.UpieasyConfirmBottomDrawer
 import com.aerotech.upieasy.ui.theme.*
 import kotlinx.coroutines.launch
 
-import com.aerotech.upieasy.ui.components.PayouNotificationsSheet
+import com.aerotech.upieasy.ui.components.UpieasyNotificationsSheet
+import com.aerotech.upieasy.ui.components.OrganizationSwitcher
+import com.aerotech.upieasy.core.database.AppDatabase
+import com.aerotech.upieasy.data.repository.OrganizationRepository
 import com.aerotech.upieasy.core.util.PaymentAlertManager
 import androidx.compose.ui.platform.LocalContext
 
@@ -42,25 +50,43 @@ fun DashboardScreen(
     onNavigateToTransactions: () -> Unit,
     onNavigateToUpi: () -> Unit,
     onNavigateToSettings: () -> Unit = {},
-    onNavigateToStaff: () -> Unit = {}
+    onNavigateToStaff: () -> Unit = {},
+    onNavigateToLegal: () -> Unit = {},
+    onLogout: () -> Unit = {}
 ) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val apiService = remember { NetworkClient.getApiService(sessionManager) }
+    val database = remember { AppDatabase.getInstance(context) }
+    val orgRepository = remember { OrganizationRepository(context, apiService, database, sessionManager) }
+    val organizations by orgRepository.observeOrganizations().collectAsState(initial = emptyList())
+    var showOrgSwitcher by remember { mutableStateOf(false) }
 
     val currentOrgId by sessionManager.currentOrgIdFlow.collectAsState(initial = null)
-    val currentOrgName by sessionManager.currentOrgNameFlow.collectAsState(initial = "UPI-Easy Store")
-    val userName by sessionManager.userNameFlow.collectAsState(initial = "Merchant")
+    val currentOrgName by sessionManager.currentOrgNameFlow.collectAsState(initial = null)
+    val userName by sessionManager.userNameFlow.collectAsState(initial = null)
+    val themeMode by sessionManager.themeModeFlow.collectAsState(initial = "SYSTEM")
 
     val alertHistory by PaymentAlertManager.alertHistory.collectAsState()
     var showNotificationsSheet by remember { mutableStateOf(false) }
+    var showSignOutConfirm by remember { mutableStateOf(false) }
 
     var dashboardData by remember { mutableStateOf<DashboardDto?>(null) }
     var isLoading by remember { mutableStateOf(true) }
+    var isRefreshing by remember { mutableStateOf(false) }
+
+    val listState = rememberLazyListState()
+    val collapseProgress by remember {
+        derivedStateOf {
+            val index = listState.firstVisibleItemIndex
+            val offset = listState.firstVisibleItemScrollOffset
+            if (index > 0) 1f
+            else (offset / 240f).coerceIn(0f, 1f)
+        }
+    }
 
     fun refresh() {
         scope.launch {
-            isLoading = true
             var orgId = currentOrgId ?: sessionManager.getCurrentOrgId()
             if (orgId.isNullOrBlank()) {
                 try {
@@ -94,30 +120,56 @@ fun DashboardScreen(
                 }
             }
             isLoading = false
+            isRefreshing = false
         }
     }
 
     LaunchedEffect(currentOrgId) {
+        isLoading = true
         refresh()
     }
 
     if (showNotificationsSheet) {
-        PayouNotificationsSheet(
+        UpieasyNotificationsSheet(
             onDismiss = { showNotificationsSheet = false },
             alertHistory = alertHistory,
-            onClearAll = { PaymentAlertManager.clearAlertHistory() }
+            onClearAll = { PaymentAlertManager.clearAlertHistory() },
+            onDeleteAlert = { PaymentAlertManager.removeAlert(it) }
         )
     }
 
     Scaffold(
         topBar = {
-            PayouTopBar(
-                brandTitle = "UPIEasy",
-                subtitle = currentOrgName ?: "Merchant Dashboard",
-                avatarInitial = (userName?.take(1) ?: "M").uppercase(),
-                onNotificationClick = { showNotificationsSheet = true },
-                onProfileClick = onNavigateToSettings
-            )
+            val unreadCount = remember(alertHistory) { alertHistory.size }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .graphicsLayer {
+                        alpha = 1f - (collapseProgress * 0.04f)
+                    }
+            ) {
+                UpieasyTopBar(
+                    brandTitle = "UPIEasy",
+                    subtitle = currentOrgName ?: "Merchant Dashboard",
+                    avatarInitial = (userName?.take(1) ?: "M").uppercase(),
+                    notificationCount = unreadCount,
+                    onNotificationClick = { showNotificationsSheet = true },
+                    onProfileClick = onNavigateToSettings,
+                    onOrganizationClick = { showOrgSwitcher = true },
+                    onMenuThemeClick = {
+                        val nextTheme = when (themeMode) {
+                            "LIGHT" -> "DARK"
+                            "DARK" -> "SYSTEM"
+                            else -> "LIGHT"
+                        }
+                        scope.launch { sessionManager.setThemeMode(nextTheme) }
+                    },
+                    onMenuLegalClick = onNavigateToLegal,
+                    onMenuLogoutClick = { showSignOutConfirm = true },
+                    userName = userName,
+                    organizationName = currentOrgName
+                )
+            }
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
@@ -133,7 +185,7 @@ fun DashboardScreen(
                         .size(260.dp)
                         .offset(x = (-50).dp, y = (-30).dp)
                         .clip(CircleShape)
-                        .background(SoftGlowIndigo)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
                 )
                 Box(
                     modifier = Modifier
@@ -141,30 +193,49 @@ fun DashboardScreen(
                         .align(Alignment.TopEnd)
                         .offset(x = 60.dp, y = 80.dp)
                         .clip(CircleShape)
-                        .background(SoftGlowEmerald)
+                        .background(MaterialTheme.colorScheme.tertiary.copy(alpha = 0.10f))
                 )
 
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 18.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                    contentPadding = PaddingValues(top = 8.dp, bottom = 100.dp)
-                ) {
-                    // Bento Tile 1: Hero Glass Collection Card
-                    item {
-                        val receivedAmount = dashboardData?.todayReceived?.amount ?: 0.0
-                        val receivedCount = dashboardData?.todayReceived?.count ?: 0
-
-                        PayouHeroCard(
-                            balance = receivedAmount,
-                            transactionCount = receivedCount,
-                            onShowQrClick = onNavigateToQr,
-                            onScanPayClick = onNavigateToScan,
-                            onHistoryClick = onNavigateToTransactions,
-                            onAddUpiClick = onNavigateToUpi
-                        )
+                UpieasyPullToRefreshContainer(
+                    isRefreshing = isRefreshing,
+                    onRefresh = {
+                        isRefreshing = true
+                        refresh()
                     }
+                ) {
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 18.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        contentPadding = PaddingValues(top = 8.dp, bottom = 100.dp)
+                    ) {
+                        // Bento Tile 1: Hero Glass Collection Card with Dynamic Shrink/Scale Animation
+                        item {
+                            val receivedAmount = dashboardData?.todayReceived?.amount ?: 0.0
+                            val receivedCount = dashboardData?.todayReceived?.count ?: 0
+
+                            val heroScale = 1f - (collapseProgress * 0.06f)
+                            val heroAlpha = 1f - (collapseProgress * 0.12f)
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .graphicsLayer {
+                                        scaleX = heroScale
+                                        scaleY = heroScale
+                                        alpha = heroAlpha
+                                    }
+                            ) {
+                                UpieasyHeroCard(
+                                    balance = receivedAmount,
+                                    transactionCount = receivedCount,
+                                    onShowQrClick = onNavigateToQr,
+                                    onScanPayClick = onNavigateToScan,
+                                    onHistoryClick = onNavigateToTransactions
+                                )
+                            }
+                        }
 
                     // Bento Row: Asymmetric Dual Cards (Settlements & Active Accounts)
                     item {
@@ -276,52 +347,96 @@ fun DashboardScreen(
                         }
                     }
 
-                    // Bento Tile 3: Quick Action Grid (PayOu Inspired 4x2 Frosted Grid)
+                    // Bento Tile 3: Dynamic Adaptable Bento Quick Action Operations
                     item {
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(24.dp),
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)),
-                            border = BorderStroke(1.dp, GlassBorderLight),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
                             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                         ) {
                             Column(
-                                modifier = Modifier.padding(16.dp),
-                                verticalArrangement = Arrangement.spacedBy(14.dp)
+                                modifier = Modifier.padding(18.dp),
+                                verticalArrangement = Arrangement.spacedBy(16.dp)
                             ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(32.dp)
+                                                .clip(CircleShape)
+                                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                Icons.Default.Bolt,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.width(10.dp))
+                                        Text(
+                                            text = "Quick Operations",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+                                    ) {
+                                        Text(
+                                            text = "Bento Suite",
+                                            color = MaterialTheme.colorScheme.primary,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                            fontSize = 10.sp
+                                        )
+                                    }
+                                }
+
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceAround
                                 ) {
-                                    PayouQuickActionButton(
+                                    UpieasyQuickActionButton(
                                         icon = Icons.Default.QrCode2,
                                         label = "Show QR",
-                                        backgroundColor = PastelGreen,
-                                        iconTint = PastelGreenIcon,
+                                        backgroundColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                                        iconTint = MaterialTheme.colorScheme.primary,
                                         onClick = onNavigateToQr,
                                         modifier = Modifier.weight(1f)
                                     )
-                                    PayouQuickActionButton(
+                                    UpieasyQuickActionButton(
                                         icon = Icons.Default.QrCodeScanner,
                                         label = "Scan Pay",
-                                        backgroundColor = PastelBlue,
-                                        iconTint = PastelBlueIcon,
+                                        backgroundColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f),
+                                        iconTint = MaterialTheme.colorScheme.tertiary,
                                         onClick = onNavigateToScan,
                                         modifier = Modifier.weight(1f)
                                     )
-                                    PayouQuickActionButton(
+                                    UpieasyQuickActionButton(
                                         icon = Icons.Default.AccountBalanceWallet,
                                         label = "Add UPI",
-                                        backgroundColor = PastelYellow,
-                                        iconTint = PastelYellowIcon,
+                                        backgroundColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
+                                        iconTint = MaterialTheme.colorScheme.secondary,
                                         onClick = onNavigateToUpi,
                                         modifier = Modifier.weight(1f)
                                     )
-                                    PayouQuickActionButton(
+                                    UpieasyQuickActionButton(
                                         icon = Icons.AutoMirrored.Filled.ReceiptLong,
                                         label = "Ledger",
-                                        backgroundColor = PastelPurple,
-                                        iconTint = PastelPurpleIcon,
+                                        backgroundColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
+                                        iconTint = MaterialTheme.colorScheme.primary,
                                         onClick = onNavigateToTransactions,
                                         modifier = Modifier.weight(1f)
                                     )
@@ -331,35 +446,35 @@ fun DashboardScreen(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceAround
                                 ) {
-                                    PayouQuickActionButton(
+                                    UpieasyQuickActionButton(
                                         icon = Icons.Default.Group,
                                         label = "Staff",
-                                        backgroundColor = PastelPink,
-                                        iconTint = PastelPinkIcon,
+                                        backgroundColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.4f),
+                                        iconTint = MaterialTheme.colorScheme.tertiary,
                                         onClick = onNavigateToStaff,
                                         modifier = Modifier.weight(1f)
                                     )
-                                    PayouQuickActionButton(
+                                    UpieasyQuickActionButton(
                                         icon = Icons.Default.NotificationsActive,
                                         label = "Alerts",
-                                        backgroundColor = PastelCyan,
-                                        iconTint = PastelCyanIcon,
+                                        backgroundColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
+                                        iconTint = MaterialTheme.colorScheme.primary,
                                         onClick = { showNotificationsSheet = true },
                                         modifier = Modifier.weight(1f)
                                     )
-                                    PayouQuickActionButton(
-                                        icon = Icons.Default.AccountBalance,
-                                        label = "Banks",
-                                        backgroundColor = PastelYellow,
-                                        iconTint = PastelYellowIcon,
-                                        onClick = onNavigateToUpi,
+                                    UpieasyQuickActionButton(
+                                        icon = Icons.Default.VolumeUp,
+                                        label = "Soundbox",
+                                        backgroundColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.55f),
+                                        iconTint = MaterialTheme.colorScheme.secondary,
+                                        onClick = onNavigateToSettings,
                                         modifier = Modifier.weight(1f)
                                     )
-                                    PayouQuickActionButton(
+                                    UpieasyQuickActionButton(
                                         icon = Icons.Default.Settings,
                                         label = "Settings",
-                                        backgroundColor = PastelBlue,
-                                        iconTint = PastelBlueIcon,
+                                        backgroundColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                                        iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
                                         onClick = onNavigateToSettings,
                                         modifier = Modifier.weight(1f)
                                     )
@@ -531,3 +646,39 @@ fun DashboardScreen(
     }
 }
 }
+
+    if (showSignOutConfirm) {
+        UpieasyConfirmBottomDrawer(
+            visible = showSignOutConfirm,
+            title = "Sign Out of UPIEasy?",
+            message = "Are you sure you want to sign out? Your offline cache will be cleared from this device and you will need to log back in.",
+            confirmText = "Sign Out",
+            cancelText = "Cancel",
+            isDestructive = true,
+            onConfirm = {
+                showSignOutConfirm = false
+                onLogout()
+            },
+            onDismiss = {
+                showSignOutConfirm = false
+            }
+        )
+    }
+
+    if (showOrgSwitcher) {
+        OrganizationSwitcher(
+            organizations = organizations,
+            activeOrganizationId = currentOrgId,
+            onOrganizationSelected = { id ->
+                scope.launch {
+                    orgRepository.switchOrganization(id)
+                    refresh()
+                }
+            },
+            onCreateFirmClick = onNavigateToSettings,
+            onDismissRequest = { showOrgSwitcher = false }
+        )
+    }
+}
+
+

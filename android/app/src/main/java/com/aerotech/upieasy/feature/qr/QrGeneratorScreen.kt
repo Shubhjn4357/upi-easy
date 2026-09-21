@@ -44,7 +44,7 @@ import com.aerotech.upieasy.core.security.SessionManager
 import com.aerotech.upieasy.core.util.QrCodeGenerator
 import com.aerotech.upieasy.core.util.UpiPaymentDetails
 import com.aerotech.upieasy.core.util.UpiUriHelper
-import com.aerotech.upieasy.ui.components.PayouButton
+import com.aerotech.upieasy.ui.components.UpieasyButton
 import com.aerotech.upieasy.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -69,7 +69,7 @@ fun QrGeneratorScreen(
     }
 
     var vpa by remember(initialVpa, defaultAccount) {
-        mutableStateOf(initialVpa ?: defaultAccount?.vpa ?: "merchant@upi")
+        mutableStateOf(initialVpa ?: defaultAccount?.vpa ?: "")
     }
     var payeeName by remember(initialPayeeName, defaultAccount, currentOrgName, userName) {
         mutableStateOf(
@@ -77,7 +77,7 @@ fun QrGeneratorScreen(
                 ?: defaultAccount?.payeeName
                 ?: currentOrgName
                 ?: userName
-                ?: "Merchant Store"
+                ?: ""
         )
     }
 
@@ -505,7 +505,7 @@ fun QrGeneratorScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
             // Primary Request Payment Button (Image 1 Style)
-            PayouButton(
+            UpieasyButton(
                 text = "Request Payment",
                 icon = Icons.Default.Share,
                 onClick = {

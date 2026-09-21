@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const users = sqliteTable("users", {
   id: text("id").primaryKey(),
@@ -12,17 +12,26 @@ export const users = sqliteTable("users", {
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
 });
 
-export const devices = sqliteTable("devices", {
-  id: text("id").primaryKey(),
-  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  deviceId: text("device_id").notNull(),
-  deviceModel: text("device_model"),
-  osVersion: text("os_version"),
-  fcmToken: text("fcm_token"),
-  isActive: integer("is_active", { mode: "boolean" }).default(true).notNull(),
-  lastSeenAt: integer("last_seen_at", { mode: "timestamp" }).notNull(),
-  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
-});
+export const devices = sqliteTable(
+  "devices",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    deviceId: text("device_id").notNull(),
+    platform: text("platform").default("ANDROID"),
+    deviceModel: text("device_model"),
+    osVersion: text("os_version"),
+    appVersion: text("app_version"),
+    fcmToken: text("fcm_token"),
+    isActive: integer("is_active", { mode: "boolean" }).default(true).notNull(),
+    lastSeenAt: integer("last_seen_at", { mode: "timestamp" }).notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp" }),
+  },
+  (table) => [
+    uniqueIndex("device_user_dev_idx").on(table.userId, table.deviceId),
+  ]
+);
 
 export const sessions = sqliteTable("sessions", {
   id: text("id").primaryKey(),

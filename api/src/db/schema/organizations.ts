@@ -51,3 +51,24 @@ export const organizationMembers = sqliteTable(
     uniqueIndex("org_member_unique").on(table.organizationId, table.userId),
   ]
 );
+
+export const organizationInvites = sqliteTable(
+  "organization_invites",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+    invitedUserId: text("invited_user_id").references(() => users.id, { onDelete: "cascade" }),
+    invitedMobile: text("invited_mobile").notNull(),
+    invitedEmail: text("invited_email"),
+    invitedName: text("invited_name"),
+    role: text("role").notNull(),
+    invitedBy: text("invited_by").notNull().references(() => users.id),
+    status: text("status", { enum: ["PENDING", "ACCEPTED", "REJECTED", "EXPIRED", "CANCELLED"] }).default("PENDING").notNull(),
+    expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+    acceptedAt: integer("accepted_at", { mode: "timestamp" }),
+    rejectedAt: integer("rejected_at", { mode: "timestamp" }),
+    cancelledAt: integer("cancelled_at", { mode: "timestamp" }),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+  }
+);

@@ -34,6 +34,10 @@ import com.aerotech.upieasy.core.network.AddUpiRequest
 import com.aerotech.upieasy.core.network.NetworkClient
 import com.aerotech.upieasy.core.network.UpiAccountDto
 import com.aerotech.upieasy.core.security.SessionManager
+import com.aerotech.upieasy.core.util.HapticHelper
+import com.aerotech.upieasy.ui.components.UpieasyPullToRefreshContainer
+import com.aerotech.upieasy.ui.components.SwipeToDeleteContainer
+import com.aerotech.upieasy.ui.components.UpieasyConfirmBottomDrawer
 import com.aerotech.upieasy.ui.theme.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -63,6 +67,7 @@ fun UpiScreen(
     var pendingDeletedIds by remember { mutableStateOf(setOf<String>()) }
     var isLoading by remember { mutableStateOf(false) }
     var showAddBottomSheet by remember { mutableStateOf(false) }
+    var isRefreshing by remember { mutableStateOf(false) }
 
     // Multi-select state
     var isSelectionMode by remember { mutableStateOf(false) }
@@ -122,6 +127,7 @@ fun UpiScreen(
                 } catch (_: Exception) {}
             }
             isLoading = false
+            isRefreshing = false
         }
     }
 
@@ -199,7 +205,8 @@ fun UpiScreen(
                 FloatingActionButton(
                     onClick = { showAddBottomSheet = true },
                     containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.padding(bottom = 76.dp)
                 ) {
                     Icon(Icons.Default.Add, contentDescription = "Add UPI ID")
                 }
@@ -289,13 +296,20 @@ fun UpiScreen(
                     }
                 }
             } else {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp),
-                    contentPadding = PaddingValues(top = 8.dp, bottom = 100.dp)
+                UpieasyPullToRefreshContainer(
+                    isRefreshing = isRefreshing,
+                    onRefresh = {
+                        isRefreshing = true
+                        refresh()
+                    }
                 ) {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp),
+                        contentPadding = PaddingValues(top = 8.dp, bottom = 100.dp)
+                    ) {
                     if (!isSelectionMode) {
                         // Bento Overview Hero Card
                         item {
@@ -427,10 +441,16 @@ fun UpiScreen(
                     ) { item ->
                         val isSelected = selectedIds.contains(item.id)
 
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .animateItemPlacement()
+                        SwipeToDeleteContainer(
+                            itemKey = item.id,
+                            enabled = !isSelectionMode,
+                            isSwipedOpen = (accountToDelete?.id == item.id),
+                            onDeleteRequest = { accountToDelete = item }
+                        ) {
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .animateItemPlacement()
                                 .combinedClickable(
                                     onClick = {
                                         if (isSelectionMode) {
@@ -591,6 +611,9 @@ fun UpiScreen(
             }
         }
     }
+}
+}
+
 
     // Add UPI Bottom Sheet
     if (showAddBottomSheet) {
@@ -734,91 +757,75 @@ fun UpiScreen(
 
     // Single Delete Confirmation
     accountToDelete?.let { account ->
-        AlertDialog(
-            onDismissRequest = { accountToDelete = null },
-            title = { Text("Delete UPI Account") },
-            text = { Text("Are you sure you want to remove ${account.vpa}? Linked static QR codes will also be removed.") },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        val target = account
-                        accountToDelete = null // Dismiss dialog immediately (0ms delay)
-                        pendingDeletedIds = pendingDeletedIds + target.id // Instant optimistic UI removal
-                        upiList = upiList.filter { it.id != target.id }
-                        Toast.makeText(context, "${target.vpa} removed", Toast.LENGTH_SHORT).show()
+        UpieasyConfirmBottomDrawer(
+            visible = accountToDelete != null,
+            title = "Delete UPI Account?",
+            message = "Are you sure you want to remove ${account.vpa}? Linked static QR codes will also be removed.",
+            confirmText = "Delete",
+            cancelText = "Cancel",
+            isDestructive = true,
+            onConfirm = {
+                val target = account
+                accountToDelete = null // Dismiss dialog immediately
+                pendingDeletedIds = pendingDeletedIds + target.id // Instant optimistic UI removal
+                upiList = upiList.filter { it.id != target.id }
+                Toast.makeText(context, "${target.vpa} removed", Toast.LENGTH_SHORT).show()
 
-                        scope.launch(Dispatchers.IO) {
-                            try {
-                                database.upiDao().deleteUpiAccount(target.id)
-                                val orgId = currentOrgId ?: sessionManager.getCurrentOrgId()
-                                if (!orgId.isNullOrBlank()) {
-                                    val res = apiService.deleteUpiAccount(orgId, target.id)
-                                    if (!res.isSuccessful) {
-                                        withContext(Dispatchers.Main) {
-                                            pendingDeletedIds = pendingDeletedIds - target.id
-                                            val err = res.errorBody()?.string()
-                                            val msg = try { org.json.JSONObject(err ?: "").optString("message").takeIf { it.isNotEmpty() } } catch (_: Exception) { null }
-                                            Toast.makeText(context, msg ?: "Server sync failed (${res.code()})", Toast.LENGTH_SHORT).show()
-                                        }
-                                    }
+                scope.launch(Dispatchers.IO) {
+                    try {
+                        database.upiDao().deleteUpiAccount(target.id)
+                        val orgId = currentOrgId ?: sessionManager.getCurrentOrgId()
+                        if (!orgId.isNullOrBlank()) {
+                            val res = apiService.deleteUpiAccount(orgId, target.id)
+                            if (!res.isSuccessful) {
+                                withContext(Dispatchers.Main) {
+                                    pendingDeletedIds = pendingDeletedIds - target.id
+                                    val err = res.errorBody()?.string()
+                                    val msg = try { org.json.JSONObject(err ?: "").optString("message").takeIf { it.isNotEmpty() } } catch (_: Exception) { null }
+                                    Toast.makeText(context, msg ?: "Server sync failed (${res.code()})", Toast.LENGTH_SHORT).show()
                                 }
-                            } catch (e: Exception) {
-                                // Background network error; item remains deleted locally
                             }
                         }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = FailedRed)
-                ) {
-                    Text("Delete")
+                    } catch (_: Exception) {
+                        // Background network error; item remains deleted locally
+                    }
                 }
             },
-            dismissButton = {
-                TextButton(onClick = { accountToDelete = null }) {
-                    Text("Cancel")
-                }
-            }
+            onDismiss = { accountToDelete = null }
         )
     }
 
     // Bulk Delete Confirmation
-    if (showBulkDeleteConfirm) {
-        AlertDialog(
-            onDismissRequest = { showBulkDeleteConfirm = false },
-            title = { Text("Delete ${selectedIds.size} UPI Accounts") },
-            text = { Text("Are you sure you want to delete all selected UPI accounts?") },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        val toDelete = selectedIds.toList()
-                        showBulkDeleteConfirm = false // Dismiss immediately
-                        isSelectionMode = false
-                        selectedIds = emptySet()
-                        pendingDeletedIds = pendingDeletedIds + toDelete // Instant optimistic removal
-                        upiList = upiList.filter { it.id !in toDelete }
-                        Toast.makeText(context, "${toDelete.size} UPI IDs deleted", Toast.LENGTH_SHORT).show()
+    if (showBulkDeleteConfirm && selectedIds.isNotEmpty()) {
+        UpieasyConfirmBottomDrawer(
+            visible = showBulkDeleteConfirm,
+            title = "Delete ${selectedIds.size} UPI Accounts?",
+            message = "Are you sure you want to delete all selected UPI accounts?",
+            confirmText = "Delete All",
+            cancelText = "Cancel",
+            isDestructive = true,
+            onConfirm = {
+                val toDelete = selectedIds.toList()
+                showBulkDeleteConfirm = false // Dismiss immediately
+                isSelectionMode = false
+                selectedIds = emptySet()
+                pendingDeletedIds = pendingDeletedIds + toDelete // Instant optimistic removal
+                upiList = upiList.filter { it.id !in toDelete }
+                Toast.makeText(context, "${toDelete.size} UPI IDs deleted", Toast.LENGTH_SHORT).show()
 
-                        scope.launch(Dispatchers.IO) {
-                            val orgId = currentOrgId ?: sessionManager.getCurrentOrgId()
-                            toDelete.forEach { id ->
-                                try {
-                                    database.upiDao().deleteUpiAccount(id)
-                                    if (!orgId.isNullOrBlank()) {
-                                        apiService.deleteUpiAccount(orgId, id)
-                                    }
-                                } catch (_: Exception) {}
+                scope.launch(Dispatchers.IO) {
+                    val orgId = currentOrgId ?: sessionManager.getCurrentOrgId()
+                    toDelete.forEach { id ->
+                        try {
+                            database.upiDao().deleteUpiAccount(id)
+                            if (!orgId.isNullOrBlank()) {
+                                apiService.deleteUpiAccount(orgId, id)
                             }
-                        }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = FailedRed)
-                ) {
-                    Text("Delete All")
+                        } catch (_: Exception) {}
+                    }
                 }
             },
-            dismissButton = {
-                TextButton(onClick = { showBulkDeleteConfirm = false }) {
-                    Text("Cancel")
-                }
-            }
+            onDismiss = { showBulkDeleteConfirm = false }
         )
     }
 }

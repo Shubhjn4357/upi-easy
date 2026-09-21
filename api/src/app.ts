@@ -14,10 +14,13 @@ import { qrRouter } from "./modules/qr/index.js";
 import { transactionsRouter } from "./modules/transactions/index.js";
 import { syncRouter } from "./modules/sync/index.js";
 import { auditRouter } from "./modules/audit/index.js";
-import { notificationsRouter } from "./modules/notifications/index.js";
+import { notificationsRouter, orgNotificationsRouter } from "./modules/notifications/index.js";
 import { webhooksRouter } from "./modules/webhooks/index.js";
+import { invitationsRouter, getMyInvitationsHandler } from "./modules/invitations/index.js";
+import { devicesRouter } from "./modules/devices/index.js";
 import { seedDemoMerchantData } from "./db/seed.js";
 import { renderDashboardHtml } from "./dashboard/html.js";
+import { requireAuth } from "./middleware/auth.js";
 import { setD1Database } from "./db/index.js";
 import type { AppEnv } from "./types/hono.js";
 
@@ -100,7 +103,11 @@ const v1 = new Hono<AppEnv>();
 
 v1.route("/auth", authRouter);
 v1.route("/users", usersRouter);
+v1.get("/me/invitations", requireAuth, getMyInvitationsHandler);
 v1.route("/me", usersRouter);
+v1.route("/invitations", invitationsRouter);
+v1.route("/devices", devicesRouter);
+v1.route("/sync", syncRouter);
 v1.route("/organizations", organizationsRouter);
 v1.route("/organizations", membersRouter);
 v1.route("/organizations", accountsRouter);
@@ -109,6 +116,7 @@ v1.route("/organizations", qrRouter);
 v1.route("/organizations", transactionsRouter);
 v1.route("/organizations", syncRouter);
 v1.route("/organizations", auditRouter);
+v1.route("/organizations", orgNotificationsRouter);
 v1.route("/notifications", notificationsRouter);
 v1.route("/webhooks", webhooksRouter);
 

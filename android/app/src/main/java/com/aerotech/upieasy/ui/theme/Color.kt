@@ -2,7 +2,7 @@ package com.aerotech.upieasy.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// PayOu Inspired Primary Branding (Vibrant Indigo & Violet Gradient)
+// Upieasy Inspired Primary Branding (Vibrant Indigo & Violet Gradient)
 val BrandPrimary = Color(0xFF5B67F2)
 val BrandPrimaryLight = Color(0xFF8B6FF4)
 val BrandPrimaryDark = Color(0xFF434DC7)
@@ -19,7 +19,7 @@ val PendingAmberBg = Color(0xFFFFF3E0)
 val FailedRed = Color(0xFFFF5252)
 val FailedRedBg = Color(0xFFFFEBEE)
 
-// PayOu Pastel Tile Palettes (Quick Action Grid)
+// Upieasy Pastel Tile Palettes (Quick Action Grid)
 val PastelYellow = Color(0xFFFFF8E7)
 val PastelYellowIcon = Color(0xFFF59E0B)
 val PastelBlue = Color(0xFFEFF2FE)

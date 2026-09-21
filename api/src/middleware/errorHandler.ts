@@ -9,6 +9,7 @@ export const errorHandler: ErrorHandler = (err, c) => {
   if (err instanceof ZodError) {
     return c.json(
       {
+        success: false,
         error: {
           code: "VALIDATION_ERROR",
           message: "Input validation failed",
@@ -23,6 +24,7 @@ export const errorHandler: ErrorHandler = (err, c) => {
   if (err instanceof AppError) {
     return c.json(
       {
+        success: false,
         error: {
           code: err.code,
           message: err.message,
@@ -50,6 +52,7 @@ export const errorHandler: ErrorHandler = (err, c) => {
 
   return c.json(
     {
+      success: false,
       error: {
         code: "INTERNAL_SERVER_ERROR",
         message: "An unexpected error occurred",

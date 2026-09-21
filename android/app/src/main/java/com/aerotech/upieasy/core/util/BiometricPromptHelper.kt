@@ -14,6 +14,17 @@ object BiometricPromptHelper {
         return biometricManager.canAuthenticate(authenticators) == BiometricManager.BIOMETRIC_SUCCESS
     }
 
+    fun canAuthenticate(context: Context): Boolean = isBiometricAvailable(context)
+
+    fun showPrompt(
+        activity: FragmentActivity,
+        title: String = "Biometric Authentication",
+        subtitle: String = "Verify your identity to proceed",
+        negativeButtonText: String? = null,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) = showBiometricPrompt(activity, title, subtitle, negativeButtonText, onSuccess, onError)
+
     fun showBiometricPrompt(
         activity: FragmentActivity,
         title: String = "Biometric Authentication",

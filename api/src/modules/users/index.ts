@@ -49,7 +49,36 @@ const getMeHandler = async (c: any) => {
   });
 };
 
+import { getMyInvitationsHandler } from "../invitations/index.js";
+
 usersRouter.get("/me", getMeHandler);
+usersRouter.get("/invitations", getMyInvitationsHandler);
+usersRouter.get("/organizations", async (c: any) => {
+  const userId = c.get("userId");
+  const memberships = await db
+    .select({
+      id: schema.organizations.id,
+      organizationId: schema.organizations.id,
+      name: schema.organizations.name,
+      organizationName: schema.organizations.name,
+      legalBusinessName: schema.organizations.legalBusinessName,
+      category: schema.organizations.category,
+      role: schema.roles.name,
+      roleName: schema.roles.name,
+      status: schema.organizationMembers.status,
+      memberStatus: schema.organizationMembers.status,
+    })
+    .from(schema.organizationMembers)
+    .innerJoin(schema.organizations, eq(schema.organizationMembers.organizationId, schema.organizations.id))
+    .innerJoin(schema.roles, eq(schema.organizationMembers.roleId, schema.roles.id))
+    .where(eq(schema.organizationMembers.userId, userId))
+    .all();
+
+  return c.json({
+    success: true,
+    organizations: memberships,
+  });
+});
 usersRouter.get("/", getMeHandler);
 
 const patchMeHandler = async (c: any) => {
@@ -86,12 +115,38 @@ const deleteMeHandler = async (c: any) => {
     .where(eq(schema.sessions.userId, userId))
     .run();
 
-  // 2. Remove organization memberships
+  // 2. Handle organizations owned by this user
+  const ownedOrgs = await db.select().from(schema.organizations).where(eq(schema.organizations.ownerId, userId)).all();
+  for (const org of ownedOrgs) {
+    try {
+      await db.delete(schema.transactions).where(eq(schema.transactions.organizationId, org.id)).run();
+      await db.delete(schema.upiAccounts).where(eq(schema.upiAccounts.organizationId, org.id)).run();
+      await db.delete(schema.bankAccounts).where(eq(schema.bankAccounts.organizationId, org.id)).run();
+      await db.delete(schema.qrCodes).where(eq(schema.qrCodes.organizationId, org.id)).run();
+      await db.delete(schema.organizationMembers).where(eq(schema.organizationMembers.organizationId, org.id)).run();
+      await db.delete(schema.auditLogs).where(eq(schema.auditLogs.organizationId, org.id)).run();
+      await db.delete(schema.idempotencyKeys).where(eq(schema.idempotencyKeys.organizationId, org.id)).run();
+      await db.delete(schema.organizations).where(eq(schema.organizations.id, org.id)).run();
+    } catch (_: any) {}
+  }
+
+  // 3. Clear audit logs and member invites where this user is referenced
+  try {
+    await db.update(schema.auditLogs).set({ actorId: null }).where(eq(schema.auditLogs.actorId, userId)).run();
+    await db.update(schema.organizationMembers).set({ invitedBy: null }).where(eq(schema.organizationMembers.invitedBy, userId)).run();
+  } catch (_: any) {}
+
+  // 4. Remove organization memberships
   await db.delete(schema.organizationMembers)
     .where(eq(schema.organizationMembers.userId, userId))
     .run();
 
-  // 3. Delete devices & user record (cascading to devices & sessions)
+  // 5. Delete devices & user record (cascading to devices & sessions)
+  try {
+    await db.delete(schema.devices).where(eq(schema.devices.userId, userId)).run();
+    await db.delete(schema.sessions).where(eq(schema.sessions.userId, userId)).run();
+  } catch (_: any) {}
+
   await db.delete(schema.users).where(eq(schema.users.id, userId)).run();
 
   return c.json({

@@ -75,7 +75,7 @@ Say goodbye to end-of-day reconciliation headaches. The searchable ledger mainta
 ### 5. Multi-Bank UPI Routing & Team Management
 - **Multi-Bank Accounts**: Link multiple merchant VPAs (e.g. `@okhdfcbank`, `@icici`, `@sbi`) to distribute revenue, switch accounts on the fly, or configure default settlement destinations.
 - **Staff Access Control**: Add cashiers, billing clerks, and store managers with role-based access control (RBAC), ensuring team members can view payment alerts and generate QRs without seeing sensitive financial reports.
-- **Biometric Security**: Protect store settings and sensitive payout configurations using device fingerprint or biometric verification.
+- **Biometric Security**: Protect store settings and sensitive Upieasyt configurations using device fingerprint or biometric verification.
 
 ---
 

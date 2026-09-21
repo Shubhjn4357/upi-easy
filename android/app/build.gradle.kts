@@ -3,6 +3,7 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
     id("com.google.devtools.ksp")
+    id("com.google.gms.google-services")
 }
 
 android {
@@ -107,6 +108,9 @@ dependencies {
 
     // WorkManager
     implementation("androidx.work:work-runtime-ktx:2.9.1")
+
+    // Firebase Cloud Messaging
+    implementation("com.google.firebase:firebase-messaging:24.0.0")
 
     // Biometrics & Keystore
     implementation("androidx.biometric:biometric:1.1.0")

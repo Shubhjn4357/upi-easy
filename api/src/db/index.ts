@@ -60,6 +60,43 @@ export function initDatabase() {
     logger.debug("Drizzle migration notice: " + (err?.message || err));
   }
 
+  // Ensure organization_invites table exists
+  try {
+    sqlite.exec(`
+      CREATE TABLE IF NOT EXISTS organization_invites (
+        id text PRIMARY KEY NOT NULL,
+        organization_id text NOT NULL REFERENCES organizations(id) ON DELETE cascade,
+        invited_user_id text REFERENCES users(id) ON DELETE cascade,
+        invited_mobile text NOT NULL,
+        invited_email text,
+        invited_name text,
+        role text NOT NULL,
+        invited_by text NOT NULL REFERENCES users(id),
+        status text DEFAULT 'PENDING' NOT NULL,
+        expires_at integer NOT NULL,
+        accepted_at integer,
+        rejected_at integer,
+        cancelled_at integer,
+        created_at integer NOT NULL,
+        updated_at integer NOT NULL
+      );
+    `);
+  } catch (_) {}
+
+  // Ensure updated devices columns exist
+  try { sqlite.exec(`ALTER TABLE devices ADD COLUMN platform text DEFAULT 'ANDROID';`); } catch (_) {}
+  try { sqlite.exec(`ALTER TABLE devices ADD COLUMN app_version text;`); } catch (_) {}
+  try { sqlite.exec(`ALTER TABLE devices ADD COLUMN updated_at integer;`); } catch (_) {}
+
+  // Ensure updated notification_preferences columns exist
+  try { sqlite.exec(`ALTER TABLE notification_preferences ADD COLUMN payment_received integer DEFAULT 1 NOT NULL;`); } catch (_) {}
+  try { sqlite.exec(`ALTER TABLE notification_preferences ADD COLUMN payment_sent integer DEFAULT 1 NOT NULL;`); } catch (_) {}
+  try { sqlite.exec(`ALTER TABLE notification_preferences ADD COLUMN payment_failed integer DEFAULT 1 NOT NULL;`); } catch (_) {}
+  try { sqlite.exec(`ALTER TABLE notification_preferences ADD COLUMN payment_reversed integer DEFAULT 1 NOT NULL;`); } catch (_) {}
+  try { sqlite.exec(`ALTER TABLE notification_preferences ADD COLUMN staff_activity integer DEFAULT 1 NOT NULL;`); } catch (_) {}
+  try { sqlite.exec(`ALTER TABLE notification_preferences ADD COLUMN sync_status integer DEFAULT 0 NOT NULL;`); } catch (_) {}
+  try { sqlite.exec(`ALTER TABLE notification_preferences ADD COLUMN voice_enabled integer DEFAULT 0 NOT NULL;`); } catch (_) {}
+
   seedPermissionsAndRoles();
   seedDemoMerchantData(db);
   logger.info("Database initialized with Drizzle schemas and seed data");

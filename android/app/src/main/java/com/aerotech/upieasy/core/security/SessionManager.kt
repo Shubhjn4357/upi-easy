@@ -32,6 +32,8 @@ class SessionManager(private val context: Context) {
         private val KEY_HIGH_VALUE_ALERT = androidx.datastore.preferences.core.booleanPreferencesKey("high_value_alert")
         private val KEY_THEME_MODE = stringPreferencesKey("theme_mode")
         private val KEY_DYNAMIC_COLOR = androidx.datastore.preferences.core.booleanPreferencesKey("dynamic_color")
+        private val KEY_HAPTIC_FEEDBACK = androidx.datastore.preferences.core.booleanPreferencesKey("haptic_feedback")
+        private val KEY_DEVICE_ID = stringPreferencesKey("device_id")
     }
 
     val accessTokenFlow: Flow<String?> = context.dataStore.data.map { it[KEY_ACCESS_TOKEN] }
@@ -51,6 +53,7 @@ class SessionManager(private val context: Context) {
     val highValueAlertFlow: Flow<Boolean> = context.dataStore.data.map { it[KEY_HIGH_VALUE_ALERT] ?: true }
     val themeModeFlow: Flow<String> = context.dataStore.data.map { it[KEY_THEME_MODE] ?: "SYSTEM" }
     val dynamicColorFlow: Flow<Boolean> = context.dataStore.data.map { it[KEY_DYNAMIC_COLOR] ?: false }
+    val hapticFeedbackFlow: Flow<Boolean> = context.dataStore.data.map { it[KEY_HAPTIC_FEEDBACK] ?: true }
 
     suspend fun setThemeMode(mode: String) {
         context.dataStore.edit { it[KEY_THEME_MODE] = mode }
@@ -58,6 +61,10 @@ class SessionManager(private val context: Context) {
 
     suspend fun setDynamicColor(enabled: Boolean) {
         context.dataStore.edit { it[KEY_DYNAMIC_COLOR] = enabled }
+    }
+
+    suspend fun setHapticFeedback(enabled: Boolean) {
+        context.dataStore.edit { it[KEY_HAPTIC_FEEDBACK] = enabled }
     }
 
     suspend fun updateProfile(name: String?, email: String?) {
@@ -159,6 +166,19 @@ class SessionManager(private val context: Context) {
 
     suspend fun getCurrentOrgId(): String? {
         return context.dataStore.data.first()[KEY_CURRENT_ORG_ID]
+    }
+
+    suspend fun getDeviceId(): String {
+        val existing = context.dataStore.data.first()[KEY_DEVICE_ID]
+        if (!existing.isNullOrBlank()) return existing
+        val newId = "android_" + java.util.UUID.randomUUID().toString().replace("-", "").take(16)
+        context.dataStore.edit { it[KEY_DEVICE_ID] = newId }
+        return newId
+    }
+
+    suspend fun hasActiveSession(): Boolean {
+        val token = getAccessToken()
+        return !token.isNullOrBlank()
     }
 
     suspend fun clearSession() {

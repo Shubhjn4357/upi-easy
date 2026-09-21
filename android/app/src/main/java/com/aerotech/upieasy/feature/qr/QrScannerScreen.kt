@@ -1,27 +1,43 @@
 package com.aerotech.upieasy.feature.qr
 
 import android.content.Intent
+import android.graphics.BitmapFactory
+import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.QrCodeScanner
+import androidx.compose.material.icons.filled.FileUpload
+import androidx.compose.material.icons.filled.FlashOn
+import androidx.compose.material.icons.filled.FlashOff
+import androidx.compose.material.icons.filled.Lightbulb
+import androidx.compose.material.icons.outlined.Lightbulb
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
@@ -29,15 +45,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import com.aerotech.upieasy.core.util.*
+import com.aerotech.upieasy.ui.theme.SuccessGreen
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.common.InputImage
-import com.aerotech.upieasy.core.util.CameraPermissionEffect
-import com.aerotech.upieasy.core.util.PaymentLauncher
-import com.aerotech.upieasy.core.util.UpiPaymentDetails
-import com.aerotech.upieasy.core.util.UpiUriHelper
-import com.aerotech.upieasy.core.util.hasCameraPermission
-import com.aerotech.upieasy.ui.theme.*
 import java.util.concurrent.Executors
+
+private val NeonLime = Color(0xFFB8FF00)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -51,8 +65,10 @@ fun QrScannerScreen(
     var scannedRawUri by remember { mutableStateOf<String?>(null) }
     var cameraPermissionGranted by remember { mutableStateOf(context.hasCameraPermission()) }
     var triggerPermission by remember { mutableStateOf(true) }
+    var isFlashOn by remember { mutableStateOf(false) }
+    var cameraControlRef by remember { mutableStateOf<CameraControl?>(null) }
 
-    // Request camera permission on first entry and re-request if missing
+    // Request camera permission on first entry
     CameraPermissionEffect(
         trigger = triggerPermission,
         onGranted = {
@@ -67,21 +83,56 @@ fun QrScannerScreen(
         }
     )
 
+    // Gallery Picker for QR Image Scanning
+    val galleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            try {
+                val inputImage = InputImage.fromFilePath(context, uri)
+                val scanner = BarcodeScanning.getClient()
+                scanner.process(inputImage)
+                    .addOnSuccessListener { barcodes ->
+                        var found = false
+                        for (barcode in barcodes) {
+                            val rawValue = barcode.rawValue ?: continue
+                            val parsed = UpiUriHelper.parseUri(rawValue)
+                            if (parsed != null) {
+                                HapticHelper.performHaptic(context, HapticHelper.FeedbackType.SUCCESS)
+                                scannedDetails = parsed
+                                scannedRawUri = rawValue
+                                found = true
+                                break
+                            }
+                        }
+                        if (!found) {
+                            HapticHelper.performHaptic(context, HapticHelper.FeedbackType.ERROR)
+                            Toast.makeText(context, "No valid UPI QR found in selected image", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                    .addOnFailureListener {
+                        Toast.makeText(context, "Failed to read image", Toast.LENGTH_SHORT).show()
+                    }
+            } catch (e: Exception) {
+                Toast.makeText(context, "Error processing image", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     if (!cameraPermissionGranted) {
-        // Show a loading/waiting state while permission is being requested
         Box(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().background(Color.Black),
             contentAlignment = Alignment.Center
         ) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                CircularProgressIndicator()
+                CircularProgressIndicator(color = NeonLime)
                 Text(
                     "Awaiting camera permission…",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = Color.White
                 )
             }
         }
@@ -94,31 +145,22 @@ fun QrScannerScreen(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 2000, easing = LinearEasing),
+            animation = tween(durationMillis = 2200, easing = LinearEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "laser_y"
     )
 
-
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Scan UPI QR Code", fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background.copy(alpha = 0.9f)
-                )
-            )
-        },
-        containerColor = Color.Black
+        containerColor = Color.Black,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { padding ->
-        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
-            // Camera Preview
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+        ) {
+            // Camera Preview View
             AndroidView(
                 factory = { ctx ->
                     val previewView = PreviewView(ctx)
@@ -148,6 +190,7 @@ fun QrScannerScreen(
                                                     val rawValue = barcode.rawValue ?: continue
                                                     val parsed = UpiUriHelper.parseUri(rawValue)
                                                     if (parsed != null) {
+                                                        HapticHelper.performHaptic(context, HapticHelper.FeedbackType.SUCCESS)
                                                         scannedDetails = parsed
                                                         scannedRawUri = rawValue
                                                         break
@@ -166,7 +209,8 @@ fun QrScannerScreen(
                         val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
                         try {
                             cameraProvider.unbindAll()
-                            cameraProvider.bindToLifecycle(lifecycleOwner, cameraSelector, preview, imageAnalysis)
+                            val camera = cameraProvider.bindToLifecycle(lifecycleOwner, cameraSelector, preview, imageAnalysis)
+                            cameraControlRef = camera.cameraControl
                         } catch (e: Exception) {
                             e.printStackTrace()
                         }
@@ -177,108 +221,217 @@ fun QrScannerScreen(
                 modifier = Modifier.fillMaxSize()
             )
 
-            // Dynamic Reticle Overlay with animated scanning laser
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(32.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                val boxSize = 270.dp
-                Box(
-                    modifier = Modifier
-                        .size(boxSize)
-                        .clip(RoundedCornerShape(20.dp))
-                        .border(1.5.dp, Color.White.copy(alpha = 0.3f), RoundedCornerShape(20.dp))
-                ) {
-                    // Animated laser line
-                    val laserColor = MaterialTheme.colorScheme.primary
-                    Canvas(modifier = Modifier.fillMaxSize()) {
-                        val currentY = size.height * laserProgress
-                        // Laser line
-                        drawLine(
-                            brush = Brush.horizontalGradient(
-                                colors = listOf(
-                                    Color.Transparent,
-                                    laserColor.copy(alpha = 0.8f),
-                                    Color.White,
-                                    laserColor.copy(alpha = 0.8f),
-                                    Color.Transparent
-                                )
-                            ),
-                            start = Offset(0f, currentY),
-                            end = Offset(size.width, currentY),
-                            strokeWidth = 4.dp.toPx()
-                        )
+            // Neon Lime Rounded Viewfinder & Cutout Overlay
+            val boxSize = 290.dp
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val w = size.width
+                val h = size.height
+                val rectSize = boxSize.toPx()
+                val left = (w - rectSize) / 2f
+                val top = (h - rectSize) / 2f - 40.dp.toPx()
+                val cornerRadius = 32.dp.toPx()
+                val armLength = 54.dp.toPx()
+                val strokeWidth = 7.dp.toPx()
 
-                        // Laser subtle glow gradient
-                        drawRect(
-                            brush = Brush.verticalGradient(
-                                colors = listOf(
-                                    laserColor.copy(alpha = 0.25f),
-                                    Color.Transparent
-                                ),
-                                startY = currentY,
-                                endY = (currentY - 40.dp.toPx()).coerceAtLeast(0f)
-                            ),
-                            topLeft = Offset(0f, (currentY - 40.dp.toPx()).coerceAtLeast(0f)),
-                            size = androidx.compose.ui.geometry.Size(size.width, 40.dp.toPx())
+                // 1. Semi-transparent dark vignette mask around the cutout
+                val path = Path().apply {
+                    addRect(Rect(0f, 0f, w, h))
+                    addRoundRect(
+                        RoundRect(
+                            rect = Rect(left, top, left + rectSize, top + rectSize),
+                            cornerRadius = CornerRadius(cornerRadius, cornerRadius)
+                        )
+                    )
+                    fillType = androidx.compose.ui.graphics.PathFillType.EvenOdd
+                }
+                drawPath(path, color = Color.Black.copy(alpha = 0.58f))
+
+                // 2. Neon Lime Glowing Rounded Corner Brackets (Exact match to Image 1)
+                val lime = NeonLime
+
+                // Top-Left Corner
+                val tlPath = Path().apply {
+                    moveTo(left, top + armLength)
+                    lineTo(left, top + cornerRadius)
+                    quadraticBezierTo(left, top, left + cornerRadius, top)
+                    lineTo(left + armLength, top)
+                }
+                drawPath(tlPath, lime, style = Stroke(width = strokeWidth, cap = StrokeCap.Round))
+
+                // Top-Right Corner
+                val trPath = Path().apply {
+                    moveTo(left + rectSize - armLength, top)
+                    lineTo(left + rectSize - cornerRadius, top)
+                    quadraticBezierTo(left + rectSize, top, left + rectSize, top + cornerRadius)
+                    lineTo(left + rectSize, top + armLength)
+                }
+                drawPath(trPath, lime, style = Stroke(width = strokeWidth, cap = StrokeCap.Round))
+
+                // Bottom-Left Corner
+                val blPath = Path().apply {
+                    moveTo(left, top + rectSize - armLength)
+                    lineTo(left, top + rectSize - cornerRadius)
+                    quadraticBezierTo(left, top + rectSize, left + cornerRadius, top + rectSize)
+                    lineTo(left + armLength, top + rectSize)
+                }
+                drawPath(blPath, lime, style = Stroke(width = strokeWidth, cap = StrokeCap.Round))
+
+                // Bottom-Right Corner
+                val brPath = Path().apply {
+                    moveTo(left + rectSize - armLength, top + rectSize)
+                    lineTo(left + rectSize - cornerRadius, top + rectSize)
+                    quadraticBezierTo(left + rectSize, top + rectSize, left + rectSize, top + rectSize - cornerRadius)
+                    lineTo(left + rectSize, top + rectSize - armLength)
+                }
+                drawPath(brPath, lime, style = Stroke(width = strokeWidth, cap = StrokeCap.Round))
+
+                // 3. Smooth animated neon scanning laser line
+                val currentY = top + (rectSize * laserProgress)
+                drawLine(
+                    brush = Brush.horizontalGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            lime.copy(alpha = 0.85f),
+                            Color.White,
+                            lime.copy(alpha = 0.85f),
+                            Color.Transparent
+                        )
+                    ),
+                    start = Offset(left + 16.dp.toPx(), currentY),
+                    end = Offset(left + rectSize - 16.dp.toPx(), currentY),
+                    strokeWidth = 3.5.dp.toPx(),
+                    cap = StrokeCap.Round
+                )
+            }
+
+            // Top Bar: Back, Torch, Upload
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(
+                    onClick = {
+                        HapticHelper.performHaptic(context, HapticHelper.FeedbackType.LIGHT)
+                        onNavigateBack()
+                    },
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.45f))
+                ) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Back",
+                        tint = Color.White,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    // Flash / Torch Toggle
+                    IconButton(
+                        onClick = {
+                            isFlashOn = !isFlashOn
+                            HapticHelper.performHaptic(context, HapticHelper.FeedbackType.LIGHT)
+                            cameraControlRef?.enableTorch(isFlashOn)
+                        },
+                        modifier = Modifier
+                            .size(42.dp)
+                            .clip(CircleShape)
+                            .background(if (isFlashOn) NeonLime.copy(alpha = 0.35f) else Color.Black.copy(alpha = 0.45f))
+                    ) {
+                        Icon(
+                            if (isFlashOn) Icons.Default.Lightbulb else Icons.Outlined.Lightbulb,
+                            contentDescription = "Flashlight",
+                            tint = if (isFlashOn) NeonLime else Color.White,
+                            modifier = Modifier.size(22.dp)
                         )
                     }
 
-                    // Corner brackets
-                    val cornerLength = 28.dp
-                    val strokeW = 4.dp
-                    Canvas(modifier = Modifier.fillMaxSize()) {
-                        val cLen = cornerLength.toPx()
-                        val sw = strokeW.toPx()
-                        val col = laserColor
-
-                        // Top-Left
-                        drawLine(col, Offset(0f, 0f), Offset(cLen, 0f), sw)
-                        drawLine(col, Offset(0f, 0f), Offset(0f, cLen), sw)
-
-                        // Top-Right
-                        drawLine(col, Offset(size.width, 0f), Offset(size.width - cLen, 0f), sw)
-                        drawLine(col, Offset(size.width, 0f), Offset(size.width, cLen), sw)
-
-                        // Bottom-Left
-                        drawLine(col, Offset(0f, size.height), Offset(cLen, size.height), sw)
-                        drawLine(col, Offset(0f, size.height), Offset(0f, size.height - cLen), sw)
-
-                        // Bottom-Right
-                        drawLine(col, Offset(size.width, size.height), Offset(size.width - cLen, size.height), sw)
-                        drawLine(col, Offset(size.width, size.height), Offset(size.width, size.height - cLen), sw)
+                    // Upload / Pick Image from Gallery
+                    IconButton(
+                        onClick = {
+                            HapticHelper.performHaptic(context, HapticHelper.FeedbackType.LIGHT)
+                            galleryLauncher.launch("image/*")
+                        },
+                        modifier = Modifier
+                            .size(42.dp)
+                            .clip(CircleShape)
+                            .background(Color.Black.copy(alpha = 0.45f))
+                    ) {
+                        Icon(
+                            Icons.Default.FileUpload,
+                            contentDescription = "Upload QR",
+                            tint = Color.White,
+                            modifier = Modifier.size(22.dp)
+                        )
                     }
                 }
             }
 
-            // Bottom guide text
-            Box(
+            // Bottom Section: BHIM UPI badge, subtitle, and Brand Bar (Matches Image 1)
+            Column(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(bottom = 60.dp),
-                contentAlignment = Alignment.BottomCenter
+                    .align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
+                    .padding(bottom = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                // BHIM | UPI Emblem Badge
                 Surface(
-                    shape = RoundedCornerShape(20.dp),
-                    color = Color.Black.copy(alpha = 0.65f)
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color.Black.copy(alpha = 0.65f),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.15f))
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Icons.Default.QrCodeScanner, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Align QR code inside the frame to scan",
+                            text = "BHIM",
                             color = Color.White,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Medium
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 15.sp,
+                            letterSpacing = 1.sp
                         )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Box(
+                            modifier = Modifier
+                                .width(1.dp)
+                                .height(14.dp)
+                                .background(Color.White.copy(alpha = 0.4f))
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "UPI",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 15.sp
+                            )
+                            Spacer(modifier = Modifier.width(3.dp))
+                            // Orange and Green accent indicator
+                            Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                                Box(modifier = Modifier.size(4.dp).background(Color(0xFFFF9933), CircleShape))
+                                Box(modifier = Modifier.size(4.dp).background(Color(0xFF138808), CircleShape))
+                            }
+                        }
                     }
                 }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Text(
+                    text = "Scan any UPI QR code to pay",
+                    color = Color.White.copy(alpha = 0.90f),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium
+                )
+
             }
         }
 
@@ -340,6 +493,7 @@ fun QrScannerScreen(
 
                     Button(
                         onClick = {
+                            HapticHelper.performHaptic(context, HapticHelper.FeedbackType.MEDIUM)
                             val uriToLaunch = scannedRawUri ?: UpiUriHelper.buildUri(details)
                             val intent = PaymentLauncher.createPaymentIntent(uriToLaunch)
                             try {

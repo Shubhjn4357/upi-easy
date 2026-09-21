@@ -21,6 +21,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.platform.LocalContext
+import com.aerotech.upieasy.core.util.HapticHelper
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.text.KeyboardOptions
@@ -28,22 +33,39 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.platform.LocalFocusManager
+import android.widget.Toast
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
+import com.aerotech.upieasy.core.database.AppDatabase
+import com.aerotech.upieasy.core.database.entity.OrganizationInviteEntity
+import com.aerotech.upieasy.core.network.InvitationDto
 import com.aerotech.upieasy.core.network.InviteStaffRequest
 import com.aerotech.upieasy.core.network.NetworkClient
 import com.aerotech.upieasy.core.network.StaffMemberDto
 import com.aerotech.upieasy.core.security.SessionManager
+import com.aerotech.upieasy.data.repository.OrganizationRepository
+import com.aerotech.upieasy.ui.components.UpieasyPullToRefreshContainer
+import com.aerotech.upieasy.ui.components.SwipeToDeleteContainer
+import com.aerotech.upieasy.ui.components.UpieasyConfirmBottomDrawer
 import com.aerotech.upieasy.ui.theme.*
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
-fun StaffScreen(sessionManager: SessionManager) {
+fun StaffScreen(
+    sessionManager: SessionManager,
+    database: AppDatabase = AppDatabase.getInstance(LocalContext.current)
+) {
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     val apiService = remember { NetworkClient.getApiService(sessionManager) }
+    val orgRepository = remember { OrganizationRepository(context, apiService, database, sessionManager) }
     val currentOrgId by sessionManager.currentOrgIdFlow.collectAsState(initial = null)
 
     var staffList by remember { mutableStateOf<List<StaffMemberDto>>(emptyList()) }
+    var pendingDeletedIds by remember { mutableStateOf(setOf<String>()) }
+    val effectiveList = staffList.filter { it.id !in pendingDeletedIds }
     var isLoading by remember { mutableStateOf(true) }
+    var isRefreshing by remember { mutableStateOf(false) }
     var showInviteBottomSheet by remember { mutableStateOf(false) }
 
     // Multi-select state
@@ -51,6 +73,12 @@ fun StaffScreen(sessionManager: SessionManager) {
     var selectedIds by remember { mutableStateOf(setOf<String>()) }
     var staffToDelete by remember { mutableStateOf<StaffMemberDto?>(null) }
     var showBulkDeleteConfirm by remember { mutableStateOf(false) }
+
+    // Invitations state
+    val incomingInvites by orgRepository.observePendingInvites().collectAsState(initial = emptyList())
+    var sentInvites by remember { mutableStateOf<List<InvitationDto>>(emptyList()) }
+    var selectedTab by remember { mutableIntStateOf(0) }
+    var actionLoadingId by remember { mutableStateOf<String?>(null) }
 
     fun refresh() {
         currentOrgId?.let { orgId ->
@@ -60,9 +88,25 @@ fun StaffScreen(sessionManager: SessionManager) {
                     val res = apiService.getStaff(orgId)
                     if (res.isSuccessful && res.body()?.success == true) {
                         staffList = res.body()?.staff ?: emptyList()
+                        pendingDeletedIds = emptySet()
                     }
                 } catch (_: Exception) {}
+
+                try {
+                    val invitesRes = apiService.getOrganizationInvites(orgId)
+                    if (invitesRes.isSuccessful && invitesRes.body()?.success == true) {
+                        sentInvites = invitesRes.body()?.invitations
+                            ?: invitesRes.body()?.invites
+                            ?: emptyList()
+                    }
+                } catch (_: Exception) {}
+
+                try {
+                    orgRepository.refreshInvitations()
+                } catch (_: Exception) {}
+
                 isLoading = false
+                isRefreshing = false
             }
         }
     }
@@ -104,10 +148,56 @@ fun StaffScreen(sessionManager: SessionManager) {
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                 )
             } else {
-                TopAppBar(
-                    title = { Text("Staff & Permissions", fontWeight = FontWeight.Bold) },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
-                )
+                Column {
+                    TopAppBar(
+                        title = { Text("Staff & Permissions", fontWeight = FontWeight.Bold) },
+                        colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
+                    )
+                    TabRow(
+                        selectedTabIndex = selectedTab,
+                        containerColor = MaterialTheme.colorScheme.background,
+                        contentColor = MaterialTheme.colorScheme.primary,
+                        indicator = { tabPositions ->
+                            TabRowDefaults.SecondaryIndicator(
+                                modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    ) {
+                        Tab(
+                            selected = selectedTab == 0,
+                            onClick = { selectedTab = 0 },
+                            text = {
+                                Text(
+                                    text = "Team Members (${effectiveList.size})",
+                                    fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Normal
+                                )
+                            }
+                        )
+                        val totalPendingInvites = incomingInvites.size + sentInvites.count { it.status == "PENDING" }
+                        Tab(
+                            selected = selectedTab == 1,
+                            onClick = { selectedTab = 1 },
+                            text = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = "Invitations",
+                                        fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Normal
+                                    )
+                                    if (totalPendingInvites > 0) {
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Badge(
+                                            containerColor = MaterialTheme.colorScheme.primary,
+                                            contentColor = MaterialTheme.colorScheme.onPrimary
+                                        ) {
+                                            Text("$totalPendingInvites")
+                                        }
+                                    }
+                                }
+                            }
+                        )
+                    }
+                }
             }
         },
         floatingActionButton = {
@@ -115,7 +205,8 @@ fun StaffScreen(sessionManager: SessionManager) {
                 FloatingActionButton(
                     onClick = { showInviteBottomSheet = true },
                     containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.padding(bottom = 76.dp)
                 ) {
                     Icon(Icons.Default.Add, contentDescription = "Invite Staff")
                 }
@@ -141,6 +232,7 @@ fun StaffScreen(sessionManager: SessionManager) {
                     .background(SoftGlowEmerald)
             )
 
+            if (selectedTab == 0) {
             if (isLoading) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = BrandAccent)
@@ -205,13 +297,20 @@ fun StaffScreen(sessionManager: SessionManager) {
                     }
                 }
             } else {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    contentPadding = PaddingValues(top = 8.dp, bottom = 100.dp)
+                UpieasyPullToRefreshContainer(
+                    isRefreshing = isRefreshing,
+                    onRefresh = {
+                        isRefreshing = true
+                        refresh()
+                    }
                 ) {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        contentPadding = PaddingValues(top = 8.dp, bottom = 100.dp)
+                    ) {
                     if (!isSelectionMode) {
                         // Bento Role Breakdown Hero Card
                         item {
@@ -223,8 +322,8 @@ fun StaffScreen(sessionManager: SessionManager) {
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(22.dp),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)),
-                                border = BorderStroke(1.dp, GlassBorderLight),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
                                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                             ) {
                                 Column(modifier = Modifier.padding(18.dp)) {
@@ -238,13 +337,13 @@ fun StaffScreen(sessionManager: SessionManager) {
                                                 modifier = Modifier
                                                     .size(42.dp)
                                                     .clip(RoundedCornerShape(14.dp))
-                                                    .background(PastelIndigoBg),
+                                                    .background(MaterialTheme.colorScheme.primaryContainer),
                                                 contentAlignment = Alignment.Center
                                             ) {
                                                 Icon(
                                                     imageVector = Icons.Default.Group,
                                                     contentDescription = null,
-                                                    tint = BrandPrimary,
+                                                    tint = MaterialTheme.colorScheme.primary,
                                                     modifier = Modifier.size(22.dp)
                                                 )
                                             }
@@ -257,7 +356,7 @@ fun StaffScreen(sessionManager: SessionManager) {
                                                     color = MaterialTheme.colorScheme.onSurface
                                                 )
                                                 Text(
-                                                    text = "${staffList.size} Total Members",
+                                                    text = "${staffList.size} Active Members",
                                                     style = MaterialTheme.typography.bodySmall,
                                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                                 )
@@ -266,11 +365,11 @@ fun StaffScreen(sessionManager: SessionManager) {
 
                                         Surface(
                                             shape = RoundedCornerShape(12.dp),
-                                            color = PastelEmeraldBg
+                                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
                                         ) {
                                             Text(
                                                 text = "RBAC Active",
-                                                color = SuccessGreen,
+                                                color = MaterialTheme.colorScheme.primary,
                                                 style = MaterialTheme.typography.labelSmall,
                                                 fontWeight = FontWeight.Bold,
                                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
@@ -287,49 +386,49 @@ fun StaffScreen(sessionManager: SessionManager) {
                                     ) {
                                         if (managerCount > 0) {
                                             Surface(
-                                                shape = RoundedCornerShape(10.dp),
-                                                color = PastelIndigoBg,
+                                                shape = RoundedCornerShape(12.dp),
+                                                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f),
                                                 modifier = Modifier.weight(1f)
                                             ) {
                                                 Column(modifier = Modifier.padding(vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                                    Text(text = "$managerCount", fontWeight = FontWeight.Bold, color = BrandPrimary, fontSize = 14.sp)
-                                                    Text(text = "Managers", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
+                                                    Text(text = "$managerCount", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSecondaryContainer, fontSize = 15.sp)
+                                                    Text(text = "Managers", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f), fontSize = 10.5.sp)
                                                 }
                                             }
                                         }
                                         if (cashierCount > 0) {
                                             Surface(
-                                                shape = RoundedCornerShape(10.dp),
-                                                color = PastelEmeraldBg,
+                                                shape = RoundedCornerShape(12.dp),
+                                                color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.7f),
                                                 modifier = Modifier.weight(1f)
                                             ) {
                                                 Column(modifier = Modifier.padding(vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                                    Text(text = "$cashierCount", fontWeight = FontWeight.Bold, color = SuccessGreen, fontSize = 14.sp)
-                                                    Text(text = "Cashiers", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
+                                                    Text(text = "$cashierCount", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onTertiaryContainer, fontSize = 15.sp)
+                                                    Text(text = "Cashiers", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f), fontSize = 10.5.sp)
                                                 }
                                             }
                                         }
                                         if (accountantCount > 0) {
                                             Surface(
-                                                shape = RoundedCornerShape(10.dp),
-                                                color = PastelAmberBg,
+                                                shape = RoundedCornerShape(12.dp),
+                                                color = MaterialTheme.colorScheme.surfaceVariant,
                                                 modifier = Modifier.weight(1f)
                                             ) {
                                                 Column(modifier = Modifier.padding(vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                                    Text(text = "$accountantCount", fontWeight = FontWeight.Bold, color = AmberAlert, fontSize = 14.sp)
-                                                    Text(text = "Accountants", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
+                                                    Text(text = "$accountantCount", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 15.sp)
+                                                    Text(text = "Accountants", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f), fontSize = 10.5.sp)
                                                 }
                                             }
                                         }
                                         if (ownerCount > 0) {
                                             Surface(
-                                                shape = RoundedCornerShape(10.dp),
-                                                color = PastelPurpleBg,
+                                                shape = RoundedCornerShape(12.dp),
+                                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f),
                                                 modifier = Modifier.weight(1f)
                                             ) {
                                                 Column(modifier = Modifier.padding(vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                                    Text(text = "$ownerCount", fontWeight = FontWeight.Bold, color = Color(0xFF8B5CF6), fontSize = 14.sp)
-                                                    Text(text = "Owners", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
+                                                    Text(text = "$ownerCount", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer, fontSize = 15.sp)
+                                                    Text(text = "Owners", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f), fontSize = 10.5.sp)
                                                 }
                                             }
                                         }
@@ -339,8 +438,26 @@ fun StaffScreen(sessionManager: SessionManager) {
                         }
                     }
 
-                    items(staffList) { staff ->
+                    items(
+                        items = effectiveList,
+                        key = { it.id }
+                    ) { staff ->
                         val isSelected = selectedIds.contains(staff.id)
+                        val itemScale by animateFloatAsState(
+                            targetValue = if (isSelected) 0.98f else 1f,
+                            animationSpec = spring(dampingRatio = 0.75f, stiffness = 400f),
+                            label = "itemScale"
+                        )
+                        val cardBg by animateColorAsState(
+                            targetValue = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f) else MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
+                            animationSpec = tween(220),
+                            label = "cardBg"
+                        )
+                        val cardBorder by animateColorAsState(
+                            targetValue = if (isSelected) MaterialTheme.colorScheme.primary else GlassBorderLight,
+                            animationSpec = tween(220),
+                            label = "cardBorder"
+                        )
 
                         val (roleBg, roleColor) = when (staff.role.uppercase()) {
                             "OWNER" -> Pair(PastelPurpleBg, Color(0xFF8B5CF6))
@@ -350,12 +467,21 @@ fun StaffScreen(sessionManager: SessionManager) {
                             else -> Pair(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.colorScheme.onSurfaceVariant)
                         }
 
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
+                        SwipeToDeleteContainer(
+                            itemKey = staff.id,
+                            enabled = !isSelectionMode,
+                            isSwipedOpen = (staffToDelete?.id == staff.id),
+                            onDeleteRequest = { staffToDelete = staff }
+                        ) {
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .animateItemPlacement()
+                                .scale(itemScale)
                                 .combinedClickable(
                                     onClick = {
                                         if (isSelectionMode) {
+                                            HapticHelper.performHaptic(context, HapticHelper.FeedbackType.LIGHT)
                                             selectedIds = if (isSelected) {
                                                 selectedIds - staff.id
                                             } else {
@@ -366,6 +492,7 @@ fun StaffScreen(sessionManager: SessionManager) {
                                     },
                                     onLongClick = {
                                         if (!isSelectionMode) {
+                                            HapticHelper.performHaptic(context, HapticHelper.FeedbackType.HEAVY)
                                             isSelectionMode = true
                                             selectedIds = setOf(staff.id)
                                         }
@@ -373,12 +500,12 @@ fun StaffScreen(sessionManager: SessionManager) {
                                 ),
                             shape = RoundedCornerShape(22.dp),
                             colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)
+                                containerColor = cardBg
                             ),
                             elevation = CardDefaults.cardElevation(defaultElevation = if (isSelected) 4.dp else 2.dp),
                             border = BorderStroke(
                                 1.dp,
-                                if (isSelected) MaterialTheme.colorScheme.primary else GlassBorderLight
+                                cardBorder
                             )
                         ) {
                             Row(
@@ -387,16 +514,25 @@ fun StaffScreen(sessionManager: SessionManager) {
                                     .padding(16.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                if (isSelectionMode) {
-                                    Checkbox(
-                                        checked = isSelected,
-                                        onCheckedChange = { checked ->
-                                            selectedIds = if (checked) selectedIds + staff.id else selectedIds - staff.id
-                                            if (selectedIds.isEmpty()) isSelectionMode = false
-                                        }
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                } else {
+                                AnimatedVisibility(
+                                    visible = isSelectionMode,
+                                    enter = fadeIn() + expandHorizontally(),
+                                    exit = fadeOut() + shrinkHorizontally()
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Checkbox(
+                                            checked = isSelected,
+                                            onCheckedChange = { checked ->
+                                                HapticHelper.performHaptic(context, HapticHelper.FeedbackType.LIGHT)
+                                                selectedIds = if (checked) selectedIds + staff.id else selectedIds - staff.id
+                                                if (selectedIds.isEmpty()) isSelectionMode = false
+                                            }
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                    }
+                                }
+
+                                if (!isSelectionMode) {
                                     Box(
                                         modifier = Modifier
                                             .size(46.dp)
@@ -473,9 +609,61 @@ fun StaffScreen(sessionManager: SessionManager) {
                         }
                     }
                 }
+                        }
+                    }
+                }
+            } else {
+                InvitationsTabContent(
+                    incomingInvites = incomingInvites,
+                    sentInvites = sentInvites,
+                    isRefreshing = isRefreshing,
+                    actionLoadingId = actionLoadingId,
+                    onRefresh = {
+                        isRefreshing = true
+                        refresh()
+                    },
+                    onAcceptInvite = { invite ->
+                        actionLoadingId = invite.id
+                        scope.launch {
+                            val res = orgRepository.acceptInvitation(invite.id)
+                            actionLoadingId = null
+                            if (res.isSuccess) {
+                                Toast.makeText(context, "Joined ${res.getOrNull()}!", Toast.LENGTH_LONG).show()
+                                refresh()
+                            } else {
+                                Toast.makeText(context, res.exceptionOrNull()?.message ?: "Failed to accept invite", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    },
+                    onRejectInvite = { invite ->
+                        actionLoadingId = invite.id
+                        scope.launch {
+                            val res = orgRepository.rejectInvitation(invite.id)
+                            actionLoadingId = null
+                            if (res.isSuccess) {
+                                Toast.makeText(context, "Invitation rejected", Toast.LENGTH_SHORT).show()
+                                refresh()
+                            } else {
+                                Toast.makeText(context, res.exceptionOrNull()?.message ?: "Failed to reject invite", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    },
+                    onCancelInvite = { invite ->
+                        actionLoadingId = invite.id
+                        scope.launch {
+                            val res = orgRepository.cancelInvitation(invite.id)
+                            actionLoadingId = null
+                            if (res.isSuccess) {
+                                Toast.makeText(context, "Invitation cancelled", Toast.LENGTH_SHORT).show()
+                                refresh()
+                            } else {
+                                Toast.makeText(context, res.exceptionOrNull()?.message ?: "Failed to cancel invite", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }
+                )
             }
         }
-    }
 
     // Invite Staff Bottom Sheet
     if (showInviteBottomSheet) {
@@ -633,27 +821,39 @@ fun StaffScreen(sessionManager: SessionManager) {
                             isSubmitting = true
                             scope.launch {
                                 try {
-                                    val res = apiService.inviteStaff(
-                                        orgId,
-                                        InviteStaffRequest(
-                                            mobileNumber = mobile,
-                                            email = email,
-                                            fullName = name,
-                                            role = selectedRole
-                                        )
+                                    val sendRes = orgRepository.sendInvitation(
+                                        orgId = orgId,
+                                        mobileNumber = mobile ?: "",
+                                        name = name,
+                                        email = email,
+                                        role = selectedRole
                                     )
-                                    if (res.isSuccessful && res.body()?.success == true) {
+                                    if (sendRes.isSuccess) {
+                                        Toast.makeText(context, "Staff invitation sent successfully", Toast.LENGTH_SHORT).show()
                                         showInviteBottomSheet = false
                                         refresh()
                                     } else {
-                                        // Parse the error body for a real error message
-                                        val errBody = res.errorBody()?.string()
-                                        val serverMsg = try {
-                                            org.json.JSONObject(errBody ?: "").optString("message", "").takeIf { it.isNotEmpty() }
-                                        } catch (_: Exception) { null }
-                                        errorMessage = serverMsg
-                                            ?: res.body()?.message
-                                            ?: "Failed to add staff member (HTTP ${res.code()})"
+                                        // Fallback to legacy invite endpoint if needed
+                                        val fallbackRes = apiService.inviteStaff(
+                                            orgId,
+                                            InviteStaffRequest(
+                                                mobileNumber = mobile,
+                                                email = email,
+                                                fullName = name,
+                                                role = selectedRole
+                                            )
+                                        )
+                                        if (fallbackRes.isSuccessful && fallbackRes.body()?.success == true) {
+                                            Toast.makeText(context, "Staff added successfully", Toast.LENGTH_SHORT).show()
+                                            showInviteBottomSheet = false
+                                            refresh()
+                                        } else {
+                                            val errBody = fallbackRes.errorBody()?.string()
+                                            val serverMsg = try {
+                                                org.json.JSONObject(errBody ?: "").optString("message", "").takeIf { it.isNotEmpty() }
+                                            } catch (_: Exception) { null }
+                                            errorMessage = serverMsg ?: sendRes.exceptionOrNull()?.message ?: "Failed to send invitation"
+                                        }
                                     }
                                 } catch (e: Exception) {
                                     errorMessage = e.localizedMessage ?: "Network error"
@@ -684,69 +884,457 @@ fun StaffScreen(sessionManager: SessionManager) {
 
     // Single Delete Confirmation
     staffToDelete?.let { staff ->
-        AlertDialog(
-            onDismissRequest = { staffToDelete = null },
-            title = { Text("Remove Staff Member") },
-            text = { Text("Are you sure you want to remove ${staff.fullName ?: staff.mobileNumber} from this organization?") },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        currentOrgId?.let { orgId ->
-                            scope.launch {
-                                try {
-                                    apiService.deleteStaff(orgId, staff.id)
-                                    refresh()
-                                } catch (_: Exception) {}
-                                staffToDelete = null
-                            }
+        UpieasyConfirmBottomDrawer(
+            visible = staffToDelete != null,
+            title = "Remove Staff Member?",
+            message = "Are you sure you want to remove ${staff.fullName ?: (staff.mobileNumber ?: "this staff member")} from this organization? Their access will be revoked immediately.",
+            confirmText = "Remove",
+            cancelText = "Cancel",
+            isDestructive = true,
+            onConfirm = {
+                val member = staffToDelete
+                staffToDelete = null
+                member?.let { st ->
+                    currentOrgId?.let { orgId ->
+                        scope.launch {
+                            try {
+                                apiService.deleteStaff(orgId, st.id)
+                                refresh()
+                            } catch (_: Exception) {}
                         }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = FailedRed)
-                ) {
-                    Text("Remove")
+                    }
                 }
             },
-            dismissButton = {
-                TextButton(onClick = { staffToDelete = null }) {
-                    Text("Cancel")
-                }
-            }
+            onDismiss = { staffToDelete = null }
         )
     }
 
     // Bulk Delete Confirmation
-    if (showBulkDeleteConfirm) {
-        AlertDialog(
-            onDismissRequest = { showBulkDeleteConfirm = false },
-            title = { Text("Remove ${selectedIds.size} Staff Members") },
-            text = { Text("Are you sure you want to remove all selected staff members?") },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        currentOrgId?.let { orgId ->
-                            scope.launch {
-                                selectedIds.forEach { id ->
-                                    try {
-                                        apiService.deleteStaff(orgId, id)
-                                    } catch (_: Exception) {}
-                                }
-                                isSelectionMode = false
-                                selectedIds = emptySet()
-                                showBulkDeleteConfirm = false
-                                refresh()
-                            }
+    if (showBulkDeleteConfirm && selectedIds.isNotEmpty()) {
+        UpieasyConfirmBottomDrawer(
+            visible = showBulkDeleteConfirm,
+            title = "Remove ${selectedIds.size} Members?",
+            message = "Are you sure you want to remove ${selectedIds.size} selected staff members? Their access will be revoked immediately.",
+            confirmText = "Remove All",
+            cancelText = "Cancel",
+            isDestructive = true,
+            onConfirm = {
+                showBulkDeleteConfirm = false
+                currentOrgId?.let { orgId ->
+                    scope.launch {
+                        val idsToDelete = selectedIds.toList()
+                        isSelectionMode = false
+                        selectedIds = emptySet()
+                        idsToDelete.forEach { id ->
+                            try {
+                                apiService.deleteStaff(orgId, id)
+                            } catch (_: Exception) {}
                         }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = FailedRed)
-                ) {
-                    Text("Remove All")
+                        refresh()
+                    }
                 }
             },
-            dismissButton = {
-                TextButton(onClick = { showBulkDeleteConfirm = false }) {
-                    Text("Cancel")
-                }
-            }
+            onDismiss = { showBulkDeleteConfirm = false }
         )
     }
 }
+}
+
+@Composable
+private fun InvitationsTabContent(
+    incomingInvites: List<OrganizationInviteEntity>,
+    sentInvites: List<InvitationDto>,
+    isRefreshing: Boolean,
+    actionLoadingId: String?,
+    onRefresh: () -> Unit,
+    onAcceptInvite: (OrganizationInviteEntity) -> Unit,
+    onRejectInvite: (OrganizationInviteEntity) -> Unit,
+    onCancelInvite: (InvitationDto) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    UpieasyPullToRefreshContainer(
+        isRefreshing = isRefreshing,
+        onRefresh = onRefresh
+    ) {
+        LazyColumn(
+            modifier = modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+            contentPadding = PaddingValues(top = 12.dp, bottom = 100.dp)
+        ) {
+            // Section 1: Incoming Invitations
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column {
+                        Text(
+                            text = "Incoming Invitations",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Invites sent to you to join other stores",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    if (incomingInvites.isNotEmpty()) {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer
+                        ) {
+                            Text(
+                                text = "${incomingInvites.size} Pending",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            if (incomingInvites.isEmpty()) {
+                item {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(18.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(20.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.MailOutline,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                modifier = Modifier.size(32.dp)
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "No Pending Invitations",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "When a merchant invites you by mobile number, you will receive an alert and invitation here.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            )
+                        }
+                    }
+                }
+            } else {
+                items(incomingInvites, key = { it.id }) { invite ->
+                    val isLoadingThis = actionLoadingId == invite.id
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(20.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)),
+                        border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(18.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(42.dp)
+                                            .clip(CircleShape)
+                                            .background(MaterialTheme.colorScheme.primaryContainer),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Business,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(22.dp)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Column {
+                                        Text(
+                                            text = invite.organizationName,
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            text = if (!invite.inviterName.isNullOrBlank()) "Invited by ${invite.inviterName}" else "Store Invitation",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = MaterialTheme.colorScheme.primaryContainer
+                                ) {
+                                    Text(
+                                        text = invite.role,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                OutlinedButton(
+                                    onClick = { onRejectInvite(invite) },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(44.dp),
+                                    shape = RoundedCornerShape(12.dp),
+                                    enabled = !isLoadingThis,
+                                    colors = ButtonDefaults.outlinedButtonColors(
+                                        contentColor = FailedRed
+                                    ),
+                                    border = BorderStroke(1.dp, FailedRed.copy(alpha = 0.5f))
+                                ) {
+                                    Text("Reject", fontWeight = FontWeight.SemiBold)
+                                }
+
+                                Button(
+                                    onClick = { onAcceptInvite(invite) },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(44.dp),
+                                    shape = RoundedCornerShape(12.dp),
+                                    enabled = !isLoadingThis,
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.primary
+                                    )
+                                ) {
+                                    if (isLoadingThis) {
+                                        CircularProgressIndicator(
+                                            color = Color.White,
+                                            modifier = Modifier.size(18.dp),
+                                            strokeWidth = 2.dp
+                                        )
+                                    } else {
+                                        Text("Accept", fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            item { Spacer(modifier = Modifier.height(12.dp)) }
+
+            // Section 2: Sent Invitations
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column {
+                        Text(
+                            text = "Sent Invitations",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Invitations sent to add staff to this store",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    if (sentInvites.isNotEmpty()) {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant
+                        ) {
+                            Text(
+                                text = "${sentInvites.size} Total",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            if (sentInvites.isEmpty()) {
+                item {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(18.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(20.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Send,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                modifier = Modifier.size(32.dp)
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "No Sent Invitations",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "Use the + button below to invite team members by mobile number.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            )
+                        }
+                    }
+                }
+            } else {
+                items(sentInvites, key = { it.id }) { invite ->
+                    val isLoadingThis = actionLoadingId == invite.id
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(18.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .clip(CircleShape)
+                                        .background(MaterialTheme.colorScheme.secondaryContainer),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Person,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column {
+                                    Text(
+                                        text = invite.invitedName ?: invite.invitedMobile ?: "Staff Member",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    val subDetail = listOfNotNull(invite.invitedMobile, invite.invitedEmail).joinToString(" • ")
+                                    if (subDetail.isNotBlank()) {
+                                        Text(
+                                            text = subDetail,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+
+                            Column(horizontalAlignment = Alignment.End) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+                                    ) {
+                                        Text(
+                                            text = invite.role,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
+                                        )
+                                    }
+
+                                    val statusColor = when (invite.status.uppercase()) {
+                                        "ACCEPTED" -> SuccessGreen
+                                        "REJECTED", "CANCELLED", "EXPIRED" -> FailedRed
+                                        else -> PendingAmber
+                                    }
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = statusColor.copy(alpha = 0.15f)
+                                    ) {
+                                        Text(
+                                            text = invite.status,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = statusColor,
+                                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
+                                        )
+                                    }
+                                }
+
+                                if (invite.status == "PENDING") {
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    TextButton(
+                                        onClick = { onCancelInvite(invite) },
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                        enabled = !isLoadingThis
+                                    ) {
+                                        if (isLoadingThis) {
+                                            CircularProgressIndicator(modifier = Modifier.size(12.dp), strokeWidth = 1.5.dp)
+                                        } else {
+                                            Text(
+                                                "Cancel",
+                                                color = FailedRed,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = FontWeight.SemiBold
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+

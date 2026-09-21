@@ -179,6 +179,87 @@ data class SyncEventDto(
     val createdAt: String
 )
 
+// Invitations & Multi-Firm DTOs
+data class InvitationDto(
+    val id: String,
+    val organizationId: String,
+    val organizationName: String,
+    val role: String,
+    val status: String,
+    val invitedMobile: String? = null,
+    val invitedName: String? = null,
+    val invitedEmail: String? = null,
+    val inviterName: String? = null,
+    val inviterEmail: String? = null,
+    val expiresAt: String,
+    val createdAt: String? = null
+)
+
+data class InvitationsListResponse(
+    val success: Boolean,
+    val invitations: List<InvitationDto>? = null,
+    val invites: List<InvitationDto>? = null
+)
+
+data class SendInviteRequest(
+    val mobileNumber: String? = null,
+    val name: String? = null,
+    val email: String? = null,
+    val role: String
+)
+
+data class SendInviteResponse(
+    val success: Boolean,
+    val message: String? = null,
+    val invite: InvitationDto? = null
+)
+
+data class AcceptInviteResponse(
+    val success: Boolean,
+    val message: String? = null,
+    val organization: OrganizationDto? = null
+)
+
+// Device Registration DTOs
+data class RegisterDeviceRequest(
+    val deviceId: String,
+    val platform: String = "ANDROID",
+    val deviceModel: String? = null,
+    val osVersion: String? = null,
+    val appVersion: String? = null,
+    val fcmToken: String? = null
+)
+
+// Multi-Organization Incremental Sync DTOs
+data class MultiOrgSyncRequest(
+    val organizations: List<OrgSyncCursorRequestDto>
+)
+
+data class OrgSyncCursorRequestDto(
+    val organizationId: String,
+    val cursor: Long = 0L
+)
+
+data class MultiOrgSyncResponse(
+    val success: Boolean,
+    val organizations: List<OrgSyncResultDto>
+)
+
+data class OrgSyncResultDto(
+    val organizationId: String,
+    val nextCursor: Long,
+    val hasMore: Boolean,
+    val changes: List<SyncChangeDto>
+)
+
+data class SyncChangeDto(
+    val sequence: Long,
+    val type: String,
+    val entityId: String? = null,
+    val payload: Any? = null,
+    val createdAt: String? = null
+)
+
 data class GoogleLoginRequest(
     val idToken: String,
     val nonce: String? = null,
@@ -310,4 +391,37 @@ interface ApiService {
         @Query("afterSequence") afterSequence: Long,
         @Query("limit") limit: Int = 100
     ): Response<SyncResponse>
+
+    // Multi-Firm Invitations
+    @GET("api/v1/me/invitations")
+    suspend fun getMyInvitations(): Response<InvitationsListResponse>
+
+    @GET("api/v1/organizations/{orgId}/invites")
+    suspend fun getOrganizationInvites(@Path("orgId") orgId: String): Response<InvitationsListResponse>
+
+    @POST("api/v1/organizations/{orgId}/invites")
+    suspend fun sendInvite(
+        @Path("orgId") orgId: String,
+        @Body request: SendInviteRequest
+    ): Response<SendInviteResponse>
+
+    @POST("api/v1/invitations/{inviteId}/accept")
+    suspend fun acceptInvitation(@Path("inviteId") inviteId: String): Response<AcceptInviteResponse>
+
+    @POST("api/v1/invitations/{inviteId}/reject")
+    suspend fun rejectInvitation(@Path("inviteId") inviteId: String): Response<ApiResponse<Any>>
+
+    @POST("api/v1/invitations/{inviteId}/cancel")
+    suspend fun cancelInvitation(@Path("inviteId") inviteId: String): Response<ApiResponse<Any>>
+
+    // Multi-Device Registration
+    @POST("api/v1/devices/register")
+    suspend fun registerDevice(@Body request: RegisterDeviceRequest): Response<ApiResponse<Any>>
+
+    @POST("api/v1/devices/unregister")
+    suspend fun unregisterDevice(@Body request: Map<String, String>): Response<ApiResponse<Any>>
+
+    // Multi-Organization Incremental Sync
+    @POST("api/v1/sync")
+    suspend fun multiOrgSync(@Body request: MultiOrgSyncRequest): Response<MultiOrgSyncResponse>
 }

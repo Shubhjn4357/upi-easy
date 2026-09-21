@@ -1,35 +1,54 @@
 package com.aerotech.upieasy.ui.components
 
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.aerotech.upieasy.core.util.HapticHelper
 import com.aerotech.upieasy.core.util.PaymentAlert
 import com.aerotech.upieasy.domain.model.Transaction
 import com.aerotech.upieasy.ui.theme.*
 import java.text.SimpleDateFormat
 import java.util.*
+import kotlin.math.roundToInt
 
 @Composable
 fun StatusBadge(status: String) {
@@ -110,16 +129,26 @@ fun BentoTile(
 }
 
 /**
- * PayOu TopBar: Bold brand title, store subtitle, notification bell with badge, and profile avatar.
+ * Upieasy TopBar: Bold brand title, store subtitle, notification bell with badge, and profile avatar.
  */
 @Composable
-fun PayouTopBar(
+fun UpieasyTopBar(
     brandTitle: String = "UPIEasy",
     subtitle: String = "Merchant Dashboard",
     avatarInitial: String = "M",
+    notificationCount: Int = 0,
     onNotificationClick: () -> Unit = {},
-    onProfileClick: () -> Unit = {}
+    onProfileClick: () -> Unit = {},
+    onOrganizationClick: (() -> Unit)? = null,
+    onMenuThemeClick: () -> Unit = {},
+    onMenuLegalClick: () -> Unit = {},
+    onMenuLogoutClick: () -> Unit = {},
+    userName: String? = null,
+    organizationName: String? = null
 ) {
+    val context = LocalContext.current
+    var showMenu by remember { mutableStateOf(false) }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -136,80 +165,220 @@ fun PayouTopBar(
                 color = MaterialTheme.colorScheme.primary,
                 letterSpacing = (-0.5).sp
             )
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Medium
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = if (onOrganizationClick != null) {
+                    Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .clickable { onOrganizationClick() }
+                        .padding(vertical = 2.dp)
+                } else Modifier
+            ) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (onOrganizationClick != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+                if (onOrganizationClick != null) {
+                    Spacer(modifier = Modifier.width(2.dp))
+                    Icon(
+                        imageVector = Icons.Default.ArrowDropDown,
+                        contentDescription = "Switch Firm",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
         }
 
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            // Notification icon button with subtle badge
+            // Notification icon button with unclipped badge (hidden if 0)
             Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
-                    .clickable { onNotificationClick() },
+                modifier = Modifier.size(42.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = Icons.Default.NotificationsNone,
-                    contentDescription = "Notifications",
-                    tint = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.size(20.dp)
-                )
                 Box(
                     modifier = Modifier
-                        .size(8.dp)
+                        .size(40.dp)
                         .clip(CircleShape)
-                        .background(SuccessGreen)
-                        .align(Alignment.TopEnd)
-                )
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+                        .clickable {
+                            HapticHelper.performHaptic(context, HapticHelper.FeedbackType.LIGHT)
+                            onNotificationClick()
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.NotificationsNone,
+                        contentDescription = "Notifications",
+                        tint = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+
+                if (notificationCount > 0) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .offset(x = (-2).dp, y = 2.dp)
+                            .size(9.dp)
+                            .clip(CircleShape)
+                            .background(FailedRed)
+                            .border(1.5.dp, MaterialTheme.colorScheme.surface, CircleShape)
+                    )
+                }
             }
 
-            // User avatar
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary)
-                    .clickable { onProfileClick() },
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = avatarInitial.uppercase(),
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp
-                )
+            // User avatar with tap dropdown menu
+            val isDark = isSystemInDarkTheme()
+            val avatarGradientColors = if (isDark) {
+                listOf(Color(0xFF1E1B4B), Color(0xFF2E1065))
+            } else {
+                listOf(Color(0xFF1E3A8A), Color(0xFF6D28D9))
+            }
+
+            Box {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(
+                            Brush.linearGradient(
+                                colors = avatarGradientColors
+                            )
+                        )
+                        .border(
+                            1.dp,
+                            if (isDark) Color(0xFF818CF8).copy(alpha = 0.4f) else Color.White.copy(alpha = 0.6f),
+                            CircleShape
+                        )
+                        .clickable {
+                            HapticHelper.performHaptic(context, HapticHelper.FeedbackType.LIGHT)
+                            showMenu = true
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = avatarInitial.uppercase(),
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp
+                    )
+                }
+
+                DropdownMenu(
+                    expanded = showMenu,
+                    onDismissRequest = { showMenu = false },
+                    modifier = Modifier
+                        .width(220.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+                        Text(
+                            text = userName ?: "Merchant",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        if (!organizationName.isNullOrBlank()) {
+                            Text(
+                                text = organizationName,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                maxLines = 1
+                            )
+                        }
+                    }
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
+                    DropdownMenuItem(
+                        text = { Text("Settings & Profile") },
+                        leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                        onClick = {
+                            showMenu = false
+                            HapticHelper.performHaptic(context, HapticHelper.FeedbackType.LIGHT)
+                            onProfileClick()
+                        }
+                    )
+
+                    DropdownMenuItem(
+                        text = { Text("Toggle Theme") },
+                        leadingIcon = { Icon(Icons.Default.Palette, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                        onClick = {
+                            showMenu = false
+                            HapticHelper.performHaptic(context, HapticHelper.FeedbackType.LIGHT)
+                            onMenuThemeClick()
+                        }
+                    )
+
+                    DropdownMenuItem(
+                        text = { Text("Legal & Terms") },
+                        leadingIcon = { Icon(Icons.Default.Gavel, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                        onClick = {
+                            showMenu = false
+                            HapticHelper.performHaptic(context, HapticHelper.FeedbackType.LIGHT)
+                            onMenuLegalClick()
+                        }
+                    )
+
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
+                    DropdownMenuItem(
+                        text = { Text("Sign Out", color = FailedRed, fontWeight = FontWeight.SemiBold) },
+                        leadingIcon = { Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, tint = FailedRed, modifier = Modifier.size(18.dp)) },
+                        onClick = {
+                            showMenu = false
+                            HapticHelper.performHaptic(context, HapticHelper.FeedbackType.MEDIUM)
+                            onMenuLogoutClick()
+                        }
+                    )
+                }
             }
         }
     }
 }
 
 /**
- * PayOu Hero Card: Electric gradient, live collection balance, and quick circular glass action buttons.
+ * Upieasy Hero Card: Electric gradient, live collection balance, and quick circular glass action buttons.
  */
 @Composable
-fun PayouHeroCard(
+fun UpieasyHeroCard(
     balance: Double,
     transactionCount: Int,
     onShowQrClick: () -> Unit,
     onScanPayClick: () -> Unit,
     onHistoryClick: () -> Unit,
-    onAddUpiClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val isDark = isSystemInDarkTheme()
+    val heroGradientColors = if (isDark) {
+        listOf(
+            Color(0xFF0F172A), // Deep midnight slate
+            Color(0xFF1E1B4B), // Rich dark indigo
+            Color(0xFF2E1065)  // Deep royal violet
+        )
+    } else {
+        listOf(
+            Color(0xFF3B82F6), // Bright radiant blue
+            Color(0xFF6366F1), // Electric indigo
+            Color(0xFF8B5CF6)  // Radiant violet
+        )
+    }
+
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(26.dp),
         colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+        border = BorderStroke(
+            1.dp,
+            if (isDark) Color(0xFF6366F1).copy(alpha = 0.35f) else Color.White.copy(alpha = 0.25f)
+        ),
         elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
     ) {
         Box(
@@ -217,14 +386,29 @@ fun PayouHeroCard(
                 .fillMaxWidth()
                 .background(
                     Brush.linearGradient(
-                        colors = listOf(
-                            BrandGradientStart,
-                            BrandGradientEnd
-                        )
+                        colors = heroGradientColors,
+                        start = Offset(0f, 0f),
+                        end = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY)
                     )
                 )
                 .padding(22.dp)
         ) {
+            // Ambient specular glass overlays
+            Box(
+                modifier = Modifier
+                    .size(160.dp)
+                    .offset(x = 180.dp, y = (-50).dp)
+                    .clip(CircleShape)
+                    .background(Color.White.copy(alpha = 0.08f))
+            )
+            Box(
+                modifier = Modifier
+                    .size(120.dp)
+                    .offset(x = (-30).dp, y = 70.dp)
+                    .clip(CircleShape)
+                    .background(Color.White.copy(alpha = 0.05f))
+            )
+
             Column {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -236,7 +420,7 @@ fun PayouHeroCard(
                             modifier = Modifier
                                 .size(28.dp)
                                 .clip(CircleShape)
-                                .background(Color.White.copy(alpha = 0.2f)),
+                                .background(Color.White.copy(alpha = 0.22f)),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
@@ -250,14 +434,14 @@ fun PayouHeroCard(
                         Text(
                             text = "Today's Collection",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = Color.White.copy(alpha = 0.85f),
-                            fontWeight = FontWeight.Medium
+                            color = Color.White.copy(alpha = 0.90f),
+                            fontWeight = FontWeight.SemiBold
                         )
                     }
 
                     Surface(
                         shape = RoundedCornerShape(20.dp),
-                        color = Color.White.copy(alpha = 0.2f)
+                        color = Color.White.copy(alpha = 0.22f)
                     ) {
                         Text(
                             text = "$transactionCount Txns",
@@ -304,35 +488,6 @@ fun PayouHeroCard(
                         onClick = onHistoryClick
                     )
                 }
-
-                Spacer(modifier = Modifier.height(18.dp))
-
-                // Bottom Pill Button (e.g. Add UPI / Manage)
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(SuccessGreen.copy(alpha = 0.25f))
-                        .clickable { onAddUpiClick() }
-                        .padding(vertical = 10.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Default.AddCircleOutline,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "Link Business UPI Address",
-                            color = Color.White,
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
             }
         }
     }
@@ -344,9 +499,13 @@ private fun HeroCircularButton(
     label: String,
     onClick: () -> Unit
 ) {
+    val context = LocalContext.current
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.clickable { onClick() }
+        modifier = Modifier.clickable {
+            HapticHelper.performHaptic(context, HapticHelper.FeedbackType.LIGHT)
+            onClick()
+        }
     ) {
         Box(
             modifier = Modifier
@@ -368,7 +527,7 @@ private fun HeroCircularButton(
             color = Color.White,
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.SemiBold,
-            fontSize = 12.sp
+            fontSize = 11.sp
         )
     }
 }
@@ -377,7 +536,7 @@ private fun HeroCircularButton(
  * Quick Action Squircle: Pastel rounded tile with icon and text below.
  */
 @Composable
-fun PayouQuickActionButton(
+fun UpieasyQuickActionButton(
     icon: ImageVector,
     label: String,
     backgroundColor: Color,
@@ -417,7 +576,7 @@ fun PayouQuickActionButton(
 }
 
 /**
- * Payou Stat Card: Used for Pending, Failed, Active UPI metrics.
+ * Upieasy Stat Card: Used for Pending, Failed, Active UPI metrics.
  */
 @Composable
 fun MetricCard(
@@ -501,7 +660,7 @@ fun MetricCard(
  * Used in Transactions / Ledger filtering.
  */
 @Composable
-fun PayouSquircleFilter(
+fun UpieasySquircleFilter(
     label: String,
     icon: ImageVector,
     isSelected: Boolean,
@@ -554,10 +713,10 @@ fun PayouSquircleFilter(
 }
 
 /**
- * PayOu Pill Button: Full-width modern pill action button.
+ * Upieasy Pill Button: Full-width modern pill action button.
  */
 @Composable
-fun PayouButton(
+fun UpieasyButton(
     text: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -687,14 +846,15 @@ fun TransactionRow(
 }
 
 /**
- * PayouNotificationsSheet: Bottom sheet displaying recent payment alerts, soundbox events, and system notifications.
+ * UpieasyNotificationsSheet: Bottom sheet displaying recent payment alerts, soundbox events, and system notifications.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PayouNotificationsSheet(
+fun UpieasyNotificationsSheet(
     onDismiss: () -> Unit,
     alertHistory: List<PaymentAlert>,
-    onClearAll: () -> Unit
+    onClearAll: () -> Unit,
+    onDeleteAlert: (PaymentAlert) -> Unit = {}
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -718,13 +878,13 @@ fun PayouNotificationsSheet(
                         modifier = Modifier
                             .size(36.dp)
                             .clip(CircleShape)
-                            .background(BrandPrimary.copy(alpha = 0.12f)),
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.Notifications,
                             contentDescription = null,
-                            tint = BrandPrimary,
+                            tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -737,7 +897,7 @@ fun PayouNotificationsSheet(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = "Voice soundbox & instant alerts",
+                            text = "Swipe left to dismiss individual alerts",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -746,53 +906,7 @@ fun PayouNotificationsSheet(
 
                 if (alertHistory.isNotEmpty()) {
                     TextButton(onClick = onClearAll) {
-                        Text("Clear All", color = FailedRed, fontWeight = FontWeight.SemiBold)
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Soundbox Active Status Banner
-            Card(
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = SuccessGreenBg),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(14.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(32.dp)
-                            .clip(CircleShape)
-                            .background(SuccessGreen.copy(alpha = 0.2f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.VolumeUp,
-                            contentDescription = null,
-                            tint = SuccessGreen,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Voice Soundbox Active",
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = SuccessGreen
-                        )
-                        Text(
-                            text = "Speaking payment announcements instantly",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = 11.sp
-                        )
+                        Text("Clear All", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
@@ -843,59 +957,448 @@ fun PayouNotificationsSheet(
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                     modifier = Modifier.fillMaxWidth().heightIn(max = 380.dp)
                 ) {
-                    items(alertHistory.size) { index ->
+                    items(alertHistory.size, key = { alertHistory[it].id }) { index ->
                         val alert = alertHistory[index]
                         val formattedDate = SimpleDateFormat("dd MMM, hh:mm a", Locale.getDefault())
                             .format(Date(alert.timestamp))
 
-                        Card(
-                            shape = RoundedCornerShape(18.dp),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)),
-                            border = BorderStroke(1.dp, GlassBorderLight),
-                            modifier = Modifier.fillMaxWidth()
+                        SwipeToDeleteContainer(
+                            itemKey = alert.id,
+                            onDelete = { onDeleteAlert(alert) }
                         ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(14.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                            Card(
+                                shape = RoundedCornerShape(18.dp),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)),
+                                border = BorderStroke(1.dp, GlassBorderLight),
+                                modifier = Modifier.fillMaxWidth()
                             ) {
-                                Box(
+                                Row(
                                     modifier = Modifier
-                                        .size(40.dp)
-                                        .clip(CircleShape)
-                                        .background(SuccessGreenBg),
-                                    contentAlignment = Alignment.Center
+                                        .fillMaxWidth()
+                                        .padding(14.dp),
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Default.ArrowDownward,
-                                        contentDescription = null,
-                                        tint = SuccessGreen,
-                                        modifier = Modifier.size(20.dp)
+                                    Box(
+                                        modifier = Modifier
+                                            .size(40.dp)
+                                            .clip(CircleShape)
+                                            .background(SuccessGreenBg),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.ArrowDownward,
+                                            contentDescription = null,
+                                            tint = SuccessGreen,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "Received from ${alert.payerName ?: "UPI Customer"}",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            text = "${if (!alert.referenceNumber.isNullOrBlank()) "UTR: ${alert.referenceNumber} • " else ""}$formattedDate",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            fontSize = 11.sp
+                                        )
+                                    }
+                                    Text(
+                                        text = "+₹${String.format("%,.2f", alert.amount)}",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = SuccessGreen
                                     )
                                 }
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = "Received from ${alert.payerName ?: "UPI Customer"}",
-                                        style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                    Text(
-                                        text = "${if (!alert.referenceNumber.isNullOrBlank()) "UTR: ${alert.referenceNumber} • " else ""}$formattedDate",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        fontSize = 11.sp
-                                    )
-                                }
-                                Text(
-                                    text = "+₹${String.format("%,.2f", alert.amount)}",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = SuccessGreen
-                                )
                             }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * SwipeToDeleteContainer: Reusable swipe-left to delete container with snapping,
+ * fixed-point haptic feedback, and coordination with screen-level confirmation bottom drawers.
+ */
+@Composable
+fun SwipeToDeleteContainer(
+    itemKey: Any,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    isSwipedOpen: Boolean = false,
+    onDeleteRequest: (() -> Unit)? = null,
+    onDelete: () -> Unit = {},
+    confirmTitle: String = "Confirm Deletion",
+    confirmMessage: String = "Are you sure you want to delete this item? This action cannot be undone.",
+    content: @Composable () -> Unit
+) {
+    val context = LocalContext.current
+    var isDeleted by remember(itemKey) { mutableStateOf(false) }
+    var offsetX by remember(itemKey) { mutableFloatStateOf(0f) }
+    var hasHapticTriggered by remember(itemKey) { mutableStateOf(false) }
+    val maxSwipe = with(LocalDensity.current) { (-100).dp.toPx() }
+    val dismissThreshold = with(LocalDensity.current) { (-70).dp.toPx() }
+
+    // Synchronize with external isSwipedOpen state:
+    // If another item is opened or confirmation is dismissed, smoothly reset offset to 0f
+    LaunchedEffect(isSwipedOpen) {
+        if (!isSwipedOpen && offsetX != 0f) {
+            offsetX = 0f
+            hasHapticTriggered = false
+        } else if (isSwipedOpen && offsetX == 0f) {
+            offsetX = maxSwipe
+        }
+    }
+
+    val animatedOffset by animateFloatAsState(
+        targetValue = if (isDeleted) -1200f else offsetX,
+        animationSpec = spring(dampingRatio = 0.8f, stiffness = 420f),
+        label = "swipeOffset"
+    )
+
+    AnimatedVisibility(
+        visible = !isDeleted,
+        enter = fadeIn() + expandVertically(),
+        exit = shrinkVertically(
+            animationSpec = tween(durationMillis = 320, easing = FastOutSlowInEasing)
+        ) + fadeOut(animationSpec = tween(durationMillis = 200)),
+        modifier = modifier
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(20.dp))
+        ) {
+            // Background Delete Action revealed on swipe left
+            if (offsetX < 0) {
+                val deleteFraction = (-offsetX / -dismissThreshold).coerceIn(0f, 1f)
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(MaterialTheme.colorScheme.errorContainer)
+                        .padding(end = 22.dp)
+                        .clickable {
+                            HapticHelper.performHaptic(context, HapticHelper.FeedbackType.MEDIUM)
+                            if (onDeleteRequest != null) {
+                                onDeleteRequest()
+                            } else {
+                                onDelete()
+                            }
+                        },
+                    contentAlignment = Alignment.CenterEnd
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.graphicsLayer {
+                            scaleX = 0.82f + (deleteFraction * 0.28f)
+                            scaleY = 0.82f + (deleteFraction * 0.28f)
+                            alpha = deleteFraction
+                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Delete",
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Text(
+                            text = "Delete",
+                            color = MaterialTheme.colorScheme.error,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp
+                        )
+                    }
+                }
+            }
+
+            // Foreground swipeable card
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .offset { IntOffset(animatedOffset.roundToInt(), 0) }
+                    .pointerInput(itemKey, enabled) {
+                        if (!enabled) return@pointerInput
+                        detectHorizontalDragGestures(
+                            onDragStart = {
+                                hasHapticTriggered = false
+                            },
+                            onDragEnd = {
+                                if (offsetX <= dismissThreshold) {
+                                    // Snap to open delete action and trigger confirmation bottom drawer
+                                    offsetX = maxSwipe
+                                    HapticHelper.performHaptic(context, HapticHelper.FeedbackType.HEAVY)
+                                    if (onDeleteRequest != null) {
+                                        onDeleteRequest()
+                                    } else {
+                                        onDelete()
+                                    }
+                                } else {
+                                    offsetX = 0f
+                                }
+                            },
+                            onDragCancel = {
+                                if (!isSwipedOpen) {
+                                    offsetX = 0f
+                                }
+                            },
+                            onHorizontalDrag = { change, dragAmount ->
+                                change.consume()
+                                val newOffset = (offsetX + dragAmount).coerceIn(maxSwipe * 1.3f, 0f)
+                                if (newOffset <= dismissThreshold && !hasHapticTriggered) {
+                                    HapticHelper.performHaptic(context, HapticHelper.FeedbackType.MEDIUM)
+                                    hasHapticTriggered = true
+                                } else if (newOffset > dismissThreshold) {
+                                    hasHapticTriggered = false
+                                }
+                                offsetX = newOffset
+                            }
+                        )
+                    }
+            ) {
+                content()
+            }
+        }
+    }
+}
+
+/**
+ * UpieasyConfirmBottomDrawer: Reusable Material 3 ModalBottomSheet for confirmation prompts
+ * (delete confirmation, sign out confirmation, etc.).
+ * Renders in a top-level Android Window/Dialog layer so it floats above bottom navigation bars,
+ * handles back gestures, and never scrolls with underlying LazyColumn items.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun UpieasyConfirmBottomDrawer(
+    visible: Boolean,
+    title: String,
+    message: String,
+    confirmText: String = "Confirm",
+    cancelText: String = "Cancel",
+    isDestructive: Boolean = true,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    if (visible) {
+        val context = LocalContext.current
+        ModalBottomSheet(
+            onDismissRequest = onDismiss,
+            containerColor = MaterialTheme.colorScheme.surface,
+            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+            dragHandle = { BottomSheetDefaults.DragHandle() },
+            windowInsets = WindowInsets.navigationBars
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp)
+                    .padding(bottom = 28.dp)
+            ) {
+                // Warning / Action Icon Circle
+                Surface(
+                    shape = CircleShape,
+                    color = if (isDestructive) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer,
+                    modifier = Modifier.size(56.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = if (isDestructive) Icons.Default.DeleteOutline else Icons.Default.Warning,
+                            contentDescription = null,
+                            tint = if (isDestructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = 12.dp)
+                )
+
+                Spacer(modifier = Modifier.height(26.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = {
+                            HapticHelper.performHaptic(context, HapticHelper.FeedbackType.LIGHT)
+                            onDismiss()
+                        },
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp)
+                    ) {
+                        Text(cancelText, fontWeight = FontWeight.SemiBold)
+                    }
+
+                    Button(
+                        onClick = {
+                            HapticHelper.performHaptic(
+                                context,
+                                if (isDestructive) HapticHelper.FeedbackType.HEAVY else HapticHelper.FeedbackType.MEDIUM
+                            )
+                            onConfirm()
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (isDestructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                            contentColor = if (isDestructive) MaterialTheme.colorScheme.onError else MaterialTheme.colorScheme.onPrimary
+                        ),
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp)
+                    ) {
+                        Text(confirmText, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * UpieasyPullToRefreshContainer: Smooth, physics-based swipe-down to refresh container.
+ */
+@Composable
+fun UpieasyPullToRefreshContainer(
+    isRefreshing: Boolean,
+    onRefresh: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit
+) {
+    val context = LocalContext.current
+    var pullOffset by remember { mutableFloatStateOf(0f) }
+    var hasHapticFired by remember { mutableStateOf(false) }
+    val pullTrigger = with(LocalDensity.current) { 70.dp.toPx() }
+    val maxPull = with(LocalDensity.current) { 110.dp.toPx() }
+
+    val animatedPullOffset by animateFloatAsState(
+        targetValue = if (isRefreshing) pullTrigger else pullOffset,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "pullOffset"
+    )
+
+    val nestedScrollConnection = remember {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                if (source == NestedScrollSource.Drag && available.y < 0 && pullOffset > 0f) {
+                    val consumed = available.y.coerceAtLeast(-pullOffset)
+                    pullOffset += consumed
+                    return Offset(0f, consumed)
+                }
+                return Offset.Zero
+            }
+
+            override fun onPostScroll(
+                consumed: Offset,
+                available: Offset,
+                source: NestedScrollSource
+            ): Offset {
+                if (source == NestedScrollSource.Drag && available.y > 0 && !isRefreshing) {
+                    val pullFraction = 1f - (pullOffset / maxPull).coerceIn(0f, 1f)
+                    val added = available.y * 0.45f * pullFraction
+                    val newOffset = (pullOffset + added).coerceIn(0f, maxPull)
+                    if (newOffset >= pullTrigger && !hasHapticFired) {
+                        HapticHelper.performHaptic(context, HapticHelper.FeedbackType.MEDIUM)
+                        hasHapticFired = true
+                    }
+                    pullOffset = newOffset
+                    return Offset(0f, available.y)
+                }
+                return Offset.Zero
+            }
+
+            override suspend fun onPreFling(available: Velocity): Velocity {
+                if (pullOffset >= pullTrigger && !isRefreshing) {
+                    HapticHelper.performHaptic(context, HapticHelper.FeedbackType.LIGHT)
+                    onRefresh()
+                }
+                pullOffset = 0f
+                hasHapticFired = false
+                return Velocity.Zero
+            }
+        }
+    }
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .nestedScroll(nestedScrollConnection)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    translationY = animatedPullOffset
+                }
+        ) {
+            content()
+        }
+
+        if (animatedPullOffset > 4f || isRefreshing) {
+            val progress = (animatedPullOffset / pullTrigger).coerceIn(0f, 1f)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp)
+                    .graphicsLayer {
+                        translationY = (animatedPullOffset * 0.7f) - 20.dp.toPx()
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Surface(
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.surface,
+                    shadowElevation = 4.dp,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        if (isRefreshing) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.ArrowDownward,
+                                contentDescription = "Pull to refresh",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier
+                                    .size(18.dp)
+                                    .graphicsLayer {
+                                        rotationZ = progress * 180f
+                                    }
+                            )
                         }
                     }
                 }

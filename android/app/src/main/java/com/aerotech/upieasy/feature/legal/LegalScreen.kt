@@ -18,9 +18,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.aerotech.upieasy.core.util.HapticHelper
 import com.aerotech.upieasy.ui.components.GlassCard
 import com.aerotech.upieasy.ui.theme.*
 
@@ -30,6 +32,7 @@ fun LegalScreen(
     onNavigateBack: () -> Unit,
     initialTab: Int = 0
 ) {
+    val context = LocalContext.current
     val tabs = listOf(
         "About Role",
         "Privacy Policy",
@@ -46,7 +49,10 @@ fun LegalScreen(
             TopAppBar(
                 title = { Text("Legal & Regulatory Disclosures", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
+                    IconButton(onClick = {
+                        HapticHelper.performHaptic(context, HapticHelper.FeedbackType.LIGHT)
+                        onNavigateBack()
+                    }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
@@ -56,13 +62,13 @@ fun LegalScreen(
         containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
-            // Background blurry ambient glow spheres
+            // Background dynamic ambient glow spheres
             Box(
                 modifier = Modifier
                     .size(260.dp)
                     .offset(x = (-50).dp, y = (-30).dp)
                     .clip(CircleShape)
-                    .background(SoftGlowIndigo)
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
             )
             Box(
                 modifier = Modifier
@@ -70,7 +76,7 @@ fun LegalScreen(
                     .align(Alignment.TopEnd)
                     .offset(x = 60.dp, y = 80.dp)
                     .clip(CircleShape)
-                    .background(SoftGlowEmerald)
+                    .background(MaterialTheme.colorScheme.tertiary.copy(alpha = 0.10f))
             )
 
             Column(modifier = Modifier.fillMaxSize()) {
@@ -84,12 +90,15 @@ fun LegalScreen(
                     tabs.forEachIndexed { index, title ->
                         Tab(
                             selected = selectedTab == index,
-                            onClick = { selectedTab = index },
+                            onClick = {
+                                HapticHelper.performHaptic(context, HapticHelper.FeedbackType.SELECTION)
+                                selectedTab = index
+                            },
                             text = {
                                 Text(
                                     text = title,
                                     fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (selectedTab == index) BrandPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = if (selectedTab == index) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         )
@@ -125,8 +134,8 @@ private fun AboutRoleSection() {
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         // High-level Bento Overview
         GlassCard(
-            backgroundColor = BrandPrimary.copy(alpha = 0.08f),
-            borderColor = BrandPrimary.copy(alpha = 0.25f)
+            backgroundColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f),
+            borderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
         ) {
             Column(modifier = Modifier.padding(18.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -134,13 +143,23 @@ private fun AboutRoleSection() {
                         modifier = Modifier
                             .size(36.dp)
                             .clip(CircleShape)
-                            .background(BrandPrimary.copy(alpha = 0.2f)),
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(Icons.Default.VerifiedUser, contentDescription = null, tint = BrandPrimary, modifier = Modifier.size(20.dp))
+                        Icon(
+                            Icons.Default.VerifiedUser,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
+                        )
                     }
                     Spacer(modifier = Modifier.width(10.dp))
-                    Text("What UPI-Easy Is", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = BrandPrimary)
+                    Text(
+                        "What UPI-Easy Is",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
                 }
                 Spacer(modifier = Modifier.height(10.dp))
                 Text(
@@ -154,14 +173,14 @@ private fun AboutRoleSection() {
         // Regulatory Boundary Card (CRITICAL)
         Card(
             shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            border = BorderStroke(1.dp, FailedRed.copy(alpha = 0.3f))
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.25f)),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.35f))
         ) {
             Column(modifier = Modifier.padding(18.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Info, contentDescription = null, tint = FailedRed)
+                    Icon(Icons.Default.Info, contentDescription = null, tint = MaterialTheme.colorScheme.error)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Important Regulatory Clarification", fontWeight = FontWeight.Bold, color = FailedRed)
+                    Text("Important Regulatory Clarification", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
                 }
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
@@ -177,13 +196,14 @@ private fun AboutRoleSection() {
         // Zero Banking Credentials Card
         Card(
             shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = SuccessGreenBg)
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.3f)),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.3f))
         ) {
             Column(modifier = Modifier.padding(18.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Lock, contentDescription = null, tint = SuccessGreen)
+                    Icon(Icons.Default.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.secondary)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Zero Banking Credentials Architecture", fontWeight = FontWeight.Bold, color = SuccessGreen)
+                    Text("Zero Banking Credentials Architecture", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.secondary)
                 }
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
@@ -221,11 +241,11 @@ private fun PrivacyPolicySection() {
 
         Card(
             shape = RoundedCornerShape(18.dp),
-            colors = CardDefaults.cardColors(containerColor = FailedRedBg),
-            border = BorderStroke(1.dp, FailedRed.copy(alpha = 0.25f))
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.25f)),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.35f))
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text("Information NEVER Collected or Processed", fontWeight = FontWeight.Bold, color = FailedRed)
+                Text("Information NEVER Collected or Processed", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
                     text = "❌ UPI PIN\n❌ Net Banking Passwords\n❌ Debit/Credit Card CVV or PIN\n❌ Banking Transaction OTPs",
