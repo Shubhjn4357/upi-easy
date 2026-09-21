@@ -72,6 +72,8 @@ if (fs.existsSync(cssPath)) {
 // Function to transform ES module export and import syntax for the self-contained static bundle
 function transformModuleForBundle(code) {
   return code
+    .replace(/import\s*[\s\S]*?from\s*['"][^'"]+['"];?/g, '')
+    .replace(/import\s*['"][^'"]+['"];?/g, '')
     .replace(/^\s*import\s+.*?;?\s*$/gm, '')
     .replace(/export\s+default\s+function\s+/g, 'function ')
     .replace(/export\s+function\s+/g, 'function ')
@@ -79,7 +81,7 @@ function transformModuleForBundle(code) {
     .replace(/export\s+let\s+/g, 'let ')
     .replace(/export\s+var\s+/g, 'var ')
     .replace(/export\s+default\s+[A-Za-z0-9_]+;?/g, '')
-    .replace(/export\s*\{[^}]*\};?/g, '');
+    .replace(/export\s*\{[\s\S]*?\};?/g, '');
 }
 
 // Read and bundle modules
@@ -97,14 +99,28 @@ for (const file of moduleFiles) {
   }
 }
 
+// Pre-compile JSX to native production JavaScript using TypeScript compiler
+const ts = require(path.resolve(__dirname, '..', 'api', 'node_modules', 'typescript'));
+
+console.log('[UPI-Easy] Pre-compiling JSX to native production JavaScript with TypeScript...');
+const transpiled = ts.transpileModule(combinedJsx, {
+  compilerOptions: {
+    jsx: ts.JsxEmit.React,
+    target: ts.ScriptTarget.ES2020,
+    module: ts.ModuleKind.None,
+    removeComments: false,
+  }
+});
+const productionJs = transpiled.outputText;
+
 // Save standalone static JS bundle & CSS
 const staticBundleJsPath = path.resolve(distDir, 'dashboard.bundle.js');
 const publicBundleJsPath = path.resolve(publicDistDir, 'dashboard.bundle.js');
 const staticCssPath = path.resolve(distDir, 'theme.css');
 const publicCssPath = path.resolve(publicDistDir, 'theme.css');
 
-fs.writeFileSync(staticBundleJsPath, combinedJsx, 'utf8');
-fs.writeFileSync(publicBundleJsPath, combinedJsx, 'utf8');
+fs.writeFileSync(staticBundleJsPath, productionJs, 'utf8');
+fs.writeFileSync(publicBundleJsPath, productionJs, 'utf8');
 fs.writeFileSync(staticCssPath, cssContent, 'utf8');
 fs.writeFileSync(publicCssPath, cssContent, 'utf8');
 
@@ -121,13 +137,23 @@ const fullHtml = `<!DOCTYPE html>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 
+  <!-- Suppress CDN dev warning for clean production console -->
+  <script>
+    (function() {
+      var _origWarn = console.warn;
+      console.warn = function() {
+        if (arguments[0] && typeof arguments[0] === 'string' && arguments[0].indexOf('cdn.tailwindcss.com') !== -1) return;
+        _origWarn.apply(console, arguments);
+      };
+    })();
+  </script>
+
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
 
-  <!-- React 18, ReactDOM, Babel for single-bundle SPA execution -->
+  <!-- React 18 & ReactDOM (Precompiled Production UMD) -->
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
   <!-- Google Identity Services (GSI) One Tap Library -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -205,8 +231,8 @@ ${cssContent}
 <body>
   <div id="root"></div>
 
-  <script type="text/babel">
-${combinedJsx}
+  <script>
+${productionJs}
   </script>
 </body>
 </html>
