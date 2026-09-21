@@ -22,6 +22,7 @@ import { paymentAccountsRouter, paymentAppsRouter } from "./modules/paymentAccou
 import { paymentEventsRouter } from "./modules/paymentEvents/index.js";
 import { seedDemoMerchantData } from "./db/seed.js";
 import { renderDashboardHtml } from "./dashboard/html.js";
+import { adminRouter } from "./modules/admin/index.js";
 import { requireAuth } from "./middleware/auth.js";
 import { setD1Database } from "./db/index.js";
 import type { AppEnv } from "./types/hono.js";
@@ -66,6 +67,9 @@ app.get("/", (c) => {
   }
   return c.html(renderDashboardHtml());
 });
+
+app.get("/dashboard", (c) => c.html(renderDashboardHtml()));
+app.get("/admin", (c) => c.html(renderDashboardHtml()));
 
 // Health check
 app.get("/health", (c) => {
@@ -124,6 +128,7 @@ v1.route("/payment-apps", paymentAppsRouter);
 v1.route("/organizations", paymentAccountsRouter);
 v1.route("/organizations", paymentEventsRouter);
 v1.route("/webhooks", webhooksRouter);
+v1.route("/admin", adminRouter);
 
 // Development & Demo Seed Endpoint
 v1.post("/dev/seed", async (c) => {

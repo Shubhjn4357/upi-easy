@@ -44,7 +44,7 @@ syncRouter.post("/", async (c) => {
     )
     .all();
 
-  const activeOrgSet = new Set(activeMemberships.map((m) => m.organizationId));
+  const activeOrgSet = new Set(activeMemberships.map((m: any) => m.organizationId));
   const now = new Date();
   const results = [];
 
@@ -108,7 +108,7 @@ syncRouter.post("/", async (c) => {
       organizationId: orgId,
       nextCursor,
       hasMore: events.length === limit,
-      changes: events.map((e) => {
+      changes: events.map((e: any) => {
         let payload: any = {};
         try {
           payload = JSON.parse(e.payloadJson);

@@ -65,7 +65,7 @@ export const getMyInvitationsHandler = async (c: any) => {
 
   // Filter out expired invites in-memory and mark them if needed
   const now = new Date();
-  const validInvites = invites.filter((inv) => new Date(inv.expiresAt) > now);
+  const validInvites = invites.filter((inv: any) => new Date(inv.expiresAt) > now);
 
   return c.json({
     success: true,

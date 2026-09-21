@@ -41,7 +41,7 @@ paymentEventsRouter.post(
   requireTenant,
   async (c, next) => {
     // Check permission: payment_events.ingest or transactions.create
-    const userRole = c.get("roleName");
+    const userRole = c.get("role");
     const perms = c.get("permissions") || [];
     const hasPerm =
       perms.includes("payment_events.ingest") ||

@@ -31,6 +31,10 @@ export function setD1Database(d1Database: any) {
   }
 }
 
+export function getRawDb(): any {
+  return sqlite;
+}
+
 export const db = new Proxy({} as any, {
   get(target, prop) {
     if (!dbInstance) {
