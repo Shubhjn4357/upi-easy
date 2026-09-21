@@ -323,7 +323,6 @@ fun StaffScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(22.dp),
                                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
                                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                             ) {
                                 Column(modifier = Modifier.padding(18.dp)) {

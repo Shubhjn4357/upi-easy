@@ -394,7 +394,7 @@ fun DashboardScreen(
                                         color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
                                     ) {
                                         Text(
-                                            text = "Bento Suite",
+                                            text = "Action Suite",
                                             color = MaterialTheme.colorScheme.primary,
                                             style = MaterialTheme.typography.labelSmall,
                                             fontWeight = FontWeight.Bold,

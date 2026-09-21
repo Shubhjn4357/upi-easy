@@ -1,6 +1,6 @@
 import { sqliteTable, text, integer, real, index } from "drizzle-orm/sqlite-core";
 import { organizations } from "./organizations.js";
-import { bankAccounts, upiAccounts } from "./accounts.js";
+import { bankAccounts, upiAccounts, paymentAccounts, qrCodes } from "./accounts.js";
 import { users } from "./auth.js";
 
 export const transactions = sqliteTable(
@@ -10,6 +10,7 @@ export const transactions = sqliteTable(
     organizationId: text("organization_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
     bankAccountId: text("bank_account_id").references(() => bankAccounts.id, { onDelete: "set null" }),
     upiAccountId: text("upi_account_id").references(() => upiAccounts.id, { onDelete: "set null" }),
+    paymentAccountId: text("payment_account_id").references(() => paymentAccounts.id, { onDelete: "set null" }),
     type: text("type", {
       enum: ["PAYMENT", "REFUND", "REVERSAL", "TRANSFER", "COLLECTION", "ADJUSTMENT"],
     }).default("PAYMENT").notNull(),
@@ -28,6 +29,10 @@ export const transactions = sqliteTable(
         "RECONCILIATION_REQUIRED",
       ],
     }).default("PENDING").notNull(),
+    verificationStatus: text("verification_status", {
+      enum: ["OBSERVED", "VERIFIED", "UNVERIFIED", "CONFLICT"],
+    }).default("UNVERIFIED").notNull(),
+    eventSource: text("event_source").default("UPI_INTENT").notNull(), // NOTIFICATION_PHONEPE, NOTIFICATION_GPAY, PROVIDER_WEBHOOK, BANK_SYNC, UPI_INTENT, MANUAL
     paymentMethod: text("payment_method").default("UPI").notNull(),
     provider: text("provider").default("NPCI").notNull(),
     providerTransactionId: text("provider_transaction_id"),
@@ -72,3 +77,31 @@ export const transactionReferences = sqliteTable("transaction_references", {
   referenceNumber: text("reference_number").notNull(),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 });
+
+export const observedPaymentEvents = sqliteTable(
+  "observed_payment_events",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+    paymentAccountId: text("payment_account_id").references(() => paymentAccounts.id, { onDelete: "set null" }),
+    qrId: text("qr_id").references(() => qrCodes.id, { onDelete: "set null" }),
+    sourceType: text("source_type").notNull(), // "NOTIFICATION_PHONEPE", "NOTIFICATION_GPAY"
+    sourcePackage: text("source_package").notNull(),
+    amountMinor: integer("amount_minor"), // in paise
+    currency: text("currency").default("INR").notNull(),
+    direction: text("direction", { enum: ["RECEIVED", "SENT", "UNKNOWN"] }).default("RECEIVED").notNull(),
+    payerName: text("payer_name"),
+    payerVpa: text("payer_vpa"),
+    reference: text("reference"), // RRN or UTR
+    eventFingerprint: text("event_fingerprint").notNull(),
+    matchStatus: text("match_status", { enum: ["MATCHED", "UNMATCHED", "AMBIGUOUS"] }).default("MATCHED").notNull(),
+    verificationStatus: text("verification_status", { enum: ["OBSERVED", "VERIFIED", "UNVERIFIED", "CONFLICT"] }).default("OBSERVED").notNull(),
+    observedAt: integer("observed_at", { mode: "timestamp" }).notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  },
+  (table) => [
+    index("observed_evt_org_fp_idx").on(table.organizationId, table.eventFingerprint),
+    index("observed_evt_org_time_idx").on(table.organizationId, table.observedAt),
+  ]
+);
+

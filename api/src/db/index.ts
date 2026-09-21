@@ -97,6 +97,60 @@ export function initDatabase() {
   try { sqlite.exec(`ALTER TABLE notification_preferences ADD COLUMN sync_status integer DEFAULT 0 NOT NULL;`); } catch (_) {}
   try { sqlite.exec(`ALTER TABLE notification_preferences ADD COLUMN voice_enabled integer DEFAULT 0 NOT NULL;`); } catch (_) {}
 
+  // Ensure payment_accounts and observed_payment_events tables exist
+  try {
+    sqlite.exec(`
+      CREATE TABLE IF NOT EXISTS payment_accounts (
+        id text PRIMARY KEY NOT NULL,
+        organization_id text NOT NULL REFERENCES organizations(id) ON DELETE cascade,
+        label text NOT NULL,
+        upi_id text NOT NULL,
+        payment_app_id text NOT NULL,
+        payment_app_package text NOT NULL,
+        status text DEFAULT 'ACTIVE' NOT NULL,
+        detection_enabled integer DEFAULT 1 NOT NULL,
+        notification_access_required integer DEFAULT 1 NOT NULL,
+        last_notification_detected_at integer,
+        created_at integer NOT NULL,
+        updated_at integer NOT NULL
+      );
+    `);
+  } catch (_) {}
+
+  try {
+    sqlite.exec(`
+      CREATE TABLE IF NOT EXISTS observed_payment_events (
+        id text PRIMARY KEY NOT NULL,
+        organization_id text NOT NULL REFERENCES organizations(id) ON DELETE cascade,
+        payment_account_id text REFERENCES payment_accounts(id) ON DELETE set null,
+        qr_id text REFERENCES qr_codes(id) ON DELETE set null,
+        source_type text NOT NULL,
+        source_package text NOT NULL,
+        amount_minor integer,
+        currency text DEFAULT 'INR' NOT NULL,
+        direction text DEFAULT 'RECEIVED' NOT NULL,
+        payer_name text,
+        payer_vpa text,
+        reference text,
+        event_fingerprint text NOT NULL,
+        match_status text DEFAULT 'MATCHED' NOT NULL,
+        verification_status text DEFAULT 'OBSERVED' NOT NULL,
+        observed_at integer NOT NULL,
+        created_at integer NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS observed_evt_org_fp_idx ON observed_payment_events (organization_id, event_fingerprint);
+      CREATE INDEX IF NOT EXISTS observed_evt_org_time_idx ON observed_payment_events (organization_id, observed_at);
+    `);
+  } catch (_) {}
+
+  // Ensure updated qr_codes columns exist
+  try { sqlite.exec(`ALTER TABLE qr_codes ADD COLUMN payment_account_id text REFERENCES payment_accounts(id) ON DELETE set null;`); } catch (_) {}
+
+  // Ensure updated transactions columns exist
+  try { sqlite.exec(`ALTER TABLE transactions ADD COLUMN payment_account_id text REFERENCES payment_accounts(id) ON DELETE set null;`); } catch (_) {}
+  try { sqlite.exec(`ALTER TABLE transactions ADD COLUMN verification_status text DEFAULT 'UNVERIFIED' NOT NULL;`); } catch (_) {}
+  try { sqlite.exec(`ALTER TABLE transactions ADD COLUMN event_source text DEFAULT 'UPI_INTENT' NOT NULL;`); } catch (_) {}
+
   seedPermissionsAndRoles();
   seedDemoMerchantData(db);
   logger.info("Database initialized with Drizzle schemas and seed data");
@@ -108,6 +162,7 @@ function seedPermissionsAndRoles() {
     { id: "perm_tx_export", name: "transactions.export", description: "Export transactions", category: "transactions" },
     { id: "perm_tx_create", name: "transactions.create", description: "Create transactions", category: "transactions" },
     { id: "perm_tx_refund", name: "transactions.refund", description: "Initiate refunds", category: "transactions" },
+    { id: "perm_evt_ingest", name: "payment_events.ingest", description: "Ingest observed payment events", category: "transactions" },
     { id: "perm_acc_read", name: "accounts.read", description: "View bank accounts", category: "accounts" },
     { id: "perm_acc_manage", name: "accounts.manage", description: "Manage bank accounts", category: "accounts" },
     { id: "perm_upi_read", name: "upi.read", description: "View UPI IDs", category: "upi" },
@@ -141,6 +196,7 @@ function seedPermissionsAndRoles() {
       "perm_tx_read",
       "perm_tx_export",
       "perm_tx_create",
+      "perm_evt_ingest",
       "perm_acc_read",
       "perm_upi_read",
       "perm_upi_manage",
@@ -149,7 +205,7 @@ function seedPermissionsAndRoles() {
       "perm_staff_manage",
       "perm_rep_read",
     ],
-    role_cashier: ["perm_tx_read", "perm_tx_create", "perm_upi_read", "perm_qr_create"],
+    role_cashier: ["perm_tx_read", "perm_tx_create", "perm_evt_ingest", "perm_upi_read", "perm_qr_create"],
     role_accountant: ["perm_tx_read", "perm_tx_export", "perm_rep_read", "perm_acc_read", "perm_upi_read"],
   };
 

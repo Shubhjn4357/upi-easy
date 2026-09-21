@@ -1,1064 +1,88 @@
-# UPI-Easy: Multi-Firm Staff, Invitation, Device Notification & Background Sync Implementation
+# UPI-Easy: Multi-QR + PhonePe/GPay Notification Detection
 
-You are implementing a production-grade organization/multi-firm collaboration system for **UPI-Easy**, an Android Jetpack Compose merchant UPI management application with a TypeScript/Hono backend deployed on Cloudflare Workers and PostgreSQL/Neon using Drizzle ORM.
+## Full Agentic Implementation Specification
 
-## PRIMARY OBJECTIVE
+You are modifying the existing **UPI-Easy** application.
 
-Implement and repair the complete flow:
+Do not create a separate demo application.
 
-```text
-Owner/Manager enters:
-    mobile number
-    optional name
-    optional email
-    role
-
-        ↓
-
-Server finds existing UPI-Easy user by normalized mobile number
-
-        ↓
-
-Create organization invitation
-
-        ↓
-
-Recipient receives:
-    in-app invitation
-    push notification
-
-        ↓
-
-Recipient opens:
-Staff → Invitations
-
-        ↓
-
-Accept
-
-        ↓
-
-organization_members becomes ACTIVE
-
-        ↓
-
-Firm immediately appears in recipient's firm switcher
-
-        ↓
-
-Recipient can switch between multiple firms
-
-        ↓
-
-Authorized users/devices belonging to the organization
-receive payment/service notifications
-
-        ↓
-
-FCM wakes/alerts device
-
-        ↓
-
-WorkManager performs authoritative sync
-
-        ↓
-
-Room database updates
-
-        ↓
-
-All authorized phones converge on the same server state
-```
-
-Do NOT implement this as separate user accounts per firm.
-
-A single UPI-Easy user account may belong to multiple organizations/firms.
-
----
-
-# 1. FIRST: INSPECT THE EXISTING CODEBASE
-
-Before modifying anything, inspect the repository.
-
-Find:
+Implement this feature end-to-end across:
 
 ```text
-Android:
-    app module
-    authentication
-    ViewModels
-    Compose screens
-    Navigation
-    Room
-    DataStore
-    Retrofit/OkHttp
-    FCM
-    WorkManager
-    Hilt
-    existing Staff screens
-    existing Settings
-    existing Dashboard/top bar
-
-Server:
-    Hono app/router
-    auth routes
-    organization routes
-    staff routes
-    notification routes
-    transaction routes
-    sync routes
-    Drizzle schema
-    migrations
-    repositories/services
-    middleware
-    RBAC
-    FCM implementation
-    Cloudflare bindings
-    worker entrypoint
-```
-
-Also search for existing implementations of:
-
-```text
-organization
-organizations
-firm
-staff
-member
-invite
-invitation
-notification
-device
-fcm
-sync
-cursor
-transaction
-outbox
-role
-permission
-```
-
-Do not duplicate existing tables, routes, repositories, services, models, or utilities.
-
-Reuse the existing architecture where possible.
-
-Do not replace working Google authentication, OTP authentication, transaction processing, or organization logic unless required.
-
----
-
-# 2. ARCHITECTURE
-
-Target architecture:
-
-```text
-                         UPI-EASY
-
-                         User
-                          │
-             ┌────────────┴────────────┐
-             │                         │
-          Profile                   Devices
-                                      │
-                         ┌────────────┼────────────┐
-                         │            │            │
-                      Phone A      Phone B      Phone C
-                         │            │            │
-                         └────────────┼────────────┘
-                                      │
-                                      ▼
-                                Organization
-                                      │
-                 ┌────────────────────┼────────────────────┐
-                 │                    │                    │
-              Members               UPI IDs            Bank Accounts
-                 │                    │                    │
-        ┌────────┼────────┐           │                    │
-        │        │        │           ▼                    │
-      Owner   Manager   Cashier    Transactions             │
-                                      │                    │
-                                      ▼                    │
-                                Outbox Events                │
-                                      │                    │
-                                      ▼                    │
-                              Notification Worker             │
-                                      │                    │
-                                      ▼                    │
-                                     FCM                     │
-                                      │
-                         ┌────────────┼────────────┐
-                         ▼            ▼            ▼
-                       Phone A      Phone B      Phone C
-                         │            │            │
-                         └────────────┼────────────┘
-                                      ▼
-                                  WorkManager
-                                      ▼
-                                    Sync API
-                                      ▼
-                                     Room
-```
-
-The backend is authoritative.
-
-Android local state is a cache/offline representation.
-
-Never treat local Android transaction state as authoritative financial state.
-
----
-
-# 3. DATABASE MODEL
-
-Use existing naming conventions if the project already has them.
-
-If missing, implement the following.
-
-## organization_members
-
-```ts
-export const organizationMembers = pgTable(
-  "organization_members",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-
-    organizationId: uuid("organization_id")
-      .notNull()
-      .references(() => organizations.id, {
-        onDelete: "cascade",
-      }),
-
-    userId: uuid("user_id")
-      .notNull()
-      .references(() => users.id, {
-        onDelete: "cascade",
-      }),
-
-    role: varchar("role", {
-      length: 32,
-    }).notNull(),
-
-    status: varchar("status", {
-      length: 32,
-    })
-      .notNull()
-      .default("ACTIVE"),
-
-    invitedBy: uuid("invited_by")
-      .references(() => users.id),
-
-    joinedAt: timestamp("joined_at"),
-
-    createdAt: timestamp("created_at")
-      .defaultNow()
-      .notNull(),
-
-    updatedAt: timestamp("updated_at")
-      .defaultNow()
-      .notNull(),
-  },
-  (table) => ({
-    uniqueOrganizationUser: uniqueIndex(
-      "organization_members_org_user_unique"
-    ).on(
-      table.organizationId,
-      table.userId
-    ),
-  })
-);
-```
-
-Use an enum or centralized constants if the existing project uses enums.
-
-Roles:
-
-```ts
-export const ORGANIZATION_ROLES = [
-  "OWNER",
-  "MANAGER",
-  "ACCOUNTANT",
-  "CASHIER",
-] as const;
-```
-
-Membership status:
-
-```ts
-export const MEMBERSHIP_STATUS = [
-  "ACTIVE",
-  "SUSPENDED",
-  "REMOVED",
-] as const;
-```
-
----
-
-# 4. ORGANIZATION INVITATIONS
-
-Create:
-
-```ts
-export const organizationInvites = pgTable(
-  "organization_invites",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-
-    organizationId: uuid("organization_id")
-      .notNull()
-      .references(() => organizations.id, {
-        onDelete: "cascade",
-      }),
-
-    invitedUserId: uuid("invited_user_id")
-      .references(() => users.id, {
-        onDelete: "cascade",
-      }),
-
-    invitedMobile: varchar("invited_mobile", {
-      length: 32,
-    }).notNull(),
-
-    invitedEmail: varchar("invited_email", {
-      length: 320,
-    }),
-
-    invitedName: varchar("invited_name", {
-      length: 160,
-    }),
-
-    role: varchar("role", {
-      length: 32,
-    }).notNull(),
-
-    invitedBy: uuid("invited_by")
-      .notNull()
-      .references(() => users.id),
-
-    status: varchar("status", {
-      length: 32,
-    })
-      .notNull()
-      .default("PENDING"),
-
-    expiresAt: timestamp("expires_at")
-      .notNull(),
-
-    acceptedAt: timestamp("accepted_at"),
-
-    rejectedAt: timestamp("rejected_at"),
-
-    cancelledAt: timestamp("cancelled_at"),
-
-    createdAt: timestamp("created_at")
-      .defaultNow()
-      .notNull(),
-
-    updatedAt: timestamp("updated_at")
-      .defaultNow()
-      .notNull(),
-  }
-);
-```
-
-Statuses:
-
-```ts
-export const INVITE_STATUS = [
-  "PENDING",
-  "ACCEPTED",
-  "REJECTED",
-  "EXPIRED",
-  "CANCELLED",
-] as const;
-```
-
----
-
-# 5. MOBILE NUMBER NORMALIZATION
-
-Do not perform:
-
-```ts
-users.mobile === input.mobile
-```
-
-directly.
-
-Create one shared server utility:
-
-```ts
-normalizeIndianMobileNumber(
-  mobile: string
-): string
-```
-
-It should normalize valid Indian numbers consistently.
-
-Examples:
-
-```text
-9876543210
-+919876543210
-919876543210
-```
-
-should resolve to the same canonical representation.
-
-Prefer storing:
-
-```text
-+919876543210
-```
-
-if that is the existing project's convention.
-
-Never log raw mobile numbers unnecessarily.
-
----
-
-# 6. INVITE API
-
-Implement:
-
-```http
-POST /api/v1/organizations/:organizationId/invites
-```
-
-Request:
-
-```json
-{
-  "mobileNumber": "+919876543210",
-  "name": "Rahul",
-  "email": "rahul@example.com",
-  "role": "CASHIER"
-}
-```
-
-Response:
-
-```json
-{
-  "success": true,
-  "invite": {
-    "id": "invite_id",
-    "organizationId": "org_id",
-    "organizationName": "Sandesh Collection",
-    "role": "CASHIER",
-    "status": "PENDING",
-    "expiresAt": "..."
-  }
-}
-```
-
-Server validation:
-
-```text
-authenticated user
+Android Jetpack Compose
         ↓
-organization exists
+NotificationListenerService
         ↓
-authenticated user is active member
+Payment App Detection
         ↓
-permission = staff.manage
+Payment Notification Parser
         ↓
-validate role
+Room
         ↓
-normalize mobile
+Sync Engine
         ↓
-find existing user
+Hono API
         ↓
-prevent inviting yourself
+Neon/Postgres
         ↓
-prevent duplicate active membership
-        ↓
-prevent duplicate pending invitation
-        ↓
-create invitation
-        ↓
-create notification
-        ↓
-enqueue push notification
-```
-
-Do not allow the Android client to choose arbitrary `organizationId` without server-side membership validation.
-
----
-
-# 7. INVITATION RECIPIENT
-
-If the mobile number belongs to an existing UPI-Easy user:
-
-```text
-invitedUserId = existingUser.id
-```
-
-This is critical.
-
-The invitation must be associated with the actual recipient user.
-
-If the user does not yet exist, retain:
-
-```text
-invitedMobile
-invitedEmail
-invitedName
-```
-
-and allow the invitation to be claimed after registration, subject to secure verification of the invited mobile number.
-
-Do not automatically create an account solely because someone entered a phone number.
-
----
-
-# 8. INVITATION APIs
-
-Implement:
-
-```http
-GET /api/v1/me/invitations
-```
-
-Return only invitations belonging to the authenticated user.
-
-Also:
-
-```http
-POST /api/v1/invitations/:inviteId/accept
-```
-
-```http
-POST /api/v1/invitations/:inviteId/reject
-```
-
-Optional:
-
-```http
-POST /api/v1/invitations/:inviteId/cancel
-```
-
-Cancellation should require organization permission.
-
----
-
-# 9. ACCEPT INVITATION TRANSACTION
-
-Acceptance must be atomic.
-
-Pseudo-code:
-
-```ts
-await db.transaction(async (tx) => {
-  const invite = await getInviteForUpdate(
-    tx,
-    inviteId
-  );
-
-  if (!invite) {
-    throw new NotFoundError();
-  }
-
-  if (
-    invite.invitedUserId !== authenticatedUser.id
-  ) {
-    throw new ForbiddenError();
-  }
-
-  if (invite.status !== "PENDING") {
-    throw new ConflictError(
-      "Invitation is no longer pending"
-    );
-  }
-
-  if (invite.expiresAt < new Date()) {
-    await markExpired(tx, invite.id);
-    throw new ConflictError(
-      "Invitation has expired"
-    );
-  }
-
-  await createOrganizationMembership(
-    tx,
-    invite.organizationId,
-    authenticatedUser.id,
-    invite.role,
-    invite.invitedBy
-  );
-
-  await markInviteAccepted(
-    tx,
-    invite.id
-  );
-
-  await createOutboxEvent(
-    tx,
-    "staff.joined",
-    invite.organizationId,
-    {
-      userId: authenticatedUser.id,
-      role: invite.role,
-    }
-  );
-});
-```
-
-Use proper database constraints to prevent duplicate memberships.
-
----
-
-# 10. `/me` ORGANIZATION RESPONSE
-
-Update:
-
-```http
-GET /api/v1/me
-```
-
-or the existing equivalent.
-
-Return:
-
-```json
-{
-  "user": {
-    "id": "...",
-    "name": "...",
-    "email": "..."
-  },
-  "organizations": [
-    {
-      "id": "org_1",
-      "name": "Sandesh Collection",
-      "role": "OWNER",
-      "status": "ACTIVE"
-    },
-    {
-      "id": "org_2",
-      "name": "Another Firm",
-      "role": "ACCOUNTANT",
-      "status": "ACTIVE"
-    }
-  ]
-}
-```
-
-This becomes the source for the Android firm switcher.
-
----
-
-# 11. MULTI-FIRM ANDROID STATE
-
-Create:
-
-```text
-data/
-├── local/
-│   ├── room/
-│   └── datastore/
-│
-├── remote/
-│   ├── api/
-│   └── dto/
-│
-└── repository/
-```
-
-Store active organization in DataStore:
-
-```kotlin
-data class ActiveOrganization(
-    val organizationId: String
-)
-```
-
-Use:
-
-```kotlin
-DataStore<Preferences>
-```
-
-for the selected organization ID.
-
-Do NOT use this local value as authorization.
-
-The server must verify membership on every organization-scoped request.
-
----
-
-# 12. TOP DASHBOARD FIRM SWITCHER
-
-Implement a reusable Compose component:
-
-```kotlin
-@Composable
-fun OrganizationSwitcher(
-    organizations: List<OrganizationUiModel>,
-    activeOrganizationId: String?,
-    onOrganizationSelected: (String) -> Unit
-)
-```
-
-Dashboard:
-
-```text
-┌─────────────────────────────────────────┐
-│ 🏢 Sandesh Collection             ▼     │
-│    Owner                                │
-└─────────────────────────────────────────┘
-```
-
-Clicking opens:
-
-```text
-Select Firm
-
-✓ Sandesh Collection
-  Another Firm
-  Third Firm
-
-+ Create / Join Firm
-```
-
-When selected:
-
-```text
-DataStore.activeOrganizationId = id
-```
-
-Then:
-
-```text
-refresh organization-scoped data
-sync organization
-update dashboard
-update transactions
-update staff
-update UPI accounts
-update notifications
-```
-
-Do not recreate the user's authentication session.
-
----
-
-# 13. SETTINGS → FIRMS
-
-Add:
-
-```text
-Settings
- └── Firms & Organizations
-```
-
-Screen:
-
-```text
-Firms & Organizations
-
-┌─────────────────────────────┐
-│ Sandesh Collection           │
-│ Owner                        │
-│ ✓ Active                     │
-└─────────────────────────────┘
-
-┌─────────────────────────────┐
-│ Another Firm                 │
-│ Accountant                   │
-│                             │
-│ [Switch]                    │
-└─────────────────────────────┘
-
-[ + Create Firm ]
-[ + Join Firm ]
-```
-
-Allow users to switch firms without logging out.
-
----
-
-# 14. STAFF UI
-
-Owner/Manager:
-
-```text
-Staff
-
-Members
-────────────────────
-
-Rahul
-Cashier
-Active
-
-Amit
-Accountant
-Active
-
-Invitations
-────────────────────
-
-Pending
-Priya
-Manager
-Waiting for response
-
-[ Invite Staff ]
-```
-
-Invite form:
-
-```text
-Invite Staff
-
-Mobile number *
-Name
-Email
-Role *
-
-[ Send Invitation ]
-```
-
-After successful request:
-
-```text
-Invitation sent
-```
-
-Do not claim that the recipient has accepted.
-
----
-
-# 15. RECIPIENT INVITATION UI
-
-The receiving user should see:
-
-```text
-Staff
-
-Invitations
-
-┌──────────────────────────────────┐
-│ Sandesh Collection               │
-│                                  │
-│ Invited by Shubham               │
-│ Role: Cashier                    │
-│                                  │
-│ [ Reject ]        [ Accept ]     │
-└──────────────────────────────────┘
-```
-
-After accepting:
-
-```text
-You're now a member of
-Sandesh Collection
-
-Role: Cashier
-```
-
-Then refresh organizations.
-
----
-
-# 16. NOTIFICATION DATABASE
-
-If not already implemented, create:
-
-```ts
-notifications
-```
-
-with:
-
-```text
-id
-userId
-organizationId
-type
-title
-body
-dataJson
-readAt
-createdAt
-```
-
-Types:
-
-```ts
-export const NOTIFICATION_TYPES = [
-  "STAFF_INVITATION",
-  "STAFF_JOINED",
-  "STAFF_REMOVED",
-  "PAYMENT_RECEIVED",
-  "PAYMENT_SENT",
-  "PAYMENT_FAILED",
-  "PAYMENT_REVERSED",
-  "TRANSACTION_RECONCILED",
-  "SECURITY_ALERT",
-  "ACCOUNT_CONNECTED",
-  "SYNC_COMPLETED",
-] as const;
-```
-
----
-
-# 17. DEVICE REGISTRATION
-
-Create/use:
-
-```ts
-devices
-```
-
-Fields:
-
-```text
-id
-userId
-deviceId
-platform
-deviceModel
-osVersion
-appVersion
-fcmToken
-isActive
-lastSeenAt
-lastSyncAt
-createdAt
-updatedAt
-```
-
-Unique:
-
-```text
-(userId, deviceId)
-```
-
-DO NOT store one FCM token directly on `users`.
-
-A user can have:
-
-```text
-Phone A → token A
-Phone B → token B
-Phone C → token C
-```
-
-All three must remain registered.
-
----
-
-# 18. DEVICE API
-
-Implement:
-
-```http
-POST /api/v1/devices/register
-```
-
-Request:
-
-```json
-{
-  "deviceId": "...",
-  "platform": "ANDROID",
-  "deviceModel": "...",
-  "osVersion": "...",
-  "appVersion": "...",
-  "fcmToken": "..."
-}
-```
-
-Also:
-
-```http
-POST /api/v1/devices/unregister
-```
-
-Call unregister on logout where appropriate.
-
-Do not permanently delete audit history.
-
----
-
-# 19. FCM NOTIFICATION FLOW
-
-When a payment event is confirmed by an authoritative provider:
-
-```text
-transaction = SUCCESS
-        ↓
-database transaction
-        ↓
-outbox_events
-        ↓
-notification worker
-        ↓
-find organization members
-        ↓
-check notification preferences
-        ↓
-find active devices
+Outbox / Cloudflare Worker
         ↓
 FCM
+        ↓
+All authorized organization devices
 ```
 
-Do not generate a "payment received" notification merely because:
+The feature must support:
 
-```text
-UPI intent returned
-```
-
-or:
-
-```text
-client says payment succeeded
-```
-
-Only use authoritative transaction/provider state.
+* Multiple payment accounts
+* Multiple QR codes
+* PhonePe notification detection
+* Google Pay notification detection
+* Installed-app detection
+* App selector when adding a UPI/payment account
+* Saving selected payment app package information
+* Android notification-access onboarding
+* Local notification parsing
+* Duplicate protection
+* Offline-first event storage
+* Backend synchronization
+* Organization-level payment event distribution
+* Multi-device notifications
+* Audit trail
+* Explicit `OBSERVED` vs `VERIFIED` transaction status
+* No private API access
+* No accessibility-service abuse
+* No SMS scraping
+* No reading another application's private database
+* No pretending a notification is a bank-confirmed transaction
 
 ---
 
-# 20. NOTIFICATION PREFERENCES
+# 1. PRODUCT MODEL
 
-Implement:
-
-```ts
-notificationPreferences
-```
-
-with organization-specific settings:
+Do NOT model the feature as:
 
 ```text
-userId
-organizationId
-paymentReceived
-paymentSent
-paymentFailed
-paymentReversed
-staffActivity
-securityAlerts
-syncStatus
-voiceEnabled
-updatedAt
+QR → Notification
 ```
 
-Default:
+Model it as:
 
 ```text
-paymentReceived = true
-paymentSent = true
-paymentFailed = true
-paymentReversed = true
-staffActivity = true
-securityAlerts = true
-syncStatus = false
-voiceEnabled = false
+Organization
+    ↓
+Payment Account
+    ↓
+UPI Account
+    ↓
+QR Codes
+    ↓
+Payment Detection Source
+    ↓
+Observed Payment Events
 ```
 
-Users can change preferences.
-
----
-
-# 21. PAYMENT NOTIFICATION TO ALL LINKED PHONES
+A payment account represents the receiving identity.
 
 Example:
 
@@ -1066,1913 +90,3642 @@ Example:
 Organization:
 Sandesh Collection
 
-Members:
-Shubham - Owner
-Rahul - Manager
-Amit - Accountant
+Payment Account:
+Main PhonePe
 
-Devices:
-Shubham Phone A
-Shubham Phone B
-Rahul Phone A
-Amit Phone A
+UPI ID:
+9827743085@ybl
+
+Payment App:
+PhonePe
+
+Package:
+com.phonepe.app
+
+QRs:
+    Counter 1
+    Counter 2
+    Billing Desk
 ```
 
-Payment:
+Another:
 
 ```text
-₹5,000 received
-UPI account X
+Payment Account:
+Main Google Pay
+
+UPI ID:
+shop@okaxis
+
+Payment App:
+Google Pay
+
+Package:
+com.google.android.apps.nbu.paisa.user
+
+QRs:
+    Counter 3
+    Wholesale Desk
 ```
-
-Server determines authorized recipients based on:
-
-```text
-organization membership
-+
-permission
-+
-notification preference
-+
-active device
-```
-
-Then sends to every applicable device.
-
-Do not send organization payment information to devices belonging to another organization.
 
 ---
 
-# 22. BACKGROUND SYNC
+# 2. IMPORTANT TRANSACTION SEMANTICS
 
-Android must use:
+Notification detection is NOT an official payment provider webhook.
+
+Therefore:
 
 ```text
-WorkManager
-+
-FCM
-+
-Room
+PhonePe/GPay notification detected
+        ↓
+OBSERVED PAYMENT
 ```
+
+not:
+
+```text
+PhonePe/GPay notification detected
+        ↓
+BANK VERIFIED SUCCESS
+```
+
+Use these statuses:
+
+```text
+CREATED
+PAYMENT_INITIATED
+PENDING
+SUCCESS
+FAILED
+REVERSED
+REFUNDED
+UNKNOWN
+RECONCILIATION_REQUIRED
+```
+
+And independently track:
+
+```text
+eventSource:
+
+NOTIFICATION_PHONEPE
+NOTIFICATION_GPAY
+PROVIDER_WEBHOOK
+BANK_SYNC
+MANUAL
+```
+
+and:
+
+```text
+verificationStatus:
+
+OBSERVED
+VERIFIED
+UNVERIFIED
+CONFLICT
+```
+
+For this feature:
+
+```text
+PhonePe notification
+    → eventSource = NOTIFICATION_PHONEPE
+    → verificationStatus = OBSERVED
+```
+
+```text
+Google Pay notification
+    → eventSource = NOTIFICATION_GPAY
+    → verificationStatus = OBSERVED
+```
+
+Never automatically upgrade an observed notification to `VERIFIED`.
+
+---
+
+# 3. SUPPORTED PAYMENT APPS
+
+For this first implementation, support exactly:
+
+### PhonePe
+
+```text
+displayName:
+PhonePe
+
+packageName:
+com.phonepe.app
+```
+
+### Google Pay
+
+```text
+displayName:
+Google Pay
+
+packageName:
+com.google.android.apps.nbu.paisa.user
+```
+
+Do not implement BHIM, Paytm, Amazon Pay, WhatsApp Pay, etc. yet.
+
+However, architecture must be extensible.
 
 Create:
 
 ```text
-sync/
-├── SyncWorker.kt
-├── SyncScheduler.kt
-├── SyncRepository.kt
-├── SyncState.kt
-└── SyncCoordinator.kt
+PaymentAppDefinition
 ```
 
-Worker:
+with:
 
 ```kotlin
-class SyncWorker(
-    appContext: Context,
-    workerParams: WorkerParameters
-) : CoroutineWorker(
-    appContext,
-    workerParams
-) {
+data class PaymentAppDefinition(
+    val id: String,
+    val displayName: String,
+    val packageName: String,
+    val supported: Boolean,
+    val parserKey: String
+)
+```
 
-    override suspend fun doWork(): Result {
+Example:
+
+```kotlin
+val supportedPaymentApps = listOf(
+    PaymentAppDefinition(
+        id = "phonepe",
+        displayName = "PhonePe",
+        packageName = "com.phonepe.app",
+        supported = true,
+        parserKey = "phonepe"
+    ),
+    PaymentAppDefinition(
+        id = "google_pay",
+        displayName = "Google Pay",
+        packageName = "com.google.android.apps.nbu.paisa.user",
+        supported = true,
+        parserKey = "google_pay"
+    )
+)
+```
+
+Keep this registry centralized.
+
+---
+
+# 4. INSTALLED APP DETECTION
+
+When the user opens:
+
+```text
+Add Payment Account
+```
+
+show:
+
+```text
+Payment App
+
+[ Select payment app ▼ ]
+```
+
+The selector should only display supported apps that are actually installed.
+
+Do NOT scan every installed application.
+
+Use Android package visibility with explicit package declarations.
+
+Manifest:
+
+```xml
+<manifest ...>
+
+    <queries>
+
+        <package
+            android:name="com.phonepe.app" />
+
+        <package
+            android:name="com.google.android.apps.nbu.paisa.user" />
+
+    </queries>
+
+</manifest>
+```
+
+Android package visibility is restricted on Android 11+ and explicit package declarations are the correct mechanism when the application needs to check known packages. Avoid `QUERY_ALL_PACKAGES`.
+
+Create:
+
+```kotlin
+interface PaymentAppDetector {
+
+    fun getInstalledSupportedApps(): List<PaymentAppDefinition>
+
+    fun isInstalled(packageName: String): Boolean
+}
+```
+
+Implementation:
+
+```kotlin
+class AndroidPaymentAppDetector(
+    private val context: Context
+) : PaymentAppDetector {
+
+    override fun getInstalledSupportedApps():
+        List<PaymentAppDefinition> {
+
+        return supportedPaymentApps.filter {
+            isInstalled(it.packageName)
+        }
+    }
+
+    override fun isInstalled(
+        packageName: String
+    ): Boolean {
+
         return try {
-            syncRepository.syncAllOrganizations()
-            Result.success()
-        } catch (e: IOException) {
-            Result.retry()
-        } catch (e: Exception) {
-            Result.failure()
+            context.packageManager
+                .getApplicationInfo(packageName, 0)
+
+            true
+        } catch (
+            _: PackageManager.NameNotFoundException
+        ) {
+            false
         }
     }
 }
 ```
 
-Use network constraints:
-
-```kotlin
-val constraints =
-    Constraints.Builder()
-        .setRequiredNetworkType(
-            NetworkType.CONNECTED
-        )
-        .build()
-```
-
-Use exponential backoff for failures.
-
-Do not create an always-running foreground service merely to poll the API.
+Also obtain the application label/icon through `PackageManager` for UI display.
 
 ---
 
-# 23. PERIODIC SYNC
+# 5. ADD PAYMENT ACCOUNT UI
 
-Schedule periodic WorkManager sync.
-
-Use the minimum interval permitted by Android/WorkManager rather than attempting an unsupported custom interval.
-
-Also trigger synchronization:
+When the user selects:
 
 ```text
-app startup
-app foreground
-network becomes available
-FCM event
-manual pull-to-refresh
-organization switch
-after important local operation
+UPI
+→ Add Payment Account
 ```
 
-Background execution is best-effort on Android.
+show:
 
-Never promise users that Android will execute arbitrary code continuously in the background.
+```text
+Add Payment Account
+
+Payment App
+┌───────────────────────────┐
+│ PhonePe                ▼  │
+└───────────────────────────┘
+
+UPI ID
+┌───────────────────────────┐
+│ 9827743085@ybl            │
+└───────────────────────────┘
+
+Account Name
+┌───────────────────────────┐
+│ Main PhonePe              │
+└───────────────────────────┘
+
+[ Generate QR ]
+
+[ Save Payment Account ]
+```
+
+For Google Pay:
+
+```text
+Payment App
+Google Pay
+```
+
+The selected app must be persisted.
+
+Store:
+
+```text
+paymentAppId
+packageName
+```
+
+Do NOT store only the display name.
 
 ---
 
-# 24. FCM → SYNC
+# 6. PAYMENT ACCOUNT DATABASE
 
-When FCM receives an event:
+Add/update:
 
-```json
-{
-  "type": "payment.received",
-  "organizationId": "org_123",
-  "sequence": 1860
+```sql
+payment_accounts
+```
+
+Fields:
+
+```text
+id
+organization_id
+
+label
+
+upi_id
+
+payment_app_id
+payment_app_package
+
+status
+
+detection_enabled
+
+notification_access_required
+
+last_notification_detected_at
+
+created_at
+updated_at
+```
+
+Example:
+
+```text
+id:
+pa_01
+
+organization_id:
+org_01
+
+label:
+Main PhonePe
+
+upi_id:
+9827743085@ybl
+
+payment_app_id:
+phonepe
+
+payment_app_package:
+com.phonepe.app
+
+status:
+ACTIVE
+
+detection_enabled:
+true
+```
+
+Never use the package name as the primary identifier.
+
+---
+
+# 7. QR DATABASE
+
+Existing QR architecture should become:
+
+```sql
+qr_codes
+```
+
+Fields:
+
+```text
+id
+organization_id
+payment_account_id
+
+label
+
+upi_id
+payload
+
+qr_type
+
+amount
+transaction_reference
+
+is_active
+
+created_at
+updated_at
+```
+
+Example:
+
+```text
+Payment Account:
+Main PhonePe
+
+QR:
+Counter 1
+
+UPI:
+9827743085@ybl
+```
+
+Another:
+
+```text
+Payment Account:
+Main PhonePe
+
+QR:
+Counter 2
+
+UPI:
+9827743085@ybl
+```
+
+Multiple QR codes may belong to one payment account.
+
+Important:
+
+If two QR codes use the same UPI ID, a generic payment notification may NOT tell us which physical QR was scanned.
+
+Therefore:
+
+```text
+payment_account_id
+```
+
+is authoritative for notification association.
+
+`qr_id` is optional.
+
+Never fabricate `qr_id`.
+
+---
+
+# 8. NOTIFICATION LISTENER SERVICE
+
+Create:
+
+```text
+notification/
+    PaymentNotificationListenerService.kt
+    PaymentNotificationProcessor.kt
+    PaymentNotificationParser.kt
+    PhonePeNotificationParser.kt
+    GooglePayNotificationParser.kt
+    NotificationEventDeduplicator.kt
+```
+
+Declare:
+
+```xml
+<service
+    android:name=".notification.PaymentNotificationListenerService"
+    android:exported="false"
+    android:label="@string/payment_notification_listener"
+    android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+
+    <intent-filter>
+        <action
+            android:name=
+            "android.service.notification.NotificationListenerService" />
+    </intent-filter>
+
+</service>
+```
+
+This is the Android-supported notification listener mechanism. Android calls the service when notifications are posted/removed, and the `StatusBarNotification` identifies the originating package.
+
+---
+
+# 9. WAIT FOR LISTENER CONNECTION
+
+Do not immediately perform notification operations from service initialization.
+
+Use:
+
+```kotlin
+override fun onListenerConnected() {
+    super.onListenerConnected()
+
+    // Initialize processing pipeline
 }
 ```
 
-Do not trust this payload as authoritative transaction data.
-
-Use it as a synchronization trigger:
-
-```text
-FCM
- ↓
-check organization
- ↓
-enqueue WorkManager
- ↓
-Sync API
- ↓
-server returns authoritative changes
- ↓
-Room
-```
-
-This protects against stale, duplicated, reordered, or missing notifications.
+Android documents `onListenerConnected()` as the point after which notification-listener operations should be performed.
 
 ---
 
-# 25. INCREMENTAL SYNC API
+# 10. NOTIFICATION FILTER
 
-Implement:
+The service must immediately ignore unsupported applications.
 
-```http
-POST /api/v1/sync
+```kotlin
+private val supportedPackages = setOf(
+    "com.phonepe.app",
+    "com.google.android.apps.nbu.paisa.user"
+)
+```
+
+Implementation:
+
+```kotlin
+override fun onNotificationPosted(
+    sbn: StatusBarNotification
+) {
+
+    val packageName = sbn.packageName
+
+    if (packageName !in supportedPackages) {
+        return
+    }
+
+    processor.process(sbn)
+}
+```
+
+Do not upload arbitrary notifications.
+
+Do not store arbitrary notifications.
+
+Only inspect notifications from configured supported payment apps.
+
+---
+
+# 11. NOTIFICATION DATA EXTRACTION
+
+Create a normalized internal model:
+
+```kotlin
+data class RawPaymentNotification(
+    val packageName: String,
+    val notificationKey: String,
+    val notificationId: Int,
+    val postTime: Long,
+
+    val title: String?,
+    val text: String?,
+    val bigText: String?,
+
+    val subText: String?,
+    val category: String?
+)
+```
+
+Extract:
+
+```kotlin
+val extras = sbn.notification.extras
+
+val title =
+    extras.getString(Notification.EXTRA_TITLE)
+
+val text =
+    extras.getCharSequence(
+        Notification.EXTRA_TEXT
+    )?.toString()
+
+val bigText =
+    extras.getCharSequence(
+        Notification.EXTRA_BIG_TEXT
+    )?.toString()
+```
+
+Also store:
+
+```kotlin
+sbn.key
+sbn.id
+sbn.postTime
+sbn.notification.category
+```
+
+Do NOT store icons, images, RemoteViews, or unnecessary notification payloads.
+
+---
+
+# 12. PARSER ARCHITECTURE
+
+Do not make one giant parser.
+
+Create:
+
+```kotlin
+interface PaymentNotificationParser {
+
+    fun supports(
+        packageName: String
+    ): Boolean
+
+    fun parse(
+        notification: RawPaymentNotification
+    ): ParsedPaymentEvent?
+}
+```
+
+PhonePe:
+
+```kotlin
+class PhonePeNotificationParser :
+    PaymentNotificationParser
+```
+
+Google Pay:
+
+```kotlin
+class GooglePayNotificationParser :
+    PaymentNotificationParser
+```
+
+---
+
+# 13. NORMALIZED PAYMENT EVENT
+
+Create:
+
+```kotlin
+data class ParsedPaymentEvent(
+    val sourcePackage: String,
+    val sourceApp: String,
+
+    val direction: PaymentDirection,
+
+    val amount: BigDecimal?,
+
+    val payerName: String?,
+    val payerVpa: String?,
+
+    val reference: String?,
+
+    val rawTitle: String?,
+    val rawText: String?,
+
+    val observedAt: Instant,
+
+    val confidence: ParseConfidence
+)
+```
+
+Enum:
+
+```kotlin
+enum class PaymentDirection {
+    RECEIVED,
+    SENT,
+    UNKNOWN
+}
+```
+
+Confidence:
+
+```kotlin
+enum class ParseConfidence {
+    HIGH,
+    MEDIUM,
+    LOW
+}
+```
+
+---
+
+# 14. PARSER RULES
+
+Do not hard-code one exact notification sentence.
+
+UPI apps can change notification wording.
+
+Use a rule-based parser.
+
+Example concepts:
+
+Received keywords:
+
+```text
+received
+credited
+payment received
+money received
+₹
+INR
+```
+
+Sent keywords:
+
+```text
+paid
+payment sent
+debited
+sent
+```
+
+But do NOT classify solely because a notification contains `₹`.
+
+Require multiple signals.
+
+For example:
+
+```text
+amount detected
++
+received/credited semantic signal
+```
+
+for RECEIVED.
+
+If uncertain:
+
+```text
+direction = UNKNOWN
+confidence = LOW
+```
+
+Then do not create a successful payment transaction.
+
+Create an observed event requiring review.
+
+---
+
+# 15. AMOUNT PARSER
+
+Support:
+
+```text
+₹500
+₹500.00
+INR 500
+Rs 500
+Rs. 500
+```
+
+Normalize:
+
+```text
+500
+500.00
+```
+
+Use `BigDecimal`.
+
+Never use:
+
+```kotlin
+Double
+Float
+```
+
+for money.
+
+---
+
+# 16. VPA/PAYER EXTRACTION
+
+If notification text contains a VPA, parse it.
+
+Example:
+
+```text
+rahul@ybl
+```
+
+Normalize:
+
+```text
+rahul@ybl
+```
+
+If unavailable:
+
+```text
+payerVpa = null
+```
+
+Never infer a VPA from a person's name.
+
+---
+
+# 17. PAYMENT ACCOUNT MATCHING
+
+After parsing:
+
+```text
+Observed event
+       ↓
+source package
+       ↓
+find enabled payment accounts
+       ↓
+paymentAppPackage matches
+       ↓
+UPI account association
+```
+
+Query:
+
+```sql
+SELECT *
+FROM payment_accounts
+WHERE organization_id IN (...)
+AND payment_app_package = ?
+AND detection_enabled = true;
+```
+
+If only one enabled account exists for that package:
+
+```text
+paymentAccountId = that account
+```
+
+If multiple accounts exist:
+
+```text
+paymentAccountId = unresolved
+```
+
+Do NOT randomly assign.
+
+---
+
+# 18. IMPORTANT MULTI-ACCOUNT LIMITATION
+
+Suppose the user has:
+
+```text
+PhonePe account A
+VPA A
+
+PhonePe account B
+VPA B
+```
+
+and PhonePe posts:
+
+```text
+₹500 received
+```
+
+If the notification does not expose the receiving VPA, the app cannot safely determine which VPA received it.
+
+Therefore:
+
+```text
+MATCHED
+UNMATCHED
+AMBIGUOUS
+```
+
+must exist as event-resolution states.
+
+```kotlin
+enum class PaymentMatchStatus {
+    MATCHED,
+    UNMATCHED,
+    AMBIGUOUS
+}
+```
+
+Never guess.
+
+---
+
+# 19. EVENT DEDUPLICATION
+
+Notifications can be posted/reposted.
+
+Create:
+
+```kotlin
+NotificationEventDeduplicator
+```
+
+Generate:
+
+```text
+eventFingerprint =
+SHA-256(
+    packageName +
+    notificationKey +
+    title +
+    text +
+    postTimeBucket
+)
+```
+
+Also maintain:
+
+```text
+sourcePackage
+notificationKey
+amount
+direction
+payer
+observedAt
+```
+
+in the database.
+
+Use a unique constraint where possible.
+
+Example:
+
+```sql
+UNIQUE(
+    organization_id,
+    source_package,
+    source_notification_key
+)
+```
+
+If notification keys are unstable across reposts, use a secondary normalized fingerprint.
+
+---
+
+# 20. ROOM ENTITY
+
+Create:
+
+```kotlin
+@Entity(
+    tableName = "observed_payment_events",
+    indices = [
+        Index(
+            value = [
+                "organizationId",
+                "eventFingerprint"
+            ],
+            unique = true
+        )
+    ]
+)
+data class ObservedPaymentEventEntity(
+
+    @PrimaryKey
+    val id: String,
+
+    val organizationId: String?,
+
+    val paymentAccountId: String?,
+    val qrId: String?,
+
+    val sourcePackage: String,
+    val sourceApp: String,
+
+    val direction: String,
+
+    val amountMinor: Long?,
+
+    val currency: String,
+
+    val payerName: String?,
+    val payerVpa: String?,
+
+    val reference: String?,
+
+    val notificationTitle: String?,
+    val notificationText: String?,
+
+    val eventFingerprint: String,
+
+    val matchStatus: String,
+    val verificationStatus: String,
+
+    val observedAt: Long,
+
+    val syncState: String
+)
+```
+
+Use minor units:
+
+```text
+₹500
+→ 50000 paise
+```
+
+if your existing money architecture uses integer minor units.
+
+---
+
+# 21. DO NOT TRUST CLIENT-SUPPLIED ORGANIZATION
+
+The Android app must NOT simply say:
+
+```json
+{
+  "organizationId": "org_123"
+}
+```
+
+and have the server trust it.
+
+The server determines:
+
+```text
+authenticated user
+        ↓
+device
+        ↓
+organization membership
+        ↓
+authorized organization
+```
+
+Then accepts the event.
+
+---
+
+# 22. API
+
+Create:
+
+```text
+POST /v1/payment-events/observed
 ```
 
 Request:
 
 ```json
 {
-  "organizations": [
-    {
-      "organizationId": "org_123",
-      "cursor": 1858
-    },
-    {
-      "organizationId": "org_456",
-      "cursor": 91
-    }
-  ]
+  "clientEventId": "evt_local_123",
+  "source": {
+    "type": "NOTIFICATION_PHONEPE",
+    "packageName": "com.phonepe.app"
+  },
+  "paymentAccountId": "pa_123",
+  "qrId": null,
+  "amountMinor": 50000,
+  "currency": "INR",
+  "direction": "RECEIVED",
+  "payerName": "Rahul",
+  "payerVpa": "rahul@ybl",
+  "reference": null,
+  "observedAt": "2026-09-21T10:42:00Z",
+  "verificationStatus": "OBSERVED",
+  "matchStatus": "MATCHED",
+  "fingerprint": "..."
 }
 ```
 
-Response:
+Server response:
 
 ```json
 {
-  "organizations": [
-    {
-      "organizationId": "org_123",
-      "nextCursor": 1861,
-      "hasMore": false,
-      "changes": [
-        {
-          "sequence": 1859,
-          "type": "payment.received",
-          "entityId": "txn_1"
-        },
-        {
-          "sequence": 1860,
-          "type": "staff.joined",
-          "entityId": "member_1"
-        },
-        {
-          "sequence": 1861,
-          "type": "payment.received",
-          "entityId": "txn_2"
-        }
-      ]
-    }
-  ]
-}
-```
-
-Never allow the client to retrieve an organization it does not belong to.
-
----
-
-# 26. SERVER EVENT SEQUENCE
-
-Each organization should have a monotonic event sequence.
-
-Example:
-
-```text
-organization 123
-
-1857
-1858
-1859
-1860
-1861
-```
-
-Store:
-
-```text
-organizationId
-sequence
-eventType
-entityType
-entityId
-payload
-createdAt
-```
-
-Unique:
-
-```text
-(organizationId, sequence)
-```
-
-This enables reliable synchronization.
-
----
-
-# 27. OUTBOX PATTERN
-
-For important events:
-
-```text
-DB transaction
-    │
-    ├── update transaction
-    ├── create notification/event
-    └── create outbox event
-             │
-             ▼
-        transaction commits
-             │
-             ▼
-       worker processes
-             │
-       ┌─────┴─────┐
-       ▼           ▼
-      FCM        sync event
-```
-
-Never send FCM first and then save the transaction.
-
-Otherwise:
-
-```text
-FCM sent
-DB transaction failed
-```
-
-creates a notification for something that does not exist.
-
----
-
-# 28. ROOM DATABASE
-
-Create local entities for:
-
-```text
-OrganizationEntity
-OrganizationMemberEntity
-OrganizationInviteEntity
-DeviceEntity
-NotificationEntity
-TransactionEntity
-UpiAccountEntity
-SyncCursorEntity
-```
-
-Example:
-
-```kotlin
-@Entity(
-    tableName = "sync_cursors",
-    primaryKeys = ["organizationId"]
-)
-data class SyncCursorEntity(
-    val organizationId: String,
-    val sequence: Long,
-    val lastSuccessfulSync: Long?
-)
-```
-
-Use organization ID as part of local data identity where appropriate.
-
----
-
-# 29. ROOM QUERY EXAMPLES
-
-Active organizations:
-
-```kotlin
-@Query("""
-    SELECT * FROM organizations
-    WHERE membershipStatus = 'ACTIVE'
-    ORDER BY name
-""")
-fun observeOrganizations():
-    Flow<List<OrganizationEntity>>
-```
-
-Pending invitations:
-
-```kotlin
-@Query("""
-    SELECT * FROM organization_invites
-    WHERE status = 'PENDING'
-    ORDER BY createdAt DESC
-""")
-fun observePendingInvites():
-    Flow<List<OrganizationInviteEntity>>
-```
-
-Organization transactions:
-
-```kotlin
-@Query("""
-    SELECT * FROM transactions
-    WHERE organizationId = :organizationId
-    ORDER BY occurredAt DESC
-""")
-fun observeTransactions(
-    organizationId: String
-): Flow<List<TransactionEntity>>
-```
-
----
-
-# 30. REPOSITORY PATTERN
-
-Android:
-
-```text
-UI
- ↓
-ViewModel
- ↓
-Repository
- ↓
-Room + API
-```
-
-Example:
-
-```kotlin
-class OrganizationRepository(
-    private val api: OrganizationApi,
-    private val dao: OrganizationDao,
-    private val dataStore: UserPreferences
-) {
-
-    fun observeOrganizations():
-        Flow<List<OrganizationEntity>> =
-        dao.observeOrganizations()
-
-    suspend fun switchOrganization(
-        organizationId: String
-    ) {
-        dataStore.setActiveOrganization(
-            organizationId
-        )
-    }
-
-    suspend fun acceptInvitation(
-        inviteId: String
-    ) {
-        api.acceptInvitation(inviteId)
-        refreshOrganizations()
-    }
+  "accepted": true,
+  "eventId": "evt_server_123",
+  "transactionId": "txn_123",
+  "status": "OBSERVED"
 }
 ```
 
 ---
 
-# 31. VIEWMODEL
+# 23. SERVER VALIDATION
 
-Create/use:
-
-```kotlin
-class OrganizationViewModel(
-    private val repository: OrganizationRepository
-) : ViewModel() {
-
-    val organizations =
-        repository.observeOrganizations()
-            .stateIn(
-                viewModelScope,
-                SharingStarted.WhileSubscribed(5000),
-                emptyList()
-            )
-
-    val invitations =
-        repository.observePendingInvites()
-            .stateIn(
-                viewModelScope,
-                SharingStarted.WhileSubscribed(5000),
-                emptyList()
-            )
-
-    fun acceptInvite(id: String) {
-        viewModelScope.launch {
-            repository.acceptInvitation(id)
-        }
-    }
-
-    fun switchOrganization(id: String) {
-        viewModelScope.launch {
-            repository.switchOrganization(id)
-        }
-    }
-}
-```
-
-Adapt this to the project's existing architecture instead of duplicating ViewModels.
-
----
-
-# 32. RBAC
-
-Server-side permissions are mandatory.
-
-Example:
+Use Zod.
 
 ```ts
-const PERMISSIONS = {
-  STAFF_READ: "staff.read",
-  STAFF_MANAGE: "staff.manage",
+const observedPaymentEventSchema = z.object({
+  clientEventId: z.string().min(1).max(128),
 
-  ORGANIZATION_READ: "organization.read",
-  ORGANIZATION_MANAGE: "organization.manage",
+  source: z.object({
+    type: z.enum([
+      "NOTIFICATION_PHONEPE",
+      "NOTIFICATION_GPAY"
+    ]),
+    packageName: z.string()
+  }),
 
-  TRANSACTIONS_READ: "transactions.read",
-  TRANSACTIONS_EXPORT: "transactions.export",
+  paymentAccountId: z.string().nullable(),
 
-  ACCOUNTS_READ: "accounts.read",
-  ACCOUNTS_MANAGE: "accounts.manage",
+  qrId: z.string().nullable(),
 
-  UPI_READ: "upi.read",
-  UPI_MANAGE: "upi.manage",
+  amountMinor: z.number().int().positive().nullable(),
 
-  REPORTS_READ: "reports.read",
-} as const;
+  currency: z.literal("INR"),
+
+  direction: z.enum([
+    "RECEIVED",
+    "SENT",
+    "UNKNOWN"
+  ]),
+
+  payerName: z.string().max(200).nullable(),
+
+  payerVpa: z.string().max(255).nullable(),
+
+  reference: z.string().max(255).nullable(),
+
+  observedAt: z.string().datetime(),
+
+  verificationStatus:
+    z.literal("OBSERVED"),
+
+  matchStatus: z.enum([
+    "MATCHED",
+    "UNMATCHED",
+    "AMBIGUOUS"
+  ]),
+
+  fingerprint: z.string().min(32).max(128)
+});
 ```
-
-Example:
-
-```text
-OWNER
-    all organization permissions
-
-MANAGER
-    staff.read
-    staff.manage
-    transactions.read
-    reports.read
-    accounts.read
-    upi.read
-
-ACCOUNTANT
-    transactions.read
-    reports.read
-
-CASHIER
-    transactions.read
-```
-
-Use the existing RBAC model if one already exists.
-
-UI hiding is not security.
 
 ---
 
-# 33. ORGANIZATION SECURITY
+# 24. SERVER AUTHORIZATION
 
-Every organization-scoped server operation must verify:
-
-```text
-JWT
- ↓
-user
- ↓
-organization membership
- ↓
-membership ACTIVE
- ↓
-permission
- ↓
-resource belongs to organization
- ↓
-operation
-```
-
-Never authorize using:
+Processing order:
 
 ```text
-organizationId supplied by client
+Authentication
+      ↓
+Device session
+      ↓
+Organization membership
+      ↓
+Permission
+      ↓
+Payment account ownership
+      ↓
+Idempotency
+      ↓
+Validation
+      ↓
+Insert event
+      ↓
+Create transaction
+      ↓
+Outbox event
 ```
 
-alone.
+Required permission:
+
+```text
+transactions.create
+```
+
+or create a dedicated:
+
+```text
+payment_events.ingest
+```
+
+permission for detection devices.
+
+Recommended:
+
+```text
+payment_events.ingest
+```
 
 ---
 
-# 34. NOTIFICATION SECURITY
+# 25. TRANSACTION RECORD
 
-Do not put sensitive information into FCM payloads unnecessarily.
-
-Prefer:
-
-```json
-{
-  "type": "payment.received",
-  "organizationId": "org_123",
-  "eventSequence": 1861
-}
-```
-
-Then fetch authoritative information through authenticated API sync.
-
-Do not send:
-
-```text
-UPI PIN
-OTP
-password
-JWT
-refresh token
-bank password
-API key
-full sensitive account credentials
-```
-
-through FCM.
-
----
-
-# 35. LOGOUT
-
-When a user logs out:
-
-```text
-revoke session
-```
-
-and appropriately deactivate/unregister the device session.
-
-If Google Credential Manager is being used, integrate the appropriate credential-state clearing behavior on sign-out according to the Android Credential Manager implementation.
-
-Do not delete the device record merely because the user logs out if you need historical device/audit information. Mark it inactive instead.
-
----
-
-# 36. MULTIPLE DEVICES
-
-Test:
-
-```text
-User A
- ├── Nothing Phone
- ├── another Android phone
- └── tablet
-```
-
-All devices must:
-
-```text
-login
-register device
-receive notifications
-sync independently
-store their own sync cursor
-```
-
-If Phone A is offline:
-
-```text
-Phone B receives event
-Server remains authoritative
-Phone A later reconnects
-Phone A syncs missing sequence numbers
-```
-
-The system must converge.
-
----
-
-# 37. OFFLINE BEHAVIOR
-
-The app must remain useful offline.
-
-Allowed offline:
-
-```text
-view cached organizations
-view cached transactions
-view cached staff
-view cached UPI accounts
-view cached reports
-view cached notifications
-```
-
-Safe queued operations may be supported.
-
-Never manufacture financial success offline.
-
-For example:
-
-```text
-UPI payment initiated
-```
-
-can be:
-
-```text
-PENDING
-```
-
-until authoritative confirmation exists.
-
----
-
-# 38. CONFLICT HANDLING
-
-When the server has newer information:
-
-```text
-SERVER_WINS
-```
-
-for authoritative financial state.
-
-For user preferences:
-
-```text
-last-write-wins
-```
-
-may be appropriate.
-
-For membership/role/security changes:
-
-```text
-server authoritative
-```
-
-Always document the conflict strategy in code.
-
----
-
-# 39. API RATE LIMITING
-
-Add rate limits to:
-
-```text
-invite creation
-invite acceptance
-invite rejection
-device registration
-sync
-notification registration
-```
-
-Example:
-
-```text
-staff invites:
-20/hour/user/organization
-```
-
-Use the existing rate-limiter implementation and make limits configurable.
-
----
-
-# 40. AUDIT LOGGING
-
-Create audit events:
-
-```text
-staff.invited
-staff.invite.accepted
-staff.invite.rejected
-staff.invite.cancelled
-staff.joined
-staff.removed
-staff.role.changed
-organization.switched
-device.registered
-device.removed
-notification.preference.changed
-```
-
-Do not store secrets in audit metadata.
-
----
-
-# 41. TRANSACTIONAL INTEGRITY
-
-Invitation acceptance must not partially succeed.
-
-Bad:
-
-```text
-membership created
-invite update failed
-```
-
-Good:
-
-```text
-DB transaction:
-    create membership
-    mark invite accepted
-    create event
-    commit
-```
-
-All or nothing.
-
----
-
-# 42. IDEMPOTENCY
-
-Accepting the same invitation twice should not create duplicate memberships.
-
-Inviting the same person twice should detect an existing active invitation.
-
-Use idempotency where appropriate:
-
-```http
-Idempotency-Key: <uuid>
-```
-
-for important mutating requests.
-
----
-
-# 43. ERROR STATES
-
-Android must handle:
-
-```text
-INVITE_NOT_FOUND
-INVITE_EXPIRED
-INVITE_ALREADY_ACCEPTED
-INVITE_ALREADY_REJECTED
-ALREADY_MEMBER
-INSUFFICIENT_PERMISSION
-ORGANIZATION_NOT_FOUND
-USER_NOT_FOUND
-RATE_LIMITED
-NETWORK_ERROR
-SYNC_CONFLICT
-SESSION_EXPIRED
-```
-
-Provide useful UI messages.
-
-Do not expose raw server stack traces.
-
----
-
-# 44. PUSH NOTIFICATION FAILURE
-
-FCM delivery isn't guaranteed.
-
-Therefore:
-
-```text
-FCM = wake/notification mechanism
-API sync = source of truth
-```
-
-If FCM fails:
-
-```text
-periodic WorkManager
-+
-app startup
-+
-manual sync
-```
-
-still recovers the state.
-
-Remove stale FCM tokens when the provider indicates they are invalid.
-
----
-
-# 45. SYNC RECOVERY
-
-If:
-
-```text
-client cursor = 100
-server earliest available event = 500
-```
-
-because old events were compacted, return:
-
-```json
-{
-  "requiresFullSync": true
-}
-```
-
-Android then:
-
-```text
-clear organization cache
-↓
-fetch current organization snapshot
-↓
-store current cursor
-```
-
-Do not attempt to replay unavailable events forever.
-
----
-
-# 46. ORGANIZATION SWITCH SYNC
-
-When the user switches:
-
-```text
-Firm A → Firm B
-```
-
-perform:
-
-```text
-save active organization
-       ↓
-load cached Firm B
-       ↓
-start sync Firm B
-       ↓
-refresh dashboard
-       ↓
-refresh notifications
-       ↓
-refresh staff
-       ↓
-refresh UPI accounts
-       ↓
-refresh transactions
-```
-
-Never mix Firm A and Firm B transaction lists.
-
----
-
-# 47. DASHBOARD
-
-The dashboard top bar should observe:
-
-```kotlin
-activeOrganization
-```
-
-and render:
-
-```text
-[ Firm Name ▼ ]
-```
-
-All dashboard repositories should receive:
-
-```text
-activeOrganizationId
-```
-
-rather than maintaining independent copies of the active organization.
-
-Use one source of truth.
-
----
-
-# 48. NOTIFICATION SCREEN
+When an observed RECEIVED event is accepted:
 
 Create:
 
 ```text
-Notifications
-```
-
-grouped by:
-
-```text
-Today
-Yesterday
-Earlier
-```
-
-Types:
-
-```text
-Payment received
-Payment failed
-Payment reversed
-Staff invitation
-Staff joined
-Security
-Sync
-```
-
-Tapping:
-
-```text
-staff invitation
-```
-
-opens invitation.
-
-Tapping:
-
-```text
-payment
-```
-
-opens transaction detail.
-
----
-
-# 49. STAFF INVITE NOTIFICATION
-
-Push:
-
-```text
-New staff invitation
-
-Sandesh Collection
-Role: Cashier
-
-Tap to review
-```
-
-Deep link:
-
-```text
-upieasy://organization/{organizationId}/invitation/{inviteId}
-```
-
-If the app isn't installed/open, the normal notification should route to the appropriate screen after authentication.
-
-Never put authorization information in the deep-link URL itself.
-
----
-
-# 50. PAYMENT NOTIFICATION
-
-Example:
-
-```text
-Payment received
-
-₹2,500
-Sandesh Collection
-
-Tap to view
-```
-
-Deep link:
-
-```text
-upieasy://organization/{organizationId}/transaction/{transactionId}
-```
-
-Server authorization must still happen when opening the transaction.
-
-A deep link is not proof of permission.
-
----
-
-# 51. ANDROID NAVIGATION
-
-Add routes such as:
-
-```text
-dashboard
-staff
-staff/invitations
-staff/invite
-organizations
-organizations/{organizationId}
-notifications
-transactions/{transactionId}
-settings
-settings/organizations
-settings/notifications
-```
-
-Protect organization routes using the active authenticated session and server authorization.
-
----
-
-# 52. HILT
-
-If Hilt is already used, register:
-
-```text
-Credential/Api services
-OrganizationRepository
-NotificationRepository
-SyncRepository
-WorkManager worker
-Room DAOs
-FCM service
-DataStore
-```
-
-Do not introduce another dependency injection framework.
-
----
-
-# 53. FCM SERVICE
-
-Use:
-
-```kotlin
-class UpiEasyFirebaseMessagingService :
-    FirebaseMessagingService() {
-
-    override fun onNewToken(token: String) {
-        // Persist locally.
-        // Register/update with backend when authenticated.
-    }
-
-    override fun onMessageReceived(
-        message: RemoteMessage
-    ) {
-        // Parse event metadata.
-        // Schedule WorkManager sync.
-        // Display notification if appropriate.
-    }
-}
-```
-
-Do not perform large database synchronization directly inside `onMessageReceived`.
-
-Schedule WorkManager.
-
----
-
-# 54. BATTERY OPTIMIZATION
-
-Do not request exemption from battery optimization by default.
-
-The app should work correctly under normal Android background restrictions.
-
-Use:
-
-```text
-FCM
-+
-WorkManager
-+
-network constraints
-+
-backoff
-+
-foreground sync when app is active
-```
-
-Only show battery-optimization guidance if a device manufacturer or Android configuration is materially preventing expected notification/sync behavior.
-
-Never claim guaranteed real-time delivery when Android cannot guarantee it.
-
----
-
-# 55. SERVER WORKERS
-
-Use the existing Cloudflare Worker architecture.
-
-Prefer modular workers/services:
-
-```text
-src/
-├── modules/
-│   ├── organizations/
-│   ├── staff/
-│   ├── notifications/
-│   ├── devices/
-│   ├── sync/
-│   └── transactions/
-│
-├── workers/
-│   ├── notification.worker.ts
-│   ├── sync.worker.ts
-│   └── reconciliation.worker.ts
-│
-├── db/
-├── middleware/
-├── lib/
-└── app.ts
-```
-
-Do not create microservices unnecessarily.
-
-A modular monolith + queues is sufficient at this stage.
-
----
-
-# 56. CLOUDFLARE QUEUES
-
-If the existing project uses Cloudflare Queues, create queues/bindings for:
-
-```text
-notification-events
-sync-events
-reconciliation-events
-```
-
-Otherwise use the project's existing async mechanism.
-
-Don't introduce another queue provider merely for this feature.
-
----
-
-# 57. SERVER API LIST
-
-Implement or repair:
-
-```http
-POST /api/v1/organizations/:organizationId/invites
-
-GET /api/v1/me/invitations
-
-POST /api/v1/invitations/:inviteId/accept
-
-POST /api/v1/invitations/:inviteId/reject
-
-POST /api/v1/invitations/:inviteId/cancel
-
-GET /api/v1/me/organizations
-
-POST /api/v1/devices/register
-
-POST /api/v1/devices/unregister
-
-GET /api/v1/organizations/:organizationId/notifications
-
-POST /api/v1/organizations/:organizationId/notifications/:id/read
-
-GET /api/v1/organizations/:organizationId/sync
-
-POST /api/v1/sync
-```
-
-Adapt routes if the existing project has a different convention.
-
-Do not create duplicate endpoints.
-
----
-
-# 58. API RESPONSE FORMAT
-
-Follow the existing API response convention.
-
-If none exists, standardize:
-
-Success:
-
-```json
-{
-  "success": true,
-  "data": {}
-}
-```
-
-Error:
-
-```json
-{
-  "success": false,
-  "error": {
-    "code": "INVITE_EXPIRED",
-    "message": "This invitation has expired."
-  }
-}
-```
-
-Never expose database errors to clients.
-
----
-
-# 59. TESTS
-
-Implement server tests for:
-
-```text
-invite existing user
-invite non-existing user
-invite self
-duplicate invitation
-duplicate active membership
-accept invitation
-reject invitation
-expired invitation
-cancel invitation
-wrong recipient attempts acceptance
-unauthorized manager attempts restricted operation
-multiple organization membership
-organization switch
-device registration
-multiple devices
-notification preferences
-payment notification routing
-sync cursor
-missing events
-full resync
-session expiration
-```
-
-Android tests:
-
-```text
-organization list
-active organization persistence
-switch organization
-invite screen
-pending invitations
-accept invitation
-reject invitation
-notification deep link
-Room sync
-WorkManager retry
-FCM token registration
-multiple-device behavior
-offline behavior
-```
-
----
-
-# 60. IMPORTANT SECURITY TEST
-
-Attempt:
-
-```http
-POST /api/v1/invitations/{inviteId}/accept
-```
-
-as a different authenticated user.
-
-Expected:
-
-```text
-403
-```
-
-Attempt:
-
-```http
-GET /api/v1/organizations/{otherOrg}/transactions
-```
-
-without membership.
-
-Expected:
-
-```text
-403
-```
-
-Attempt:
-
-```http
-POST /api/v1/organizations/{otherOrg}/invites
-```
-
-without permission.
-
-Expected:
-
-```text
-403
-```
-
-Never rely on Android UI hiding buttons.
-
----
-
-# 61. MIGRATION
-
-Generate Drizzle migration.
-
-Before applying:
-
-```text
-inspect existing schema
-check foreign keys
-check existing organization/member tables
-check existing indexes
-```
-
-Do not destroy existing production data.
-
-If an existing staff/member system exists, migrate it into the new membership model rather than duplicating it.
-
-Run:
-
-```text
-pnpm db:generate
-pnpm db:migrate
-```
-
-or the repository's existing equivalents.
-
----
-
-# 62. ANDROID BUILD VALIDATION
-
-Run:
-
-```bash
-./gradlew assembleDebug
-./gradlew test
-./gradlew lint
-```
-
-If configured:
-
-```bash
-./gradlew installDebug
-```
-
-Do not require Android Studio.
-
-The project must work with:
-
-```text
-JDK 17
-Gradle Wrapper
-Android SDK
-ADB
-VS Code
-```
-
----
-
-# 63. SERVER VALIDATION
-
-Run:
-
-```bash
-pnpm install
-pnpm typecheck
-pnpm lint
-pnpm test
-pnpm build
-```
-
-If applicable:
-
-```bash
-npx wrangler deploy
-```
-
-Do not use a development-only configuration in production.
-
-Verify Cloudflare bindings/secrets exist.
-
----
-
-# 64. PRODUCTION CONFIGURATION
-
-Verify:
-
-```text
-DATABASE_URL
-JWT_SECRET
-FCM credentials
-Google configuration
-CORS
-API_BASE_URL
-Cloudflare bindings
-Queue bindings
-```
-
-Never expose secrets to Android.
-
----
-
-# 65. LOGGING
-
-Server logs should include:
-
-```text
-requestId
-userId
-organizationId
-eventType
-deviceId where appropriate
-status
-latency
-```
-
-Do NOT log:
-
-```text
-UPI PIN
-OTP
-JWT
-refresh token
-Google ID token
-FCM token unnecessarily
-bank password
-card CVV
-```
-
-Avoid logging full mobile numbers unless operationally required.
-
----
-
-# 66. OBSERVABILITY
-
-Use the project's existing Sentry/Pino integration.
-
-Track:
-
-```text
-invite creation failure
-invite acceptance failure
-FCM registration failure
-notification worker failure
-sync failure
-database failure
-organization authorization failure
-```
-
-Add useful context:
-
-```text
-organizationId
-userId
-deviceId
-requestId
-```
-
-without secrets.
-
----
-
-# 67. PERFORMANCE
-
-Do not query every user's entire organization list for every payment.
-
-For payment notification:
-
-```text
-payment
- ↓
-organizationId
- ↓
-active members
- ↓
-notification preferences
- ↓
-active devices
-```
-
-Use indexed columns:
-
-```text
-organization_id
-user_id
-invited_user_id
-status
-fcm_token
-```
-
-Recommended indexes:
-
-```text
-organization_members(organization_id)
-organization_members(user_id)
-organization_members(organization_id, user_id)
-organization_invites(invited_user_id, status)
-organization_invites(organization_id, status)
-devices(user_id)
-devices(user_id, is_active)
-notifications(user_id, created_at)
-notifications(organization_id, created_at)
-```
-
----
-
-# 68. UX REQUIREMENT
-
-Use Material 3 / existing UPI-Easy design system.
-
-Staff invitation should have:
-
-```text
-large touch targets
-clear role selection
-validation
-loading state
-success state
-error state
-empty state
-offline state
-```
-
-Firm switcher should feel like a lightweight account/workspace switcher.
-
-Do not make switching firms feel like logging out.
-
----
-
-# 69. ACCEPTANCE CRITERIA
-
-The implementation is complete only when this exact scenario works:
-
-### Device A
-
-User A logs in.
-
-Creates:
-
-```text
-Sandesh Collection
-```
-
-User A is:
-
-```text
-OWNER
-```
-
-### Device B
-
-User B logs in using their own UPI-Easy account.
-
-### Device A
-
-User A opens:
-
-```text
-Staff
-→ Invite Staff
-```
-
-Enters:
-
-```text
-Mobile: User B's registered mobile
-Name: Rahul
-Email: optional
-Role: CASHIER
-```
-
-Presses:
-
-```text
-Send Invitation
-```
-
-### Server
-
-Creates:
-
-```text
-organization_invites
+transaction
 ```
 
 with:
 
 ```text
-invitedUserId = User B
-status = PENDING
+status:
+PENDING
 ```
 
-and creates:
+or:
 
 ```text
-notification
+UNKNOWN
 ```
 
-Then sends FCM to User B's active devices.
+depending on existing transaction semantics.
 
-### Device B
-
-User B receives:
+Do NOT use:
 
 ```text
-New staff invitation
-Sandesh Collection
-Role: Cashier
+SUCCESS
 ```
 
-Opening the notification navigates to:
+for notification-only events.
+
+Recommended:
 
 ```text
-Staff → Invitations
+transaction.status = UNKNOWN
+
+transaction.verificationStatus = OBSERVED
 ```
 
-User B presses:
+This prevents the dashboard from presenting an unverified notification as a confirmed bank settlement.
+
+---
+
+# 26. OUTBOX
+
+Inside the same DB transaction:
 
 ```text
-Accept
+INSERT observed_payment_event
+INSERT transaction
+INSERT outbox_event
 ```
 
-### Server
-
-Atomically:
+Outbox:
 
 ```text
-organization_members
-    User B
-    Sandesh Collection
-    CASHIER
-    ACTIVE
-
-organization_invites
-    ACCEPTED
+PAYMENT_OBSERVED
 ```
 
-Creates:
+Payload:
 
-```text
-staff.joined
+```json
+{
+  "transactionId": "txn_123",
+  "organizationId": "org_123",
+  "paymentAccountId": "pa_123",
+  "amountMinor": 50000,
+  "source": "NOTIFICATION_PHONEPE"
+}
 ```
 
-event.
+---
 
-### Device B
+# 27. NOTIFICATION WORKER
 
-`GET /me` / sync returns:
+Existing worker architecture should process:
 
 ```text
-Sandesh Collection
+PAYMENT_OBSERVED
+```
+
+Flow:
+
+```text
+Outbox
+   ↓
+Notification Worker
+   ↓
+Find organization members
+   ↓
+Check role
+   ↓
+Check notification preferences
+   ↓
+Find active devices
+   ↓
+Send FCM
+```
+
+Roles:
+
+```text
+OWNER
+MANAGER
+ACCOUNTANT
 CASHIER
 ```
 
-Firm appears in:
-
-```text
-Dashboard top switcher
-Settings → Firms & Organizations
-```
-
-### Device A
-
-Owner receives:
-
-```text
-Rahul joined Sandesh Collection
-```
-
-### Payment
-
-A confirmed payment arrives for a UPI account belonging to:
-
-```text
-Sandesh Collection
-```
-
-Server creates:
-
-```text
-payment.received
-```
-
-event.
-
-Every authorized active device with:
-
-```text
-paymentReceived = true
-```
-
-receives notification.
-
-### Offline test
-
-Device B is offline.
-
-Payment occurs.
-
-Device B later reconnects.
-
-WorkManager syncs.
-
-Device B receives the missing transaction through incremental sync.
-
-No duplicate transaction is created.
-
-### Multi-firm test
-
-User B also belongs to:
-
-```text
-Firm X
-Firm Y
-Firm Z
-```
-
-Switching:
-
-```text
-Firm X → Firm Y
-```
-
-changes all organization-scoped dashboard data.
-
-Firm X data must never appear under Firm Y.
+Use the existing role/permission system.
 
 ---
 
-# 70. DO NOT DO THESE THINGS
+# 28. FCM PAYLOAD
 
-Never:
+Do not send sensitive full notification text unnecessarily.
 
-```text
-create duplicate user accounts for each firm
+Use:
+
+```json
+{
+  "type": "PAYMENT_OBSERVED",
+  "transactionId": "txn_123",
+  "organizationId": "org_123",
+  "amountMinor": "50000",
+  "currency": "INR",
+  "source": "PHONEPE"
+}
 ```
 
-Never:
-
-```text
-trust client-supplied organization membership
-```
-
-Never:
-
-```text
-trust client-supplied role
-```
-
-Never:
-
-```text
-trust client-supplied payment success
-```
-
-Never:
-
-```text
-store one FCM token per user
-```
-
-Never:
-
-```text
-use FCM as the authoritative database
-```
-
-Never:
-
-```text
-depend exclusively on background execution
-```
-
-Never:
-
-```text
-store UPI PIN
-```
-
-Never:
-
-```text
-store bank password
-```
-
-Never:
-
-```text
-send authentication secrets through notifications
-```
-
-Never:
-
-```text
-mix cached data between organizations
-```
-
-Never:
-
-```text
-delete financial records simply because the user changes firms
-```
+The receiving app fetches authoritative event details through the API if necessary.
 
 ---
 
-# 71. DELIVERABLES
+# 29. ANDROID FCM HANDLING
 
-After implementation, provide:
+FCM is a delivery/trigger mechanism.
+
+It is NOT the database.
+
+Flow:
 
 ```text
-1. Files created
-2. Files modified
-3. Database migration
-4. API routes
-5. Android screens/components
-6. Room entities/DAOs
-7. WorkManager implementation
-8. FCM implementation
-9. Notification flow
-10. Organization switcher
-11. Staff invitation flow
-12. RBAC changes
-13. Tests added
-14. Commands executed
-15. Build/test results
-16. Any unresolved issues
+FCM received
+      ↓
+Save lightweight event
+      ↓
+Trigger sync
+      ↓
+GET /payment-events?cursor=...
+      ↓
+Room
+      ↓
+UI
 ```
 
-Also provide a final architecture diagram showing:
+Do not rely on FCM payload alone for accounting.
+
+---
+
+# 30. WORKMANAGER
+
+Create:
 
 ```text
-Android
+PaymentEventSyncWorker
+```
+
+Responsibilities:
+
+```text
+Upload pending observed events
+Download server-side events
+Resolve conflicts
+Update sync cursor
+Retry failures
+```
+
+Constraints:
+
+```kotlin
+Constraints.Builder()
+    .setRequiredNetworkType(
+        NetworkType.CONNECTED
+    )
+    .build()
+```
+
+Use exponential backoff.
+
+Do not create an infinite foreground service.
+
+---
+
+# 31. OFFLINE FLOW
+
+If payment notification arrives while offline:
+
+```text
+PhonePe
  ↓
-Hono
+NotificationListener
  ↓
-Neon
+Parser
  ↓
-Outbox
+Room
  ↓
-Cloudflare Worker/Queue
- ↓
-FCM
- ↓
-Android
+syncState = PENDING_UPLOAD
+```
+
+Later:
+
+```text
+Network available
  ↓
 WorkManager
  ↓
-Sync API
+Upload
+```
+
+Never lose the local event merely because the server is unavailable.
+
+---
+
+# 32. NOTIFICATION ACCESS UI
+
+Create:
+
+```text
+Settings
+ → Payment Detection
+```
+
+Screen:
+
+```text
+Payment Detection
+
+Detect payments from installed UPI apps.
+
+PhonePe
+● Enabled
+
+Google Pay
+○ Not enabled
+
+Notification Access
+Connected
+```
+
+For each selected payment app:
+
+```text
+Payment detection
+[ ON ]
+
+Notification access
+[ Connected ]
+```
+
+If permission is missing:
+
+```text
+Notification access required
+
+UPI-Easy needs Android notification
+access to observe payment notifications
+from PhonePe.
+
+[ Enable Access ]
+```
+
+Open:
+
+```kotlin
+startActivity(
+    Intent(
+        Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS
+    )
+)
+```
+
+Android provides this system settings action for notification-listener access.
+
+---
+
+# 33. VERIFY ACCESS STATE
+
+Do not assume the user granted permission after returning from settings.
+
+Check:
+
+```kotlin
+NotificationManager
+    .isNotificationListenerAccessGranted(
+        ComponentName(
+            context,
+            PaymentNotificationListenerService::class.java
+        )
+    )
+```
+
+Update UI accordingly.
+
+---
+
+# 34. ADD PAYMENT ACCOUNT FLOW
+
+Exact flow:
+
+```text
+UPI
  ↓
+Add Payment Account
+ ↓
+Detect installed supported payment apps
+ ↓
+Show selector
+ ↓
+User selects PhonePe
+ ↓
+Enter UPI ID
+ ↓
+Enter account label
+ ↓
+Save
+ ↓
+Check notification access
+ ↓
+If missing:
+    show setup screen
+ ↓
+Enable notification access
+ ↓
+Return
+ ↓
+Verify access
+ ↓
+Payment Account = ACTIVE
+```
+
+If no supported payment app is installed:
+
+```text
+No supported UPI app found
+
+Install PhonePe or Google Pay
+to enable notification-based payment detection.
+```
+
+Do not make the feature unusable for users who only want QR generation.
+
+Instead allow:
+
+```text
+Continue without payment detection
+```
+
+with:
+
+```text
+Detection:
+Not configured
+```
+
+---
+
+# 35. QR GENERATION
+
+QR generation remains independent.
+
+Example UPI URI:
+
+```text
+upi://pay?
+pa=9827743085@ybl
+&pn=Sandesh%20Collection
+&cu=INR
+```
+
+URL-encode parameters correctly.
+
+Do not treat the generated QR itself as payment confirmation.
+
+QR generation:
+
+```text
+FREE
+LOCAL
+NO NETWORK REQUIRED
+```
+
+Payment observation:
+
+```text
+DEPENDS ON DEVICE NOTIFICATION
+```
+
+---
+
+# 36. MULTIPLE QR SCREEN
+
+Create:
+
+```text
+UPI
+```
+
+with:
+
+```text
+Payment Accounts
+
+┌──────────────────────────────┐
+│ PhonePe                      │
+│ 9827743085@ybl               │
+│ Detection ● Active           │
+│                              │
+│ 3 QR codes                   │
+└──────────────────────────────┘
+
+┌──────────────────────────────┐
+│ Google Pay                   │
+│ shop@okaxis                  │
+│ Detection ● Active           │
+│                              │
+│ 2 QR codes                   │
+└──────────────────────────────┘
+```
+
+Tap account:
+
+```text
+Main PhonePe
+
+9827743085@ybl
+
+Detection
+● Active
+
+Last payment observed
+₹1,250
+10:42 AM
+
+QR Codes
+
+Counter 1
+Counter 2
+Billing Desk
+
+[ Add QR ]
+[ Edit Account ]
+```
+
+---
+
+# 37. QR DETAIL
+
+Each QR:
+
+```text
+Counter 1
+
+[ QR IMAGE ]
+
+9827743085@ybl
+
+Status:
+Active
+
+Payment Account:
+Main PhonePe
+
+[ Share ]
+[ Save Image ]
+[ Edit ]
+[ Disable ]
+```
+
+If QR uses same VPA as another QR, show:
+
+```text
+QR-level payment identification:
+Limited
+
+Payments will be associated
+with the payment account unless
+the receiving notification contains
+enough information to identify the QR.
+```
+
+Do not falsely claim exact QR attribution.
+
+---
+
+# 38. PAYMENT EVENT UI
+
+Transaction list should distinguish:
+
+```text
+₹500
+Rahul
+
+Payment observed
+PhonePe
+
+10:42 AM
+```
+
+Badge:
+
+```text
+OBSERVED
+```
+
+Instead of:
+
+```text
+SUCCESS
+```
+
+If verified later:
+
+```text
+VERIFIED
+```
+
+If conflict:
+
+```text
+CONFLICT
+```
+
+---
+
+# 39. DASHBOARD
+
+Dashboard card:
+
+```text
+Today's Received
+
+₹24,500
+
+18 payments
+
+12 Verified
+6 Observed
+```
+
+Do not combine observed and verified values without clearly labeling them.
+
+Better:
+
+```text
+Received Today
+
+₹24,500
+
+Verified
+₹18,000
+
+Observed
+₹6,500
+```
+
+---
+
+# 40. PAYMENT DETAILS
+
+Payment detail:
+
+```text
+Payment
+
+₹500
+
+Observed
+PhonePe
+
+Payer:
+Rahul
+
+UPI:
+rahul@ybl
+
+Payment Account:
+Main PhonePe
+
+QR:
+Counter 1
+
+Observed:
+10:42:11 AM
+
+Verification:
+Not verified
+
+Source:
+Android notification
+```
+
+If QR cannot be established:
+
+```text
+QR:
+Not determined
+```
+
+---
+
+# 41. SECURITY
+
+Never collect:
+
+```text
+UPI PIN
+Bank password
+Debit card PIN
+CVV
+Payment authorization OTP
+Net banking password
+```
+
+Notification listener should only process payment-related notification content.
+
+Do not store arbitrary notification history.
+
+Do not upload the entire notification stream.
+
+---
+
+# 42. LOCAL DATA RETENTION
+
+For raw notification text:
+
+```text
+Keep minimum necessary data.
+```
+
+Prefer:
+
+```text
+parsed amount
+payer
+source
+timestamp
+reference
+```
+
+instead of permanently storing raw notification content.
+
+If raw text is retained for debugging:
+
+```text
+local only
+limited retention
+encrypted where appropriate
+user-controlled diagnostics
+```
+
+Production logging must never print full notification contents.
+
+---
+
+# 43. LOGGING
+
+Bad:
+
+```kotlin
+Log.d(
+    "PaymentListener",
+    "Notification = $text"
+)
+```
+
+Do not do this.
+
+Good:
+
+```kotlin
+Log.d(
+    "PaymentListener",
+    "Payment notification detected: " +
+    "package=$packageName"
+)
+```
+
+For debug builds only, optionally expose redacted parser diagnostics.
+
+---
+
+# 44. NOTIFICATION PARSER TESTING
+
+Create fixture tests.
+
+Example:
+
+```text
+PhonePeFixtures/
+    received_500.txt
+    received_1250.txt
+    payment_sent.txt
+    unrelated_notification.txt
+    malformed_notification.txt
+```
+
+Tests:
+
+```kotlin
+@Test
+fun phonePeReceivedPaymentIsParsed()
+```
+
+```kotlin
+@Test
+fun unrelatedPhonePeNotificationIsIgnored()
+```
+
+```kotlin
+@Test
+fun duplicateNotificationIsIgnored()
+```
+
+```kotlin
+@Test
+fun missingAmountDoesNotCreatePayment()
+```
+
+```kotlin
+@Test
+fun ambiguousAccountDoesNotGuess()
+```
+
+Google Pay equivalents:
+
+```text
+GooglePayFixtures/
+```
+
+IMPORTANT:
+
+Do not assume exact current PhonePe/GPay wording forever.
+
+Parser tests should be versioned and easy to update.
+
+---
+
+# 45. END-TO-END TEST
+
+Test:
+
+```text
+PhonePe notification
+      ↓
+NotificationListenerService
+      ↓
+PhonePeParser
+      ↓
+ParsedPaymentEvent
+      ↓
 Room
+      ↓
+WorkManager
+      ↓
+POST /payment-events/observed
+      ↓
+Cloudflare Worker
+      ↓
+Neon
+      ↓
+Outbox
+      ↓
+Notification Worker
+      ↓
+FCM
+      ↓
+Second Android device
+      ↓
+Room
+      ↓
+Transaction UI
 ```
 
-## FINAL ENGINEERING PRINCIPLE
+---
 
-The source of truth is:
+# 46. SERVER TABLES
+
+Ensure these exist:
 
 ```text
-SERVER + DATABASE
+payment_accounts
+qr_codes
+transactions
+observed_payment_events
+transaction_events
+notification_devices
+notifications
+notification_preferences
+outbox_events
+sync_cursors
+audit_logs
 ```
 
-Android is:
+Add relationships:
 
 ```text
-LOCAL CACHE + OFFLINE UI + SYNC CLIENT
+organization
+    ↓
+payment_account
+    ↓
+qr_code
+
+payment_account
+    ↓
+observed_payment_event
+    ↓
+transaction
 ```
 
-FCM is:
+---
+
+# 47. OBSERVED PAYMENT EVENT SCHEMA
+
+Recommended Drizzle shape:
+
+```ts
+export const observedPaymentEvents =
+  pgTable(
+    "observed_payment_events",
+    {
+      id: text("id").primaryKey(),
+
+      organizationId:
+        text("organization_id")
+          .notNull()
+          .references(
+            () => organizations.id
+          ),
+
+      paymentAccountId:
+        text("payment_account_id")
+          .references(
+            () => paymentAccounts.id
+          ),
+
+      qrId:
+        text("qr_id")
+          .references(
+            () => qrCodes.id
+          ),
+
+      sourceType:
+        text("source_type")
+          .notNull(),
+
+      sourcePackage:
+        text("source_package")
+          .notNull(),
+
+      amountMinor:
+        bigint(
+          "amount_minor",
+          { mode: "number" }
+        ),
+
+      currency:
+        text("currency")
+          .notNull()
+          .default("INR"),
+
+      direction:
+        text("direction")
+          .notNull(),
+
+      payerName:
+        text("payer_name"),
+
+      payerVpa:
+        text("payer_vpa"),
+
+      reference:
+        text("reference"),
+
+      eventFingerprint:
+        text("event_fingerprint")
+          .notNull(),
+
+      matchStatus:
+        text("match_status")
+          .notNull(),
+
+      verificationStatus:
+        text("verification_status")
+          .notNull(),
+
+      observedAt:
+        timestamp(
+          "observed_at",
+          { withTimezone: true }
+        ).notNull(),
+
+      createdAt:
+        timestamp(
+          "created_at",
+          { withTimezone: true }
+        )
+        .defaultNow()
+        .notNull()
+    },
+    table => ({
+      fingerprintUnique:
+        uniqueIndex(
+          "observed_payment_event_fingerprint_idx"
+        )
+        .on(
+          table.organizationId,
+          table.eventFingerprint
+        )
+    })
+  );
+```
+
+Adapt names/types to the existing schema rather than blindly duplicating existing tables.
+
+---
+
+# 48. API ROUTES
+
+Implement:
 
 ```text
-NOTIFICATION / SYNC TRIGGER
+GET /v1/payment-apps/supported
 ```
 
-WorkManager is:
+Returns:
+
+```json
+[
+  {
+    "id": "phonepe",
+    "displayName": "PhonePe",
+    "packageName": "com.phonepe.app"
+  },
+  {
+    "id": "google_pay",
+    "displayName": "Google Pay",
+    "packageName": "com.google.android.apps.nbu.paisa.user"
+  }
+]
+```
+
+This endpoint is optional because the initial supported list can remain Android-side.
+
+Prefer keeping package definitions Android-side because installed-state detection happens locally.
+
+---
+
+Implement:
 
 ```text
-RELIABLE BACKGROUND SYNC MECHANISM
+GET /v1/payment-accounts
+POST /v1/payment-accounts
+PATCH /v1/payment-accounts/:id
+DELETE /v1/payment-accounts/:id
 ```
 
-Organization membership is:
+QR:
 
 ```text
-USER ↔ ORGANIZATION
+GET /v1/payment-accounts/:id/qr
+POST /v1/payment-accounts/:id/qr
+PATCH /v1/qr/:id
+DELETE /v1/qr/:id
 ```
 
-not:
+Observed events:
 
 ```text
-USER = ORGANIZATION
+POST /v1/payment-events/observed
+GET /v1/payment-events
+GET /v1/payment-events/:id
 ```
 
-A user can belong to multiple organizations, have different roles in each organization, use multiple devices, and receive organization-scoped notifications according to permissions and notification preferences.
+---
 
-Implement the feature end-to-end, preserve existing working functionality, use the existing project conventions, and do not leave mock implementations or TODO placeholders where production code is expected.
+# 49. IDEMPOTENCY
+
+Client sends:
+
+```text
+clientEventId
+```
+
+Server requires:
+
+```text
+Idempotency-Key
+```
+
+or uses:
+
+```text
+clientEventId + deviceId
+```
+
+to prevent duplicates.
+
+Example:
+
+```text
+device_123:event_456
+```
+
+must only create one server event.
+
+---
+
+# 50. AUDIT LOG
+
+Record:
+
+```text
+PAYMENT_EVENT_OBSERVED
+```
+
+with:
+
+```text
+actorUserId
+deviceId
+organizationId
+paymentEventId
+source
+timestamp
+```
+
+Do not store raw notification text in audit logs.
+
+---
+
+# 51. DEVICE REGISTRATION
+
+Every Android installation already participating in UPI-Easy should have:
+
+```text
+deviceId
+userId
+organizationId
+fcmToken
+platform
+appVersion
+lastSeenAt
+```
+
+Add:
+
+```text
+paymentDetectionEnabled
+notificationListenerEnabled
+```
+
+or derive these from device configuration.
+
+---
+
+# 52. DEVICE CAPABILITY
+
+Expose:
+
+```json
+{
+  "notificationListener": true,
+  "supportedPaymentApps": [
+    "phonepe",
+    "google_pay"
+  ],
+  "installedPaymentApps": [
+    "phonepe"
+  ]
+}
+```
+
+This lets the server know:
+
+```text
+Owner's phone:
+PhonePe detection available
+
+Manager's phone:
+No payment detection
+```
+
+---
+
+# 53. ORGANIZATION RULE
+
+Payment detection belongs to a device.
+
+Payment events belong to an organization.
+
+Therefore:
+
+```text
+Device
+   ↓
+Detection
+   ↓
+Organization
+   ↓
+Payment Account
+```
+
+Do NOT make the listener itself belong globally to one company.
+
+The user may switch companies.
+
+When active organization changes:
+
+```text
+listener remains active
+```
+
+but the processor resolves the payment event against configured payment accounts belonging to the appropriate organization.
+
+If the same device is authorized for multiple organizations and an event cannot safely be mapped:
+
+```text
+AMBIGUOUS
+```
+
+Do not randomly select the active organization.
+
+Prefer requiring an explicit detection-device/account assignment for production.
+
+---
+
+# 54. RECOMMENDED DEVICE ASSIGNMENT
+
+Add:
+
+```text
+payment_detection_devices
+```
+
+Fields:
+
+```text
+id
+organization_id
+device_id
+payment_account_id
+enabled
+created_at
+updated_at
+```
+
+Example:
+
+```text
+Owner Phone
+     ↓
+Payment Account:
+Main PhonePe
+```
+
+This solves much of the multi-company ambiguity.
+
+---
+
+# 55. EVENT RESOLUTION
+
+When notification arrives:
+
+```text
+source package
+      ↓
+device
+      ↓
+payment detection device assignments
+      ↓
+payment account
+      ↓
+parse event
+```
+
+If exactly one payment account is assigned:
+
+```text
+MATCHED
+```
+
+If zero:
+
+```text
+UNMATCHED
+```
+
+If more than one:
+
+```text
+AMBIGUOUS
+```
+
+Never guess.
+
+---
+
+# 56. ANDROID REPOSITORY STRUCTURE
+
+Integrate into the existing project.
+
+Recommended:
+
+```text
+app/
+└── src/main/java/.../
+
+    data/
+        local/
+            dao/
+                PaymentAccountDao.kt
+                QrCodeDao.kt
+                ObservedPaymentEventDao.kt
+
+            entity/
+                PaymentAccountEntity.kt
+                QrCodeEntity.kt
+                ObservedPaymentEventEntity.kt
+
+        remote/
+            api/
+                PaymentAccountApi.kt
+                PaymentEventApi.kt
+
+            dto/
+                PaymentAccountDto.kt
+                ObservedPaymentEventDto.kt
+
+        repository/
+            PaymentAccountRepository.kt
+            PaymentEventRepository.kt
+
+    payment/
+        apps/
+            PaymentAppDefinition.kt
+            PaymentAppDetector.kt
+            AndroidPaymentAppDetector.kt
+
+        notification/
+            PaymentNotificationListenerService.kt
+            PaymentNotificationProcessor.kt
+            PaymentNotificationParser.kt
+            PhonePeNotificationParser.kt
+            GooglePayNotificationParser.kt
+            NotificationFingerprint.kt
+
+        sync/
+            PaymentEventSyncWorker.kt
+
+    ui/
+        payment/
+            PaymentAccountsScreen.kt
+            AddPaymentAccountScreen.kt
+            PaymentAccountDetailScreen.kt
+            AddQrScreen.kt
+            PaymentDetectionScreen.kt
+
+            components/
+                PaymentAppSelector.kt
+                PaymentAccountCard.kt
+                QrCodeCard.kt
+                DetectionStatusCard.kt
+                ObservedPaymentBadge.kt
+```
+
+Adapt this to the actual existing package/folder structure.
+
+Do not duplicate repositories, Room databases, Retrofit clients, Hilt modules, or navigation graphs already present.
+
+---
+
+# 57. HILT
+
+Create bindings for:
+
+```text
+PaymentAppDetector
+PaymentNotificationProcessor
+PhonePeNotificationParser
+GooglePayNotificationParser
+PaymentEventRepository
+```
+
+Example:
+
+```kotlin
+@Provides
+@Singleton
+fun providePaymentAppDetector(
+    @ApplicationContext context: Context
+): PaymentAppDetector =
+    AndroidPaymentAppDetector(context)
+```
+
+---
+
+# 58. COMPOSE APP SELECTOR
+
+Use Material 3.
+
+Component:
+
+```kotlin
+@Composable
+fun PaymentAppSelector(
+    apps: List<PaymentAppDefinition>,
+    selected: PaymentAppDefinition?,
+    onSelected: (PaymentAppDefinition) -> Unit
+)
+```
+
+Display:
+
+```text
+PhonePe
+Installed
+```
+
+```text
+Google Pay
+Installed
+```
+
+Do not show unsupported/uninstalled apps.
+
+If app is not installed, it should not appear in the selector.
+
+---
+
+# 59. DETECTION STATUS
+
+Create:
+
+```kotlin
+data class NotificationAccessState(
+    val enabled: Boolean,
+    val supportedAppInstalled: Boolean
+)
+```
+
+UI states:
+
+```text
+● Active
+○ Permission required
+○ App not installed
+○ Detection disabled
+```
+
+---
+
+# 60. ADD ACCOUNT VALIDATION
+
+Before saving:
+
+```text
+Payment app selected
++
+UPI ID non-empty
++
+UPI format valid
++
+label non-empty
+```
+
+Example VPA validation:
+
+```kotlin
+private val vpaRegex =
+    Regex(
+        "^[A-Za-z0-9._-]+@[A-Za-z0-9.-]+$"
+    )
+```
+
+This is basic validation only.
+
+Do not claim it proves the VPA exists.
+
+---
+
+# 61. DO NOT VERIFY VPA BY SENDING MONEY
+
+The app must never automatically initiate a real payment just to test a VPA.
+
+---
+
+# 62. NOTIFICATION ACCESS EXPLANATION
+
+Before opening system settings, clearly explain:
+
+```text
+Why is notification access required?
+
+UPI-Easy uses Android's notification listener
+to detect payment notifications from the selected
+UPI app.
+
+UPI-Easy does not read the UPI app's private
+database or private APIs.
+
+Only supported payment-app notifications are
+processed.
+```
+
+This must be visible before requesting access.
+
+---
+
+# 63. SYSTEM ACCESS CHECK
+
+Create:
+
+```kotlin
+fun isNotificationListenerEnabled(
+    context: Context
+): Boolean {
+
+    val manager =
+        context.getSystemService(
+            NotificationManager::class.java
+        )
+
+    val component =
+        ComponentName(
+            context,
+            PaymentNotificationListenerService::class.java
+        )
+
+    return manager
+        .isNotificationListenerAccessGranted(component)
+}
+```
+
+Use this whenever the app resumes from settings.
+
+---
+
+# 64. IMPORTANT SERVICE BEHAVIOR
+
+Do not start the listener manually.
+
+Android binds the `NotificationListenerService`.
+
+Your app should:
+
+```text
+Register service
+        ↓
+User grants access
+        ↓
+Android binds service
+        ↓
+onListenerConnected()
+        ↓
+Process notifications
+```
+
+---
+
+# 65. NOTIFICATION REMOVAL
+
+Implement:
+
+```kotlin
+override fun onNotificationRemoved(
+    sbn: StatusBarNotification
+) {
+    // Do not delete payment records.
+    // Notification removal does not mean payment reversal.
+}
+```
+
+This is extremely important.
+
+If PhonePe notification disappears:
+
+```text
+NOT:
+payment reversed
+```
+
+It means:
+
+```text
+notification removed
+```
+
+Nothing more.
+
+---
+
+# 66. PAYMENT REVERSAL
+
+Never derive:
+
+```text
+NotificationRemoved
+→ REVERSED
+```
+
+Reversal requires a separate verified source or explicit reconciliation process.
+
+---
+
+# 67. PAYMENT SENT
+
+Initially support:
+
+```text
+RECEIVED
+```
+
+as the primary accounting event.
+
+For:
+
+```text
+SENT
+```
+
+you may detect and store it as:
+
+```text
+direction = SENT
+```
+
+but do not include it in received collections.
+
+Dashboard:
+
+```text
+Received
+Sent
+```
+
+must remain separate.
+
+---
+
+# 68. EVENT PIPELINE
+
+Final Android pipeline:
+
+```text
+Android System
+      ↓
+NotificationListenerService
+      ↓
+package filter
+      ↓
+RawNotification
+      ↓
+ParserRegistry
+      ↓
+ParsedPaymentEvent
+      ↓
+PaymentAccountResolver
+      ↓
+MATCHED / UNMATCHED / AMBIGUOUS
+      ↓
+Fingerprint
+      ↓
+Room
+      ↓
+WorkManager
+      ↓
+Hono API
+```
+
+---
+
+# 69. FINAL SERVER PIPELINE
+
+```text
+POST /payment-events/observed
+      ↓
+Auth
+      ↓
+Device authorization
+      ↓
+Organization authorization
+      ↓
+Zod validation
+      ↓
+Payment account validation
+      ↓
+Idempotency
+      ↓
+Observed Event INSERT
+      ↓
+Transaction INSERT
+      ↓
+Outbox INSERT
+      ↓
+Commit
+      ↓
+Queue
+      ↓
+Notification Worker
+      ↓
+FCM
+```
+
+---
+
+# 70. MULTI-DEVICE NOTIFICATION
+
+Suppose:
+
+```text
+Owner phone
+PhonePe notification detected
+```
+
+Then:
+
+```text
+Owner phone
+      ↓
+Server
+      ↓
+Organization members
+      ↓
+OWNER
+MANAGER
+ACCOUNTANT
+CASHIER
+      ↓
+notification preference check
+      ↓
+active devices
+      ↓
+FCM
+```
+
+All authorized devices receive the event according to their notification permissions.
+
+---
+
+# 71. ROLE DEFAULTS
+
+Recommended defaults:
+
+```text
+OWNER:
+payment.received = ON
+
+MANAGER:
+payment.received = ON
+
+ACCOUNTANT:
+payment.received = ON
+
+CASHIER:
+payment.received = ON
+```
+
+But preserve user notification preferences.
+
+---
+
+# 72. BACKGROUND REQUIREMENTS
+
+Do not use:
+
+```text
+infinite polling
+```
+
+Do not use:
+
+```text
+background timer every few seconds
+```
+
+Do not use:
+
+```text
+AccessibilityService
+```
+
+Do not use:
+
+```text
+root
+```
+
+The Android notification listener is event-driven.
+
+That is the correct mechanism.
+
+---
+
+# 73. BATTERY
+
+The listener must remain lightweight.
+
+On notification:
+
+```text
+parse
+↓
+persist
+↓
+return
+```
+
+Do not perform:
+
+```text
+large network request
+complex DB query
+long-running work
+```
+
+directly in the notification callback.
+
+Instead:
+
+```text
+notification callback
+      ↓
+Room
+      ↓
+WorkManager
+```
+
+---
+
+# 74. NETWORK FAILURE
+
+If API upload fails:
+
+```text
+syncState = FAILED
+retryCount++
+```
+
+WorkManager retries.
+
+If permanent validation failure:
+
+```text
+syncState = REJECTED
+```
+
+and surface diagnostic information locally.
+
+---
+
+# 75. CONFLICT HANDLING
+
+If same fingerprint arrives twice:
+
+```text
+ignore duplicate
+```
+
+If same amount/payer/time but different fingerprints:
+
+```text
+do not automatically merge
+```
+
+Store both and let reconciliation determine whether they are separate payments.
+
+---
+
+# 76. RECONCILIATION
+
+Add:
+
+```text
+Observed payment
+      ↓
+Possible matching transaction
+      ↓
+Verified source later
+      ↓
+Reconcile
+```
+
+If verified source says:
+
+```text
+₹500 SUCCESS
+```
+
+then:
+
+```text
+verificationStatus = VERIFIED
+status = SUCCESS
+```
+
+If no verified source exists:
+
+```text
+verificationStatus = OBSERVED
+```
+
+---
+
+# 77. API RESPONSE TO UI
+
+Transaction response:
+
+```json
+{
+  "id": "txn_123",
+  "amountMinor": 50000,
+  "currency": "INR",
+  "direction": "RECEIVED",
+  "status": "UNKNOWN",
+  "verificationStatus": "OBSERVED",
+  "eventSource": "NOTIFICATION_PHONEPE",
+  "paymentAccount": {
+    "id": "pa_123",
+    "label": "Main PhonePe",
+    "upiId": "9827743085@ybl"
+  },
+  "qr": null,
+  "observedAt": "2026-09-21T10:42:11Z"
+}
+```
+
+---
+
+# 78. ERROR STATES
+
+Implement:
+
+```text
+NO_PAYMENT_APP_INSTALLED
+
+NOTIFICATION_ACCESS_REQUIRED
+
+PAYMENT_DETECTION_DISABLED
+
+PAYMENT_ACCOUNT_NOT_FOUND
+
+AMBIGUOUS_PAYMENT_ACCOUNT
+
+PARSER_UNABLE_TO_IDENTIFY_PAYMENT
+
+DUPLICATE_EVENT
+
+SERVER_REJECTED
+
+NETWORK_ERROR
+
+SYNC_PENDING
+```
+
+---
+
+# 79. USER-FACING WARNING
+
+In Payment Detection settings:
+
+```text
+Important
+
+Payment detection is based on notifications
+generated by the selected UPI app.
+
+Notifications can be delayed, changed, disabled,
+or unavailable.
+
+UPI-Easy treats these events as "Observed" until
+they are independently verified.
+
+Do not rely on an observed notification alone
+for disputes or final settlement reconciliation.
+```
+
+---
+
+# 80. DEVELOPMENT DEBUG SCREEN
+
+Add debug-only screen:
+
+```text
+Payment Detection Debug
+
+Listener:
+CONNECTED
+
+PhonePe:
+Installed ✓
+Enabled ✓
+
+Google Pay:
+Installed ✓
+Disabled
+
+Last notification:
+PhonePe
+
+Last parsed event:
+₹500
+
+Parser:
+PhonePeParser
+
+Confidence:
+HIGH
+
+Match:
+Main PhonePe
+
+Sync:
+UPLOADED
+```
+
+Do not show raw sensitive notification text in production.
+
+---
+
+# 81. TESTING MATRIX
+
+Test these cases:
+
+```text
+1. PhonePe installed
+2. Google Pay installed
+3. Neither installed
+4. PhonePe selected
+5. Google Pay selected
+6. Notification access denied
+7. Notification access granted
+8. Notification access revoked
+9. PhonePe payment received
+10. Google Pay payment received
+11. Payment sent
+12. Unrelated notification
+13. Duplicate notification
+14. Missing amount
+15. Multiple payment accounts
+16. Multiple QR codes
+17. Same VPA across multiple QR codes
+18. Offline notification
+19. Server unavailable
+20. FCM delivery
+21. Multiple authorized devices
+22. Company switch
+23. Device removed
+24. Staff removed
+25. Permission revoked
+26. App uninstalled
+27. Phone restarted
+28. Notification listener reconnect
+29. Notification removed
+30. Parser format changes
+```
+
+---
+
+# 82. REBOOT TEST
+
+After Android reboot:
+
+```text
+device starts
+ ↓
+Android notification listener reconnects
+ ↓
+onListenerConnected()
+ ↓
+payment detection continues
+```
+
+Do not assume the app's Activity must be opened first.
+
+Test this on the real target device.
+
+---
+
+# 83. NOTHING PHONE TESTING
+
+Because the development device is a Nothing Phone, test:
+
+```text
+Android 16
+Nothing OS
+battery optimization
+notification permission
+notification listener access
+PhonePe
+Google Pay
+screen locked
+screen unlocked
+device reboot
+network disconnected
+network restored
+```
+
+Do not rely only on emulator behavior.
+
+---
+
+# 84. IMPORTANT PLAY STORE CONSIDERATION
+
+The implementation must use Android's notification-listener mechanism legitimately.
+
+Do not describe it as:
+
+```text
+Read PhonePe database
+```
+
+or:
+
+```text
+Intercept PhonePe
+```
+
+The actual mechanism is:
+
+```text
+Android notification access
+```
+
+The application should clearly explain why notification access is required and only process supported payment-app notifications.
+
+Android's notification listener is an OS-level API, and package visibility should be restricted to the known supported applications rather than using broad installed-app access.
+
+Before Play Store release, separately review current Google Play policy requirements for notification access and financial/payment-related functionality. Do not assume technical feasibility automatically means store-policy approval.
+
+---
+
+# 85. DO NOT IMPLEMENT
+
+The agent must NOT implement:
+
+```text
+❌ AccessibilityService
+❌ Root access
+❌ Reading /data/data/com.phonepe.app
+❌ Reading PhonePe SQLite database
+❌ Private PhonePe APIs
+❌ Private Google Pay APIs
+❌ Intent interception of another app's private internals
+❌ SMS interception
+❌ OTP interception
+❌ UPI PIN collection
+❌ Bank password collection
+❌ Fake SUCCESS
+❌ Automatic payment verification
+❌ Notification removal → reversal
+❌ Guessing QR attribution
+❌ QUERY_ALL_PACKAGES
+```
+
+---
+
+# 86. IMPLEMENTATION ORDER
+
+Execute in this order.
+
+## Phase 1
+
+Inspect existing repository.
+
+Identify:
+
+```text
+Android module
+Gradle
+Compose navigation
+Hilt
+Room
+Retrofit/OkHttp
+DataStore
+WorkManager
+FCM
+authentication
+organization context
+API client
+transaction model
+QR model
+```
+
+Do not create duplicates.
+
+---
+
+## Phase 2
+
+Implement:
+
+```text
+PaymentAppDefinition
+PaymentAppDetector
+supported app registry
+package visibility
+installed-app detection
+```
+
+---
+
+## Phase 3
+
+Implement database:
+
+```text
+payment_accounts
+qr_codes
+observed_payment_events
+payment_detection_devices
+```
+
+using the existing Room architecture.
+
+---
+
+## Phase 4
+
+Implement Compose:
+
+```text
+Add Payment Account
+PaymentAppSelector
+Payment Account Card
+Payment Account Details
+QR management
+Payment Detection settings
+```
+
+---
+
+## Phase 5
+
+Implement:
+
+```text
+NotificationListenerService
+```
+
+and notification-access UI.
+
+---
+
+## Phase 6
+
+Implement:
+
+```text
+PaymentNotificationParser
+PhonePeNotificationParser
+GooglePayNotificationParser
+```
+
+---
+
+## Phase 7
+
+Implement:
+
+```text
+fingerprinting
+deduplication
+payment-account resolution
+match status
+```
+
+---
+
+## Phase 8
+
+Implement:
+
+```text
+POST /v1/payment-events/observed
+```
+
+on Hono.
+
+---
+
+## Phase 9
+
+Implement:
+
+```text
+Neon persistence
+Drizzle schema
+idempotency
+authorization
+outbox
+```
+
+---
+
+## Phase 10
+
+Implement:
+
+```text
+notification worker
+FCM distribution
+multi-device sync
+```
+
+---
+
+## Phase 11
+
+Implement:
+
+```text
+WorkManager
+offline queue
+sync cursor
+retry
+```
+
+---
+
+## Phase 12
+
+Implement:
+
+```text
+transaction UI
+observed badge
+verification state
+payment-account association
+```
+
+---
+
+## Phase 13
+
+Run:
+
+```text
+unit tests
+repository tests
+API tests
+Room tests
+parser tests
+instrumentation tests
+end-to-end tests
+```
+
+---
+
+# 87. DEFINITION OF DONE
+
+The feature is complete only when this exact flow works:
+
+```text
+1. Install UPI-Easy
+        ↓
+2. Open UPI
+        ↓
+3. Add Payment Account
+        ↓
+4. App detects installed PhonePe/Google Pay
+        ↓
+5. User selects PhonePe
+        ↓
+6. User enters VPA
+        ↓
+7. User enters account label
+        ↓
+8. UPI-Easy saves payment account
+        ↓
+9. UPI-Easy detects missing notification access
+        ↓
+10. User grants Android notification access
+        ↓
+11. UPI-Easy verifies permission
+        ↓
+12. User creates QR
+        ↓
+13. Customer scans QR using a UPI app
+        ↓
+14. Selected payment app receives payment
+        ↓
+15. Payment app posts notification
+        ↓
+16. NotificationListenerService receives it
+        ↓
+17. Package is identified
+        ↓
+18. Parser extracts payment information
+        ↓
+19. Payment account is resolved
+        ↓
+20. Event is deduplicated
+        ↓
+21. Event is stored in Room
+        ↓
+22. WorkManager uploads it
+        ↓
+23. Hono validates it
+        ↓
+24. Neon stores observed event
+        ↓
+25. Transaction is created as OBSERVED/UNKNOWN
+        ↓
+26. Outbox event created
+        ↓
+27. Worker sends FCM
+        ↓
+28. Owner receives UPI-Easy notification
+        ↓
+29. Manager receives notification
+        ↓
+30. Accountant receives notification
+        ↓
+31. Authorized devices sync
+        ↓
+32. Transaction appears in ledger
+```
+
+---
+
+# 88. FINAL ARCHITECTURAL RULE
+
+The implementation must preserve this distinction permanently:
+
+```text
+QR CODE
+    =
+payment destination
+
+NOTIFICATION
+    =
+observed payment signal
+
+PROVIDER/BANK VERIFICATION
+    =
+authoritative payment confirmation
+```
+
+UPI-Easy can fully implement the first two without becoming a payment provider.
+
+It must not pretend the second is the third.
+
+---
+
+# 89. EXPECTED FINAL RESULT
+
+UPI-Easy will provide:
+
+```text
+                  UPI-EASY
+                      │
+             ┌────────┴────────┐
+             │                 │
+       Payment Accounts       QR Codes
+             │                 │
+       ┌─────┴─────┐      ┌────┴─────┐
+       │           │      │          │
+    PhonePe      GPay   Counter 1  Counter 2
+       │           │
+       └─────┬─────┘
+             │
+      Android Notification
+          Listener
+             │
+       ┌─────┴─────┐
+       │           │
+    PhonePe      GPay
+       │           │
+       └─────┬─────┘
+             │
+       Parsed Event
+             │
+          Room DB
+             │
+        WorkManager
+             │
+        Cloudflare
+             │
+           Neon
+             │
+          Outbox
+             │
+           FCM
+             │
+     ┌───────┼────────┐
+     │       │        │
+   Owner   Manager  Accountant
+```
+
+The architecture must remain modular so that a future legitimate provider/bank integration can add:
+
+```text
+PROVIDER_WEBHOOK
+```
+
+without replacing:
+
+```text
+NOTIFICATION_PHONEPE
+NOTIFICATION_GPAY
+```
+
+The two systems can coexist.
+
+---
+
+# AGENT EXECUTION RULES
+
+1. Inspect the existing code before changing anything.
+2. Reuse existing architecture.
+3. Do not duplicate services.
+4. Do not create mock payment success.
+5. Do not hard-code transaction success.
+6. Do not guess QR attribution.
+7. Do not trust client organization IDs.
+8. Do not trust notification text as authoritative settlement.
+9. Use Room as the local source of truth.
+10. Use Neon as the server source of truth.
+11. Use FCM as delivery/trigger only.
+12. Use WorkManager for deferred synchronization.
+13. Use Hilt for dependency injection.
+14. Use Kotlin coroutines/Flow.
+15. Keep Compose UI state driven by ViewModels.
+16. Keep notification parsing independent from Compose.
+17. Keep server validation independent from Android parsing.
+18. Add unit tests for every parser.
+19. Add idempotency for every observed event.
+20. Never store UPI PIN, bank password, CVV, or payment authorization OTP.
+21. Never implement accessibility/root/private-app-database techniques.
+22. Never use `QUERY_ALL_PACKAGES` for this feature.
+23. Support only PhonePe and Google Pay in v1.
+24. Make adding future payment apps possible through `PaymentAppDefinition + PaymentNotificationParser`.
+25. At completion, provide a changed-files summary, database migration summary, Android permission/setup summary, API summary, and test results.
+
+# END SPECIFICATION
+One important correction to the earlier idea: don't make the app selector merely a hard-coded list and don't try to discover every installed app. For your v1, declare PhonePe and Google Pay as the only package-visible targets, then use PackageManager to show whichever of those two are actually installed. Android specifically recommends limiting package visibility to the apps your feature needs.
+
+The resulting feature is essentially a local payment-notification bridge. The QR management remains completely yours, while the Android device that actually receives the PhonePe/GPay notification becomes the observation device. That is the cleanest way to get the multi-QR + multi-device behavior

@@ -1,4 +1,4 @@
-﻿package com.aerotech.upieasy.domain.model
+package com.aerotech.upieasy.domain.model
 
 data class Transaction(
     val id: String,
@@ -17,7 +17,9 @@ data class Transaction(
     val payeeName: String,
     val payeeVpa: String,
     val note: String?,
-    val occurredAt: Long
+    val occurredAt: Long,
+    val verificationStatus: String = "UNVERIFIED",
+    val eventSource: String = "UPI_INTENT"
 )
 
 data class UpiAccount(

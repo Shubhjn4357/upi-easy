@@ -1,84 +1,64 @@
 package com.aerotech.upieasy.feature.notifications
 
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
 import android.os.Build
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
-import android.speech.tts.TextToSpeech
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.aerotech.upieasy.core.database.AppDatabase
-import com.aerotech.upieasy.core.database.TransactionEntity
+import com.aerotech.upieasy.core.database.entity.ObservedPaymentEventEntity
+import com.aerotech.upieasy.core.database.entity.TransactionEntity
 import com.aerotech.upieasy.core.security.SessionManager
+import com.aerotech.upieasy.core.sync.PaymentEventSyncWorker
+import com.aerotech.upieasy.core.util.PaymentAlertManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import java.util.Locale
+import java.math.BigDecimal
 import java.util.UUID
-import java.util.regex.Pattern
 
 class PaymentNotificationListenerService : NotificationListenerService() {
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private var textToSpeech: TextToSpeech? = null
-    private var isTtsReady = false
+    private val deduplicator = NotificationEventDeduplicator()
+    private val accountResolver = PaymentAccountResolver()
+    private val parsers: List<PaymentNotificationParser> = listOf(
+        PhonePeNotificationParser(),
+        GooglePayNotificationParser()
+    )
 
     companion object {
         private const val TAG = "PaymentNotificationListener"
         private const val CHANNEL_ID = "upi_easy_payments"
 
-        // Known UPI & Banking app package identifiers
-        private val UPI_PACKAGE_NAMES = setOf(
-            "com.google.android.apps.nbu.paisa.user", // Google Pay
-            "com.phonepe.app",                         // PhonePe
-            "net.one97.paytm",                         // Paytm
-            "in.org.npci.upiapp",                      // BHIM UPI
-            "com.cred.android",                        // CRED
-            "com.amazon.mShop.android.shopping",       // Amazon Pay
-            "com.sbi.upi",                             // SBI UPI
-            "com.msf.kbank.mobile",                    // Kotak
-            "com.icicibank.pockets",                   // ICICI Pockets
-            "com.snapwork.hdfc"                        // HDFC MobileBanking
-        )
-
-        private val AMOUNT_PATTERN = Pattern.compile(
-            "(?:Rs\\.?|INR|₹)\\s*([0-9,]+(?:\\.[0-9]{1,2})?)",
-            Pattern.CASE_INSENSITIVE
-        )
-
-        private val RRN_PATTERN = Pattern.compile(
-            "(?:UTR|RRN|Ref|UPI Ref(?: No)?|Reference No)?[:\\s#]*([0-9]{12})",
-            Pattern.CASE_INSENSITIVE
+        // Section 10: The service must immediately ignore unsupported applications
+        val SUPPORTED_PACKAGES = setOf(
+            PhonePeNotificationParser.PACKAGE_NAME,
+            GooglePayNotificationParser.PACKAGE_NAME
         )
     }
 
     override fun onCreate() {
         super.onCreate()
-        initTextToSpeech()
         createNotificationChannel()
+        Log.i(TAG, "PaymentNotificationListenerService created")
     }
 
-    override fun onDestroy() {
-        textToSpeech?.stop()
-        textToSpeech?.shutdown()
-        super.onDestroy()
+    override fun onListenerConnected() {
+        super.onListenerConnected()
+        Log.i(TAG, "Notification listener connected successfully")
     }
 
-    private fun initTextToSpeech() {
-        try {
-            textToSpeech = TextToSpeech(applicationContext) { status ->
-                if (status == TextToSpeech.SUCCESS) {
-                    val result = textToSpeech?.setLanguage(Locale("en", "IN"))
-                    isTtsReady = (result != TextToSpeech.LANG_MISSING_DATA && result != TextToSpeech.LANG_NOT_SUPPORTED)
-                }
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to initialize TextToSpeech soundbox engine", e)
-        }
+    override fun onNotificationRemoved(sbn: StatusBarNotification?) {
+        super.onNotificationRemoved(sbn)
+        // Section 65 & 66: Notification removal does NOT mean payment reversal!
+        // Do not delete records or alter transaction statuses on removal.
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
@@ -86,93 +66,170 @@ class PaymentNotificationListenerService : NotificationListenerService() {
         if (sbn == null) return
 
         val packageName = sbn.packageName ?: return
-        val extras = sbn.notification?.extras ?: return
 
-        val title = extras.getString("android.title") ?: ""
-        val text = extras.getCharSequence("android.text")?.toString() ?: ""
-        val fullContent = "$title $text"
-
-        // Check if from UPI package or contains UPI transaction keywords
-        val isUpiPackage = UPI_PACKAGE_NAMES.contains(packageName)
-        val isCreditKeyword = fullContent.contains("received", ignoreCase = true) ||
-                fullContent.contains("credited", ignoreCase = true) ||
-                fullContent.contains("paid to you", ignoreCase = true) ||
-                fullContent.contains("deposited", ignoreCase = true)
-
-        if ((isUpiPackage || packageName.contains("sms", ignoreCase = true)) && isCreditKeyword) {
-            processPaymentNotification(fullContent)
+        // Section 10: Strict package filter
+        if (packageName !in SUPPORTED_PACKAGES) {
+            return
         }
+
+        val notification = sbn.notification ?: return
+        val extras = notification.extras ?: return
+
+        // Section 11: Extract normalized notification data
+        val title = extras.getString(Notification.EXTRA_TITLE)
+        val text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString()
+        val bigText = extras.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString()
+        val subText = extras.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString()
+
+        val raw = RawPaymentNotification(
+            packageName = packageName,
+            notificationKey = sbn.key ?: "${packageName}_${sbn.id}_${sbn.postTime}",
+            notificationId = sbn.id,
+            postTime = sbn.postTime,
+            title = title,
+            text = text,
+            bigText = bigText,
+            subText = subText,
+            category = notification.category
+        )
+
+        processNotification(raw)
     }
 
-    private fun processPaymentNotification(notificationText: String) {
+    private fun processNotification(raw: RawPaymentNotification) {
         serviceScope.launch {
             try {
-                val amountMatcher = AMOUNT_PATTERN.matcher(notificationText)
-                if (!amountMatcher.find()) return@launch
+                // Section 12: Select parser
+                val parser = parsers.find { it.supports(raw.packageName) } ?: return@launch
+                val event = parser.parse(raw) ?: return@launch
 
-                val amountStr = amountMatcher.group(1)?.replace(",", "") ?: return@launch
-                val amountDouble = amountStr.toDoubleOrNull() ?: return@launch
-                val amountInPaise = (amountDouble * 100).toLong()
+                // Section 19: Compute fingerprint
+                val fingerprint = NotificationEventDeduplicator.computeFingerprint(
+                    packageName = raw.packageName,
+                    notificationKey = raw.notificationKey,
+                    title = raw.title,
+                    text = raw.text ?: raw.bigText,
+                    postTime = raw.postTime
+                )
 
-                // Extract RRN / UTR if present
-                val rrnMatcher = RRN_PATTERN.matcher(notificationText)
-                val rrn = if (rrnMatcher.find()) rrnMatcher.group(1) else null
+                // Check in-memory deduplicator
+                if (deduplicator.isDuplicate(fingerprint)) {
+                    Log.d(TAG, "Dropping duplicate notification in-memory: $fingerprint")
+                    return@launch
+                }
 
-                val sessionManager = SessionManager(applicationContext)
-                val orgId = sessionManager.getCurrentOrgId() ?: return@launch
-                val soundEnabled = sessionManager.soundNotificationsFlow.first()
+                val context = applicationContext
+                val sessionManager = SessionManager(context)
+                val orgId = sessionManager.getCurrentOrgId()
+                val database = AppDatabase.getInstance(context)
 
-                val database = AppDatabase.getInstance(applicationContext)
-                val txnEntity = TransactionEntity(
-                    id = "txn_notif_${UUID.randomUUID().toString().replace("-", "").take(16)}",
+                // Check Room database deduplication
+                if (orgId != null) {
+                    val existing = database.observedPaymentEventDao().getEventByFingerprint(orgId, fingerprint)
+                    if (existing != null) {
+                        Log.d(TAG, "Dropping duplicate notification from Room: $fingerprint")
+                        return@launch
+                    }
+                }
+
+                // Section 17 & 18: Account Resolution
+                val activeAccounts = if (orgId != null) {
+                    database.paymentAccountDao().getActiveAccountsForPackage(raw.packageName)
+                } else {
+                    emptyList()
+                }
+
+                val resolution = accountResolver.resolve(
+                    sourcePackage = raw.packageName,
+                    payerVpa = event.payerVpa,
+                    availableAccounts = activeAccounts
+                )
+
+                val amountMinor = event.amount?.multiply(BigDecimal(100))?.toLong()
+                val eventId = "evt_obs_${UUID.randomUUID().toString().replace("-", "").take(16)}"
+                val txnId = "txn_obs_${UUID.randomUUID().toString().replace("-", "").take(16)}"
+
+                // Section 20: Store observed event entity
+                val observedEntity = ObservedPaymentEventEntity(
+                    id = eventId,
                     organizationId = orgId,
-                    bankAccountId = null,
-                    upiAccountId = null,
-                    type = "PAYMENT",
-                    direction = "CREDIT",
-                    amount = amountDouble,
+                    paymentAccountId = resolution.paymentAccountId,
+                    qrId = null,
+                    sourcePackage = raw.packageName,
+                    sourceApp = event.sourceApp,
+                    direction = event.direction.name,
+                    amountMinor = amountMinor,
                     currency = "INR",
-                    status = "CONFIRMED",
-                    paymentMethod = "UPI",
-                    referenceNumber = rrn,
-                    payerName = "UPI Customer",
-                    payerVpa = null,
-                    payeeName = sessionManager.currentOrgNameFlow.first() ?: "Merchant Store",
-                    payeeVpa = "merchant@upi",
-                    note = "Payment received via soundbox listener",
-                    occurredAt = System.currentTimeMillis(),
-                    syncStatus = "SYNCED"
+                    payerName = event.payerName,
+                    payerVpa = event.payerVpa,
+                    reference = event.reference,
+                    notificationTitle = raw.title,
+                    notificationText = raw.text ?: raw.bigText,
+                    eventFingerprint = fingerprint,
+                    matchStatus = resolution.status.name,
+                    verificationStatus = "OBSERVED",
+                    observedAt = raw.postTime,
+                    syncState = "PENDING_UPLOAD"
                 )
 
-                // Save to offline Room database
-                database.transactionDao().insertTransaction(txnEntity)
-                Log.i(TAG, "Saved UPI payment from notification: ₹$amountDouble (RRN: $rrn)")
+                database.observedPaymentEventDao().insertEvent(observedEntity)
+                Log.i(TAG, "Saved observed payment event: ${event.amount} (${event.direction}) from ${event.sourceApp}")
 
-                // Trigger voice soundbox announcement, popup alert, and system notification
-                com.aerotech.upieasy.core.util.PaymentAlertManager.notifyPayment(
-                    context = applicationContext,
-                    amount = amountDouble,
-                    payerName = "UPI Customer",
-                    referenceNumber = rrn
-                )
+                // Update payment account last detection timestamp
+                resolution.paymentAccountId?.let { paId ->
+                    database.paymentAccountDao().updateLastDetectedTime(paId, raw.postTime)
+                }
+
+                // Section 2 & 25: For RECEIVED payments with non-null amount, create local transaction record
+                // Important: NEVER set status = SUCCESS directly from a notification!
+                if (event.direction == PaymentDirection.RECEIVED && event.amount != null) {
+                    val amountDouble = event.amount.toDouble()
+                    val orgName = sessionManager.currentOrgNameFlow.first() ?: "Merchant Store"
+                    val accountLabel = resolution.candidateAccounts.firstOrNull()?.label ?: "${event.sourceApp} Account"
+                    val payeeVpa = resolution.candidateAccounts.firstOrNull()?.upiId ?: "merchant@upi"
+
+                    val txnEntity = TransactionEntity(
+                        id = txnId,
+                        organizationId = orgId ?: "org_default",
+                        bankAccountId = null,
+                        upiAccountId = null,
+                        type = "PAYMENT",
+                        direction = "RECEIVED",
+                        amount = amountDouble,
+                        currency = "INR",
+                        status = "UNKNOWN", // UNKNOWN / PENDING per Section 2 & 25
+                        paymentMethod = "UPI",
+                        referenceNumber = event.reference,
+                        payerName = event.payerName ?: "UPI Customer",
+                        payerVpa = event.payerVpa,
+                        payeeName = accountLabel,
+                        payeeVpa = payeeVpa,
+                        note = "Payment observed from ${event.sourceApp}",
+                        occurredAt = raw.postTime,
+                        syncStatus = "PENDING",
+                        paymentAccountId = resolution.paymentAccountId,
+                        verificationStatus = "OBSERVED",
+                        eventSource = "NOTIFICATION_${event.sourceApp.uppercase().replace(" ", "_")}"
+                    )
+
+                    database.transactionDao().insertTransaction(txnEntity)
+
+                    // Trigger soundbox voice announcement & system notification
+                    PaymentAlertManager.notifyPayment(
+                        context = context,
+                        amount = amountDouble,
+                        payerName = event.payerName ?: "UPI Customer",
+                        referenceNumber = event.reference
+                    )
+                }
+
+                // Section 30: Schedule background sync upload
+                PaymentEventSyncWorker.enqueue(context)
+
             } catch (e: Exception) {
-                Log.e(TAG, "Error processing UPI payment notification", e)
+                Log.e(TAG, "Error processing payment notification", e)
             }
         }
-    }
-
-    private fun showPaymentNotification(amount: Double, rrn: String?) {
-        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        val contentText = if (rrn != null) "₹$amount credited successfully (Ref: $rrn)" else "₹$amount credited successfully"
-
-        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.stat_sys_download_done)
-            .setContentTitle("UPI-Easy Payment Confirmed")
-            .setContentText(contentText)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setAutoCancel(true)
-
-        notificationManager.notify(System.currentTimeMillis().toInt(), builder.build())
     }
 
     private fun createNotificationChannel() {
@@ -183,8 +240,7 @@ class PaymentNotificationListenerService : NotificationListenerService() {
             val channel = NotificationChannel(CHANNEL_ID, name, importance).apply {
                 description = descriptionText
             }
-            val notificationManager: NotificationManager =
-                getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             notificationManager.createNotificationChannel(channel)
         }
     }

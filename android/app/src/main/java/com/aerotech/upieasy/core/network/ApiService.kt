@@ -133,6 +133,13 @@ data class AddUpiRequest(
     val isDefault: Boolean = false
 )
 
+data class UpdateUpiRequest(
+    val vpa: String? = null,
+    val payeeName: String? = null,
+    val merchantCategoryCode: String? = null,
+    val isDefault: Boolean? = null
+)
+
 data class StaffListResponse(
     val success: Boolean,
     val staff: List<StaffMemberDto>
@@ -370,6 +377,13 @@ interface ApiService {
         @Path("upiId") upiId: String
     ): Response<ApiResponse<Any>>
 
+    @PUT("api/v1/organizations/{orgId}/upi/{upiId}")
+    suspend fun updateUpiAccount(
+        @Path("orgId") orgId: String,
+        @Path("upiId") upiId: String,
+        @Body request: UpdateUpiRequest
+    ): Response<ApiResponse<Any>>
+
     @GET("api/v1/organizations/{orgId}/staff")
     suspend fun getStaff(@Path("orgId") orgId: String): Response<StaffListResponse>
 
@@ -424,4 +438,99 @@ interface ApiService {
     // Multi-Organization Incremental Sync
     @POST("api/v1/sync")
     suspend fun multiOrgSync(@Body request: MultiOrgSyncRequest): Response<MultiOrgSyncResponse>
+
+    // Multi-Payment Accounts & Observed Payment Events
+    @GET("api/v1/organizations/{orgId}/payment-accounts")
+    suspend fun getPaymentAccounts(@Path("orgId") orgId: String): Response<PaymentAccountsResponse>
+
+    @POST("api/v1/organizations/{orgId}/payment-accounts")
+    suspend fun createPaymentAccount(
+        @Path("orgId") orgId: String,
+        @Body request: CreatePaymentAccountRequest
+    ): Response<CreatePaymentAccountResponse>
+
+    @PATCH("api/v1/organizations/{orgId}/payment-accounts/{id}")
+    suspend fun updatePaymentAccount(
+        @Path("orgId") orgId: String,
+        @Path("id") id: String,
+        @Body request: Map<String, @JvmSuppressWildcards Any>
+    ): Response<ApiResponse<PaymentAccountDto>>
+
+    @DELETE("api/v1/organizations/{orgId}/payment-accounts/{id}")
+    suspend fun deletePaymentAccount(
+        @Path("orgId") orgId: String,
+        @Path("id") id: String
+    ): Response<ApiResponse<Any>>
+
+    @POST("api/v1/organizations/{orgId}/payment-events/observed")
+    suspend fun postObservedPaymentEvent(
+        @Path("orgId") orgId: String,
+        @Body request: PostObservedPaymentEventRequest
+    ): Response<ObservedPaymentEventResponse>
 }
+
+// Data Transfer Objects for Payment Accounts & Observed Events
+data class PaymentAccountDto(
+    val id: String,
+    val organizationId: String,
+    val label: String,
+    val upiId: String,
+    val paymentAppId: String,
+    val paymentAppPackage: String,
+    val status: String,
+    val detectionEnabled: Boolean,
+    val notificationAccessRequired: Boolean,
+    val lastNotificationDetectedAt: Long? = null,
+    val createdAt: Long? = null,
+    val updatedAt: Long? = null
+)
+
+data class PaymentAccountsResponse(
+    val success: Boolean,
+    val data: List<PaymentAccountDto>
+)
+
+data class CreatePaymentAccountRequest(
+    val label: String,
+    val upiId: String,
+    val paymentAppId: String,
+    val paymentAppPackage: String,
+    val detectionEnabled: Boolean = true,
+    val notificationAccessRequired: Boolean = true
+)
+
+data class CreatePaymentAccountResponse(
+    val success: Boolean,
+    val data: PaymentAccountDto
+)
+
+data class PostObservedPaymentEventRequest(
+    val clientEventId: String,
+    val source: ObservedSourceDto,
+    val paymentAccountId: String?,
+    val qrId: String?,
+    val amountMinor: Long?,
+    val currency: String = "INR",
+    val direction: String = "RECEIVED",
+    val payerName: String?,
+    val payerVpa: String?,
+    val reference: String?,
+    val observedAt: String,
+    val verificationStatus: String = "OBSERVED",
+    val matchStatus: String = "MATCHED",
+    val fingerprint: String
+)
+
+data class ObservedSourceDto(
+    val type: String,
+    val packageName: String
+)
+
+data class ObservedPaymentEventResponse(
+    val accepted: Boolean,
+    val eventId: String,
+    val transactionId: String?,
+    val status: String,
+    val duplicate: Boolean? = null
+)
+

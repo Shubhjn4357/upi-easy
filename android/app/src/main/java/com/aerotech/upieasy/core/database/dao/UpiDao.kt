@@ -24,6 +24,9 @@ interface UpiDao {
     @Query("UPDATE local_upi_accounts SET isDefault = 1 WHERE id = :id")
     suspend fun setDefaultUpi(id: String)
 
+    @Query("UPDATE local_upi_accounts SET vpa = :vpa, payeeName = :payeeName, isDefault = :isDefault WHERE id = :id")
+    suspend fun updateUpiDetails(id: String, vpa: String, payeeName: String, isDefault: Boolean)
+
     @Query("DELETE FROM local_upi_accounts WHERE id = :id")
     suspend fun deleteUpiAccount(id: String)
 

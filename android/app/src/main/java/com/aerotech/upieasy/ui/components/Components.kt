@@ -29,6 +29,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
@@ -56,6 +57,8 @@ fun StatusBadge(status: String) {
         "SUCCESS" -> Pair(SuccessGreenBg, SuccessGreen)
         "PENDING" -> Pair(PendingAmberBg, PendingAmber)
         "FAILED" -> Pair(FailedRedBg, FailedRed)
+        "UNKNOWN" -> Pair(Color(0xFFEDE7F6), Color(0xFF5E35B1))
+        "OBSERVED" -> Pair(Color(0xFFEDE7F6), Color(0xFF5E35B1))
         else -> Pair(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.colorScheme.onSurfaceVariant)
     }
 
@@ -74,6 +77,49 @@ fun StatusBadge(status: String) {
         )
     }
 }
+
+/**
+ * Observed Payment Badge: Displays OBSERVED status and originating UPI app (PhonePe / Google Pay)
+ * per Section 38 & 88 of specification.
+ */
+@Composable
+fun ObservedPaymentBadge(
+    verificationStatus: String,
+    eventSource: String? = null,
+    modifier: Modifier = Modifier
+) {
+    if (verificationStatus.equals("OBSERVED", ignoreCase = true)) {
+        val sourceLabel = when {
+            eventSource?.contains("PHONEPE", ignoreCase = true) == true -> "PhonePe"
+            eventSource?.contains("GPAY", ignoreCase = true) == true -> "Google Pay"
+            eventSource?.contains("GOOGLE", ignoreCase = true) == true -> "Google Pay"
+            else -> "Notification"
+        }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = modifier
+                .clip(RoundedCornerShape(6.dp))
+                .background(Color(0xFFEDE7F6))
+                .padding(horizontal = 8.dp, vertical = 3.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(6.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFF673AB7))
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                text = "OBSERVED • $sourceLabel",
+                color = Color(0xFF512DA8),
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                fontSize = 10.sp
+            )
+        }
+    }
+}
+
 
 /**
  * Glassmorphic Card: Translucent frosted glass surface with subtle border glow and soft elevation.
@@ -356,7 +402,8 @@ fun UpieasyHeroCard(
     onHistoryClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val isDark = isSystemInDarkTheme()
+    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+
     val heroGradientColors = if (isDark) {
         listOf(
             Color(0xFF0F172A), // Deep midnight slate
@@ -365,21 +412,40 @@ fun UpieasyHeroCard(
         )
     } else {
         listOf(
-            Color(0xFF3B82F6), // Bright radiant blue
-            Color(0xFF6366F1), // Electric indigo
-            Color(0xFF8B5CF6)  // Radiant violet
+            Color(0xFFFFFFFF), // Crisp pure white
+            Color(0xFFF7F8FE), // Soft frosted porcelain
+            Color(0xFFEEF2FF)  // Soft ambient pastel indigo
         )
     }
+
+    val cardBorder = if (isDark) {
+        BorderStroke(1.dp, Color(0xFF6366F1).copy(alpha = 0.35f))
+    } else {
+        BorderStroke(1.dp, GlassBorderLight)
+    }
+
+    val titleColor = if (isDark) Color.White.copy(alpha = 0.85f) else TextSecondary
+    val balanceColor = if (isDark) Color.White else TextPrimary
+    val walletBoxBg = if (isDark) Color.White.copy(alpha = 0.18f) else PastelIndigoBg
+    val walletIconTint = if (isDark) Color.White else BrandPrimary
+
+    val chipBg = if (isDark) Color.White.copy(alpha = 0.18f) else SuccessGreenBg
+    val chipTextColor = if (isDark) Color.White else SuccessGreen
+
+    val specularBubble1 = if (isDark) Color.White.copy(alpha = 0.08f) else BrandPrimary.copy(alpha = 0.04f)
+    val specularBubble2 = if (isDark) Color.White.copy(alpha = 0.05f) else BrandSecondary.copy(alpha = 0.03f)
+
+    val actionButtonBg = if (isDark) Color.White.copy(alpha = 0.18f) else PastelIndigoBg
+    val actionButtonBorder = if (isDark) null else BorderStroke(1.dp, BrandPrimary.copy(alpha = 0.12f))
+    val actionButtonIconTint = if (isDark) Color.White else BrandPrimary
+    val actionButtonTextColor = if (isDark) Color.White else TextPrimary
 
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(26.dp),
         colors = CardDefaults.cardColors(containerColor = Color.Transparent),
-        border = BorderStroke(
-            1.dp,
-            if (isDark) Color(0xFF6366F1).copy(alpha = 0.35f) else Color.White.copy(alpha = 0.25f)
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
+        border = cardBorder,
+        elevation = CardDefaults.cardElevation(defaultElevation = if (isDark) 6.dp else 3.dp)
     ) {
         Box(
             modifier = Modifier
@@ -399,14 +465,14 @@ fun UpieasyHeroCard(
                     .size(160.dp)
                     .offset(x = 180.dp, y = (-50).dp)
                     .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.08f))
+                    .background(specularBubble1)
             )
             Box(
                 modifier = Modifier
                     .size(120.dp)
                     .offset(x = (-30).dp, y = 70.dp)
                     .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.05f))
+                    .background(specularBubble2)
             )
 
             Column {
@@ -420,13 +486,13 @@ fun UpieasyHeroCard(
                             modifier = Modifier
                                 .size(28.dp)
                                 .clip(CircleShape)
-                                .background(Color.White.copy(alpha = 0.22f)),
+                                .background(walletBoxBg),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 Icons.Default.AccountBalanceWallet,
                                 contentDescription = null,
-                                tint = Color.White,
+                                tint = walletIconTint,
                                 modifier = Modifier.size(16.dp)
                             )
                         }
@@ -434,18 +500,18 @@ fun UpieasyHeroCard(
                         Text(
                             text = "Today's Collection",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = Color.White.copy(alpha = 0.90f),
+                            color = titleColor,
                             fontWeight = FontWeight.SemiBold
                         )
                     }
 
                     Surface(
                         shape = RoundedCornerShape(20.dp),
-                        color = Color.White.copy(alpha = 0.22f)
+                        color = chipBg
                     ) {
                         Text(
                             text = "$transactionCount Txns",
-                            color = Color.White,
+                            color = chipTextColor,
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
@@ -458,7 +524,7 @@ fun UpieasyHeroCard(
                 Text(
                     text = "₹${String.format("%,.2f", balance)}",
                     style = MaterialTheme.typography.headlineLarge,
-                    color = Color.White,
+                    color = balanceColor,
                     fontWeight = FontWeight.ExtraBold,
                     fontSize = 36.sp,
                     letterSpacing = (-0.5).sp
@@ -475,17 +541,29 @@ fun UpieasyHeroCard(
                     HeroCircularButton(
                         icon = Icons.Default.QrCode,
                         label = "Show QR",
-                        onClick = onShowQrClick
+                        onClick = onShowQrClick,
+                        backgroundColor = actionButtonBg,
+                        border = actionButtonBorder,
+                        iconTint = actionButtonIconTint,
+                        textColor = actionButtonTextColor
                     )
                     HeroCircularButton(
                         icon = Icons.Default.QrCodeScanner,
                         label = "Scan Pay",
-                        onClick = onScanPayClick
+                        onClick = onScanPayClick,
+                        backgroundColor = actionButtonBg,
+                        border = actionButtonBorder,
+                        iconTint = actionButtonIconTint,
+                        textColor = actionButtonTextColor
                     )
                     HeroCircularButton(
                         icon = Icons.AutoMirrored.Filled.ReceiptLong,
                         label = "Ledger",
-                        onClick = onHistoryClick
+                        onClick = onHistoryClick,
+                        backgroundColor = actionButtonBg,
+                        border = actionButtonBorder,
+                        iconTint = actionButtonIconTint,
+                        textColor = actionButtonTextColor
                     )
                 }
             }
@@ -497,7 +575,11 @@ fun UpieasyHeroCard(
 private fun HeroCircularButton(
     icon: ImageVector,
     label: String,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    backgroundColor: Color = Color.White.copy(alpha = 0.22f),
+    border: BorderStroke? = null,
+    iconTint: Color = Color.White,
+    textColor: Color = Color.White
 ) {
     val context = LocalContext.current
     Column(
@@ -511,20 +593,21 @@ private fun HeroCircularButton(
             modifier = Modifier
                 .size(52.dp)
                 .clip(CircleShape)
-                .background(Color.White.copy(alpha = 0.22f)),
+                .background(backgroundColor)
+                .then(if (border != null) Modifier.border(border, CircleShape) else Modifier),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = label,
-                tint = Color.White,
+                tint = iconTint,
                 modifier = Modifier.size(24.dp)
             )
         }
         Spacer(modifier = Modifier.height(6.dp))
         Text(
             text = label,
-            color = Color.White,
+            color = textColor,
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.SemiBold,
             fontSize = 11.sp
@@ -839,7 +922,14 @@ fun TransactionRow(
 
                 Spacer(modifier = Modifier.height(4.dp))
 
-                StatusBadge(status = transaction.status)
+                if (transaction.verificationStatus.equals("OBSERVED", ignoreCase = true)) {
+                    ObservedPaymentBadge(
+                        verificationStatus = transaction.verificationStatus,
+                        eventSource = transaction.eventSource
+                    )
+                } else {
+                    StatusBadge(status = transaction.status)
+                }
             }
         }
     }

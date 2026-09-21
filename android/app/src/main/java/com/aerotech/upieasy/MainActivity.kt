@@ -1,6 +1,7 @@
 package com.aerotech.upieasy
 
 import android.os.Bundle
+import android.content.pm.ActivityInfo
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.*
@@ -27,6 +28,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -36,7 +41,6 @@ import androidx.compose.ui.draw.scale
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.aerotech.upieasy.core.util.BiometricPromptHelper
-import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
 import androidx.navigation.navArgument
 import androidx.navigation.compose.*
@@ -67,6 +71,7 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector)
 class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
         enableEdgeToEdge()
 
         val sessionManager = SessionManager(applicationContext)
@@ -287,6 +292,7 @@ class MainActivity : FragmentActivity() {
                                     }
                                 },
                                 onNavigateToLegal = { navController.navigate("legal") },
+                                onNavigateToPaymentDetection = { navController.navigate("payment_detection") },
                                 onLogout = {
                                     scope.launch {
                                         sessionManager.clearSession()
@@ -330,6 +336,12 @@ class MainActivity : FragmentActivity() {
 
                         composable("legal") {
                             com.aerotech.upieasy.feature.legal.LegalScreen(
+                                onNavigateBack = { navController.popBackStack() }
+                            )
+                        }
+
+                        composable("payment_detection") {
+                            com.aerotech.upieasy.feature.settings.PaymentDetectionSettingsScreen(
                                 onNavigateBack = { navController.popBackStack() }
                             )
                         }
@@ -377,14 +389,45 @@ fun MainAppContent(
     onNavigateToScan: () -> Unit,
     onNavigateToQr: (vpa: String?, name: String?) -> Unit,
     onNavigateToLegal: () -> Unit,
+    onNavigateToPaymentDetection: () -> Unit = {},
     onLogout: () -> Unit
 ) {
     val bottomNavController = rememberNavController()
     val navBackStackEntry by bottomNavController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route ?: Screen.Dashboard.route
     var showHubSheet by remember { mutableStateOf(false) }
+    var isBottomBarShrunk by remember { mutableStateOf(false) }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    // Reset shrink state when navigating between tabs/screens
+    LaunchedEffect(currentRoute) {
+        isBottomBarShrunk = false
+    }
+
+    val nestedScrollConnection = remember {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                val delta = available.y
+                if (delta < -14f) {
+                    // Scrolling down (finger moves up) -> shrink bottom tab
+                    if (!isBottomBarShrunk) {
+                        isBottomBarShrunk = true
+                    }
+                } else if (delta > 14f) {
+                    // Scrolling up towards top (finger moves down) -> restore to normal size
+                    if (isBottomBarShrunk) {
+                        isBottomBarShrunk = false
+                    }
+                }
+                return Offset.Zero
+            }
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .nestedScroll(nestedScrollConnection)
+    ) {
         NavHost(
             navController = bottomNavController,
             startDestination = Screen.Dashboard.route,
@@ -411,7 +454,8 @@ fun MainAppContent(
             composable(Screen.Upi.route) {
                 UpiScreen(
                     sessionManager = sessionManager,
-                    onNavigateToQrForVpa = { vpa, name -> onNavigateToQr(vpa, name) }
+                    onNavigateToQrForVpa = { vpa, name -> onNavigateToQr(vpa, name) },
+                    onNavigateToPaymentDetection = onNavigateToPaymentDetection
                 )
             }
 
@@ -424,6 +468,7 @@ fun MainAppContent(
                     sessionManager = sessionManager,
                     database = database,
                     onNavigateToLegal = onNavigateToLegal,
+                    onNavigateToPaymentDetection = onNavigateToPaymentDetection,
                     onLogout = onLogout
                 )
             }
@@ -431,6 +476,8 @@ fun MainAppContent(
 
         FloatingGlassBottomBar(
             currentRoute = currentRoute,
+            isShrunk = isBottomBarShrunk,
+            onExpand = { isBottomBarShrunk = false },
             onOpenHub = { showHubSheet = true },
             onItemClick = { screen ->
                 if (screen.route == Screen.Dashboard.route) {
@@ -502,15 +549,37 @@ fun MainAppContent(
 /**
  * 3-button icon-based sleek floating rounded pill glassmorphism bottom bar.
  * No text labels. Left: Home, Center: + Hub Button, Right: Settings.
+ * Shrinks dynamically to a sleek compact circle on scroll down,
+ * and expands back to normal size on scroll up or tap.
  */
 @Composable
 fun FloatingGlassBottomBar(
     currentRoute: String,
+    isShrunk: Boolean,
+    onExpand: () -> Unit,
     onOpenHub: () -> Unit,
     onItemClick: (Screen) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+
+    val barWidth by animateDpAsState(
+        targetValue = if (isShrunk) 58.dp else 228.dp,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMediumLow
+        ),
+        label = "barWidth"
+    )
+
+    val glowWidth by animateDpAsState(
+        targetValue = if (isShrunk) 54.dp else 224.dp,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMediumLow
+        ),
+        label = "glowWidth"
+    )
 
     Box(
         modifier = modifier
@@ -522,62 +591,80 @@ fun FloatingGlassBottomBar(
         // Subtle ambient soft glow behind the floating pill
         Box(
             modifier = Modifier
-                .width(224.dp)
+                .width(glowWidth)
                 .height(40.dp)
                 .clip(CircleShape)
-                .background(SoftGlowIndigo.copy(alpha = 0.32f))
+                .background(SoftGlowIndigo.copy(alpha = if (isShrunk) 0.38f else 0.32f))
         )
 
         // Floating rounded glassmorphism pill container
         Surface(
             shape = CircleShape,
             color = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
-            tonalElevation = 6.dp,
-            shadowElevation = 16.dp,
+            tonalElevation = if (isShrunk) 8.dp else 6.dp,
+            shadowElevation = if (isShrunk) 18.dp else 16.dp,
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.38f)),
             modifier = Modifier
-                .width(228.dp)
+                .width(barWidth)
                 .height(58.dp)
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 14.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // 1. Home Button
-                val isHomeSelected = currentRoute == Screen.Dashboard.route
-                val homeIconColor by animateColorAsState(
-                    targetValue = if (isHomeSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                    animationSpec = tween(200),
-                    label = "homeIconColor"
-                )
-                Box(
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(CircleShape)
-                        .background(if (isHomeSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f) else Color.Transparent)
-                        .clickable(
+                .then(
+                    if (isShrunk) {
+                        Modifier.clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null
                         ) {
                             HapticHelper.performHaptic(context, HapticHelper.FeedbackType.LIGHT)
-                            onItemClick(Screen.Dashboard)
-                        },
-                    contentAlignment = Alignment.Center
+                            onExpand()
+                        }
+                    } else Modifier
+                )
+        ) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                // 1. Home Button (Animated visibility when expanded)
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = !isShrunk,
+                    enter = fadeIn(tween(160)) + expandHorizontally(expandFrom = Alignment.End),
+                    exit = fadeOut(tween(120)) + shrinkHorizontally(shrinkTowards = Alignment.End),
+                    modifier = Modifier
+                        .align(Alignment.CenterStart)
+                        .padding(start = 12.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Home,
-                        contentDescription = "Home",
-                        tint = homeIconColor,
-                        modifier = Modifier.size(24.dp)
+                    val isHomeSelected = currentRoute == Screen.Dashboard.route
+                    val homeIconColor by animateColorAsState(
+                        targetValue = if (isHomeSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                        animationSpec = tween(200),
+                        label = "homeIconColor"
                     )
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(if (isHomeSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f) else Color.Transparent)
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null
+                            ) {
+                                HapticHelper.performHaptic(context, HapticHelper.FeedbackType.LIGHT)
+                                onItemClick(Screen.Dashboard)
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Home,
+                            contentDescription = "Home",
+                            tint = homeIconColor,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
                 }
 
                 // 2. Center '+' Quick Action Hub Button
                 Box(
                     modifier = Modifier
+                        .align(Alignment.Center)
                         .size(44.dp)
                         .clip(CircleShape)
                         .background(
@@ -585,47 +672,64 @@ fun FloatingGlassBottomBar(
                                 colors = listOf(BrandGradientStart, BrandGradientEnd)
                             )
                         )
-                        .clickable {
-                            HapticHelper.performHaptic(context, HapticHelper.FeedbackType.MEDIUM)
-                            onOpenHub()
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null
+                        ) {
+                            if (isShrunk) {
+                                HapticHelper.performHaptic(context, HapticHelper.FeedbackType.LIGHT)
+                                onExpand()
+                            } else {
+                                HapticHelper.performHaptic(context, HapticHelper.FeedbackType.MEDIUM)
+                                onOpenHub()
+                            }
                         },
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Default.Add,
-                        contentDescription = "Quick Actions & Routes",
+                        contentDescription = if (isShrunk) "Expand Tab" else "Quick Actions & Routes",
                         tint = Color.White,
                         modifier = Modifier.size(26.dp)
                     )
                 }
 
-                // 3. Settings Button
-                val isSettingsSelected = currentRoute == Screen.Settings.route
-                val settingsIconColor by animateColorAsState(
-                    targetValue = if (isSettingsSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                    animationSpec = tween(200),
-                    label = "settingsIconColor"
-                )
-                Box(
+                // 3. Settings Button (Animated visibility when expanded)
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = !isShrunk,
+                    enter = fadeIn(tween(160)) + expandHorizontally(expandFrom = Alignment.Start),
+                    exit = fadeOut(tween(120)) + shrinkHorizontally(shrinkTowards = Alignment.Start),
                     modifier = Modifier
-                        .size(44.dp)
-                        .clip(CircleShape)
-                        .background(if (isSettingsSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f) else Color.Transparent)
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null
-                        ) {
-                            HapticHelper.performHaptic(context, HapticHelper.FeedbackType.LIGHT)
-                            onItemClick(Screen.Settings)
-                        },
-                    contentAlignment = Alignment.Center
+                        .align(Alignment.CenterEnd)
+                        .padding(end = 12.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Settings,
-                        contentDescription = "Settings",
-                        tint = settingsIconColor,
-                        modifier = Modifier.size(23.dp)
+                    val isSettingsSelected = currentRoute == Screen.Settings.route
+                    val settingsIconColor by animateColorAsState(
+                        targetValue = if (isSettingsSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                        animationSpec = tween(200),
+                        label = "settingsIconColor"
                     )
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(if (isSettingsSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f) else Color.Transparent)
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null
+                            ) {
+                                HapticHelper.performHaptic(context, HapticHelper.FeedbackType.LIGHT)
+                                onItemClick(Screen.Settings)
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "Settings",
+                            tint = settingsIconColor,
+                            modifier = Modifier.size(23.dp)
+                        )
+                    }
                 }
             }
         }

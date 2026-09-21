@@ -281,3 +281,138 @@ upiRouter.delete(
     return c.json({ success: true, message: "UPI ID and associated QR codes deleted successfully" });
   }
 );
+
+const updateUpiValidator = z.object({
+  vpa: z.string().regex(/^[\w.-]+@[\w.-]+$/, "Invalid UPI VPA format (e.g. name@bank)").optional(),
+  payeeName: z.string().min(2).optional(),
+  merchantCategoryCode: z.string().optional(),
+  isDefault: z.boolean().optional(),
+});
+
+const handleUpdateUpi = async (c: any) => {
+  const orgId = c.get("organizationId");
+  const actorId = c.get("userId");
+  const upiId = c.req.param("upiId");
+  const body = await c.req.json();
+
+  const data = updateUpiValidator.parse(body);
+
+  const target = await db
+    .select()
+    .from(schema.upiAccounts)
+    .where(and(eq(schema.upiAccounts.id, upiId), eq(schema.upiAccounts.organizationId, orgId)))
+    .get();
+
+  if (!target) {
+    throw new NotFoundError("UPI Account not found");
+  }
+
+  const now = new Date();
+
+  // If set to default, unset other defaults in this organization
+  if (data.isDefault) {
+    await db.update(schema.upiAccounts)
+      .set({ isDefault: false })
+      .where(eq(schema.upiAccounts.organizationId, orgId))
+      .run();
+  }
+
+  const newVpa = data.vpa ? data.vpa.toLowerCase().trim() : target.vpa;
+  const newPayeeName = data.payeeName !== undefined ? data.payeeName.trim() : target.payeeName;
+  const newMcc = data.merchantCategoryCode !== undefined ? data.merchantCategoryCode : target.merchantCategoryCode;
+  const newIsDefault = data.isDefault !== undefined ? data.isDefault : target.isDefault;
+
+  await db.update(schema.upiAccounts)
+    .set({
+      vpa: newVpa,
+      payeeName: newPayeeName,
+      merchantCategoryCode: newMcc,
+      isDefault: newIsDefault,
+      updatedAt: now,
+    })
+    .where(eq(schema.upiAccounts.id, upiId))
+    .run();
+
+  // Update associated QR codes if VPA or payeeName changed
+  if (data.vpa || data.payeeName || data.merchantCategoryCode) {
+    const params = new URLSearchParams({
+      pa: newVpa,
+      pn: newPayeeName,
+      mc: newMcc,
+      cu: "INR",
+    });
+    const upiUri = `upi://pay?${params.toString()}`;
+
+    await db.update(schema.qrCodes)
+      .set({
+        qrPayload: upiUri,
+        title: `${newPayeeName} Primary QR`,
+      })
+      .where(eq(schema.qrCodes.upiAccountId, upiId))
+      .run();
+
+    // Also update matching payment accounts linking this VPA
+    await db.update(schema.paymentAccounts)
+      .set({
+        upiId: newVpa,
+        label: newPayeeName,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(schema.paymentAccounts.organizationId, orgId),
+          eq(schema.paymentAccounts.upiId, target.vpa)
+        )
+      )
+      .run();
+  }
+
+  // Audit log
+  await db.insert(schema.auditLogs)
+    .values({
+      id: generateId("aud"),
+      organizationId: orgId,
+      actorId,
+      action: "upi.updated",
+      resourceType: "upi_account",
+      resourceId: upiId,
+      metadataJson: JSON.stringify({ oldVpa: target.vpa, newVpa, payeeName: newPayeeName }),
+      createdAt: now,
+    })
+    .run();
+
+  // Outbox event for delta-sync
+  await db.insert(schema.outboxEvents)
+    .values({
+      id: generateId("evt"),
+      organizationId: orgId,
+      eventType: "upi.updated",
+      payloadJson: JSON.stringify({
+        id: upiId,
+        organizationId: orgId,
+        vpa: newVpa,
+        payeeName: newPayeeName,
+        merchantCategoryCode: newMcc,
+        isDefault: newIsDefault,
+        updatedAt: now.getTime(),
+      }),
+      status: "PENDING",
+      createdAt: now,
+    })
+    .run();
+
+  const updatedAccount = await db
+    .select()
+    .from(schema.upiAccounts)
+    .where(eq(schema.upiAccounts.id, upiId))
+    .get();
+
+  return c.json({
+    success: true,
+    message: "UPI ID updated successfully",
+    upiAccount: updatedAccount,
+  });
+};
+
+upiRouter.put("/:orgId/upi/:upiId", requireTenant, requirePermission("upi.manage"), handleUpdateUpi);
+upiRouter.patch("/:orgId/upi/:upiId", requireTenant, requirePermission("upi.manage"), handleUpdateUpi);

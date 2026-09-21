@@ -140,6 +140,8 @@ class TransactionRepository(
         payeeName = payeeName,
         payeeVpa = payeeVpa,
         note = note,
-        occurredAt = occurredAt
+        occurredAt = occurredAt,
+        verificationStatus = verificationStatus,
+        eventSource = eventSource
     )
 }

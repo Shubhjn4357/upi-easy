@@ -22,5 +22,8 @@ data class TransactionEntity(
     val payeeVpa: String,
     val note: String?,
     val occurredAt: Long,
-    val syncStatus: String = "SYNCED" // LOCAL_ONLY, QUEUED, SYNCING, SYNCED
+    val syncStatus: String = "SYNCED", // LOCAL_ONLY, QUEUED, SYNCING, SYNCED
+    val paymentAccountId: String? = null,
+    val verificationStatus: String = "UNVERIFIED", // OBSERVED, VERIFIED, UNVERIFIED, CONFLICT
+    val eventSource: String = "UPI_INTENT" // NOTIFICATION_PHONEPE, NOTIFICATION_GPAY, etc.
 )

@@ -18,6 +18,8 @@ import { notificationsRouter, orgNotificationsRouter } from "./modules/notificat
 import { webhooksRouter } from "./modules/webhooks/index.js";
 import { invitationsRouter, getMyInvitationsHandler } from "./modules/invitations/index.js";
 import { devicesRouter } from "./modules/devices/index.js";
+import { paymentAccountsRouter, paymentAppsRouter } from "./modules/paymentAccounts/index.js";
+import { paymentEventsRouter } from "./modules/paymentEvents/index.js";
 import { seedDemoMerchantData } from "./db/seed.js";
 import { renderDashboardHtml } from "./dashboard/html.js";
 import { requireAuth } from "./middleware/auth.js";
@@ -118,6 +120,9 @@ v1.route("/organizations", syncRouter);
 v1.route("/organizations", auditRouter);
 v1.route("/organizations", orgNotificationsRouter);
 v1.route("/notifications", notificationsRouter);
+v1.route("/payment-apps", paymentAppsRouter);
+v1.route("/organizations", paymentAccountsRouter);
+v1.route("/organizations", paymentEventsRouter);
 v1.route("/webhooks", webhooksRouter);
 
 // Development & Demo Seed Endpoint

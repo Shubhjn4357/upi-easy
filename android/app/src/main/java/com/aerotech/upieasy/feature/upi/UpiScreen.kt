@@ -3,6 +3,7 @@ package com.aerotech.upieasy.feature.upi
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -35,6 +36,12 @@ import com.aerotech.upieasy.core.network.NetworkClient
 import com.aerotech.upieasy.core.network.UpiAccountDto
 import com.aerotech.upieasy.core.security.SessionManager
 import com.aerotech.upieasy.core.util.HapticHelper
+import com.aerotech.upieasy.data.repository.PaymentAccountRepository
+import com.aerotech.upieasy.feature.notifications.AndroidPaymentAppDetector
+import com.aerotech.upieasy.feature.notifications.PaymentAppDefinition
+import com.aerotech.upieasy.feature.notifications.supportedPaymentApps
+import com.aerotech.upieasy.feature.settings.isNotificationAccessGranted
+import com.aerotech.upieasy.ui.components.PaymentAppSelector
 import com.aerotech.upieasy.ui.components.UpieasyPullToRefreshContainer
 import com.aerotech.upieasy.ui.components.SwipeToDeleteContainer
 import com.aerotech.upieasy.ui.components.UpieasyConfirmBottomDrawer
@@ -47,7 +54,8 @@ import kotlinx.coroutines.withContext
 @Composable
 fun UpiScreen(
     sessionManager: SessionManager,
-    onNavigateToQrForVpa: (String, String) -> Unit
+    onNavigateToQrForVpa: (String, String) -> Unit,
+    onNavigateToPaymentDetection: () -> Unit = {}
 ) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -63,6 +71,11 @@ fun UpiScreen(
         }
     }.collectAsState(initial = emptyList())
 
+    val paymentAccountRepo = remember { PaymentAccountRepository(context, apiService, database, sessionManager) }
+    val detector = remember { AndroidPaymentAppDetector(context) }
+    var isNotificationActive by remember { mutableStateOf(isNotificationAccessGranted(context)) }
+    var showNotificationGuidanceDialog by remember { mutableStateOf(false) }
+
     var upiList by remember { mutableStateOf<List<UpiAccountDto>>(emptyList()) }
     var pendingDeletedIds by remember { mutableStateOf(setOf<String>()) }
     var isLoading by remember { mutableStateOf(false) }
@@ -73,6 +86,8 @@ fun UpiScreen(
     var isSelectionMode by remember { mutableStateOf(false) }
     var selectedIds by remember { mutableStateOf(setOf<String>()) }
     var accountToDelete by remember { mutableStateOf<UpiAccountDto?>(null) }
+    var accountToEdit by remember { mutableStateOf<UpiAccountDto?>(null) }
+    var showEditBottomSheet by remember { mutableStateOf(false) }
     var showBulkDeleteConfirm by remember { mutableStateOf(false) }
 
     fun refresh() {
@@ -311,6 +326,63 @@ fun UpiScreen(
                         contentPadding = PaddingValues(top = 8.dp, bottom = 100.dp)
                     ) {
                     if (!isSelectionMode) {
+                        // Payment Detection Status Card (Section 36 & 59)
+                        item {
+                            Surface(
+                                shape = RoundedCornerShape(18.dp),
+                                color = if (isNotificationActive) Color(0xFFEDE7F6) else Color(0xFFFFF3E0),
+                                border = BorderStroke(
+                                    1.dp,
+                                    if (isNotificationActive) Color(0xFFD1C4E9) else Color(0xFFFFCC80)
+                                ),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onNavigateToPaymentDetection() }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(14.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .clip(CircleShape)
+                                            .background(if (isNotificationActive) Color(0xFF673AB7) else Color(0xFFE65100)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = if (isNotificationActive) Icons.Default.NotificationsActive else Icons.Default.NotificationsOff,
+                                            contentDescription = null,
+                                            tint = Color.White,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = if (isNotificationActive) "Payment Detection Active" else "Payment Detection Disabled",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (isNotificationActive) Color(0xFF4527A0) else Color(0xFFBF360C)
+                                        )
+                                        Text(
+                                            text = if (isNotificationActive)
+                                                "Observing PhonePe & Google Pay payment notifications"
+                                            else
+                                                "Tap to configure payment apps and grant notification access",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    Icon(
+                                        imageVector = Icons.Default.ChevronRight,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+
                         // Bento Overview Hero Card
                         item {
                             val defaultAcc = effectiveList.firstOrNull { it.isDefault } ?: effectiveList.firstOrNull()
@@ -517,7 +589,7 @@ fun UpiScreen(
                                         }
 
                                         Column {
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                           
                                                 Text(
                                                     text = item.vpa,
                                                     style = MaterialTheme.typography.titleMedium,
@@ -539,7 +611,7 @@ fun UpiScreen(
                                                         )
                                                     }
                                                 }
-                                            }
+                                           
                                             Spacer(modifier = Modifier.height(2.dp))
                                             Text(
                                                 text = "Payee: ${item.payeeName}",
@@ -551,6 +623,24 @@ fun UpiScreen(
 
                                     if (!isSelectionMode) {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
+                                            IconButton(
+                                                onClick = {
+                                                    accountToEdit = item
+                                                    showEditBottomSheet = true
+                                                },
+                                                modifier = Modifier
+                                                    .size(36.dp)
+                                                    .clip(CircleShape)
+                                                    .background(PastelBlueBg)
+                                            ) {
+                                                Icon(
+                                                    Icons.Default.Edit,
+                                                    contentDescription = "Edit UPI ID",
+                                                    tint = BrandPrimary,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                            }
+                                            Spacer(modifier = Modifier.width(6.dp))
                                             IconButton(
                                                 onClick = { onNavigateToQrForVpa(item.vpa, item.payeeName) },
                                                 modifier = Modifier
@@ -622,6 +712,8 @@ fun UpiScreen(
         var setAsDefault by remember { mutableStateOf(false) }
         var isSubmitting by remember { mutableStateOf(false) }
         var errorMessage by remember { mutableStateOf<String?>(null) }
+        val installedApps = remember { detector.getInstalledSupportedApps() }
+        var selectedPaymentApp by remember { mutableStateOf<PaymentAppDefinition?>(installedApps.firstOrNull()) }
 
         ModalBottomSheet(
             onDismissRequest = { showAddBottomSheet = false },
@@ -639,14 +731,22 @@ fun UpiScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Text(
-                    text = "Link Business UPI ID",
+                    text = "Add Payment Account",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = "Enter your UPI VPA to accept payments and print dynamic QR codes.",
+                    text = "Link your UPI account and select the installed payment app to observe incoming notifications.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                // App Selector for payment detection (Section 5 & 34)
+                PaymentAppSelector(
+                    installedApps = installedApps,
+                    allSupportedApps = supportedPaymentApps,
+                    selectedApp = selectedPaymentApp,
+                    onAppSelected = { selectedPaymentApp = it }
                 )
 
                 OutlinedTextField(
@@ -669,8 +769,8 @@ fun UpiScreen(
                         payeeInput = it
                         errorMessage = null
                     },
-                    label = { Text("Registered Payee Name") },
-                    placeholder = { Text("Acme Retail Store") },
+                    label = { Text("Account Label / Payee Name") },
+                    placeholder = { Text("Counter 1 Store") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
@@ -708,7 +808,7 @@ fun UpiScreen(
                             return@Button
                         }
                         if (payeeInput.trim().isBlank()) {
-                            errorMessage = "Please enter payee name"
+                            errorMessage = "Please enter account name / payee name"
                             return@Button
                         }
 
@@ -722,8 +822,22 @@ fun UpiScreen(
                                         AddUpiRequest(vpaInput.trim(), payeeInput.trim(), setAsDefault)
                                     )
                                     if (res.isSuccessful && res.body()?.success == true) {
+                                        // Also create payment account if an app was selected (Section 34)
+                                        selectedPaymentApp?.let { app ->
+                                            paymentAccountRepo.createPaymentAccount(
+                                                orgId = orgId,
+                                                label = payeeInput.trim().ifBlank { "${app.displayName} Account" },
+                                                upiId = vpaInput.trim(),
+                                                paymentApp = app
+                                            )
+                                        }
+
                                         showAddBottomSheet = false
                                         refresh()
+
+                                        if (!isNotificationAccessGranted(context) && selectedPaymentApp != null) {
+                                            showNotificationGuidanceDialog = true
+                                        }
                                     } else {
                                         errorMessage = res.body()?.message ?: "Failed to add UPI ID"
                                     }
@@ -746,13 +860,225 @@ fun UpiScreen(
                     if (isSubmitting) {
                         CircularProgressIndicator(color = Color.White, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                     } else {
-                        Text("Add UPI Account", fontWeight = FontWeight.Bold)
+                        Text("Save Payment Account", fontWeight = FontWeight.Bold)
                     }
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
             }
         }
+    }
+
+    // Edit UPI Bottom Sheet
+    if (showEditBottomSheet && accountToEdit != null) {
+        val editingAccount = accountToEdit!!
+        var editVpaInput by remember { mutableStateOf(editingAccount.vpa) }
+        var editPayeeInput by remember { mutableStateOf(editingAccount.payeeName) }
+        var editSetAsDefault by remember { mutableStateOf(editingAccount.isDefault) }
+        var isEditSubmitting by remember { mutableStateOf(false) }
+        var editErrorMessage by remember { mutableStateOf<String?>(null) }
+
+        ModalBottomSheet(
+            onDismissRequest = {
+                showEditBottomSheet = false
+                accountToEdit = null
+            },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            containerColor = MaterialTheme.colorScheme.surface
+        ) {
+            val focusManager = LocalFocusManager.current
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(24.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Edit UPI ID",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    IconButton(
+                        onClick = {
+                            showEditBottomSheet = false
+                            accountToEdit = null
+                        }
+                    ) {
+                        Icon(Icons.Default.Close, contentDescription = "Close")
+                    }
+                }
+
+                Text(
+                    text = "Update the UPI VPA address or merchant payee name. Linked QR codes will automatically be updated.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                OutlinedTextField(
+                    value = editVpaInput,
+                    onValueChange = {
+                        editVpaInput = it
+                        editErrorMessage = null
+                    },
+                    label = { Text("UPI ID (VPA)") },
+                    placeholder = { Text("e.g. merchant@okaxis") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next)
+                )
+
+                OutlinedTextField(
+                    value = editPayeeInput,
+                    onValueChange = {
+                        editPayeeInput = it
+                        editErrorMessage = null
+                    },
+                    label = { Text("Account Label / Payee Name") },
+                    placeholder = { Text("e.g. Counter 1 Store") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() })
+                )
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Checkbox(
+                        checked = editSetAsDefault,
+                        onCheckedChange = { editSetAsDefault = it }
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        "Set as primary UPI address for QR codes",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+
+                if (editErrorMessage != null) {
+                    Text(
+                        text = editErrorMessage!!,
+                        color = FailedRed,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+
+                Button(
+                    onClick = {
+                        if (!editVpaInput.contains("@") || editVpaInput.trim().length < 5) {
+                            editErrorMessage = "Please enter a valid UPI VPA (e.g. store@okhdfcbank)"
+                            return@Button
+                        }
+                        if (editPayeeInput.trim().isBlank()) {
+                            editErrorMessage = "Please enter account name / payee name"
+                            return@Button
+                        }
+
+                        isEditSubmitting = true
+                        scope.launch {
+                            try {
+                                val orgId = currentOrgId ?: sessionManager.getCurrentOrgId()
+                                if (!orgId.isNullOrBlank()) {
+                                    val trimmedVpa = editVpaInput.trim().lowercase()
+                                    val trimmedPayee = editPayeeInput.trim()
+
+                                    val res = apiService.updateUpiAccount(
+                                        orgId = orgId,
+                                        upiId = editingAccount.id,
+                                        request = com.aerotech.upieasy.core.network.UpdateUpiRequest(
+                                            vpa = trimmedVpa,
+                                            payeeName = trimmedPayee,
+                                            isDefault = editSetAsDefault
+                                        )
+                                    )
+
+                                    if (res.isSuccessful && res.body()?.success == true) {
+                                        withContext(Dispatchers.IO) {
+                                            if (editSetAsDefault) {
+                                                database.upiDao().clearDefaultUpi(orgId)
+                                            }
+                                            database.upiDao().updateUpiDetails(
+                                                id = editingAccount.id,
+                                                vpa = trimmedVpa,
+                                                payeeName = trimmedPayee,
+                                                isDefault = editSetAsDefault
+                                            )
+                                        }
+
+                                        showEditBottomSheet = false
+                                        accountToEdit = null
+                                        refresh()
+                                        Toast.makeText(context, "UPI ID updated successfully", Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        editErrorMessage = res.body()?.message ?: "Failed to update UPI ID"
+                                    }
+                                } else {
+                                    editErrorMessage = "Organization not found"
+                                }
+                            } catch (e: Exception) {
+                                editErrorMessage = e.localizedMessage ?: "Network error"
+                            } finally {
+                                isEditSubmitting = false
+                            }
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    enabled = !isEditSubmitting
+                ) {
+                    if (isEditSubmitting) {
+                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                    } else {
+                        Text("Save Changes", fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+        }
+    }
+
+    // Guidance dialog when notification access is missing after adding an account (Section 34 & 62)
+    if (showNotificationGuidanceDialog) {
+        AlertDialog(
+            onDismissRequest = { showNotificationGuidanceDialog = false },
+            icon = { Icon(Icons.Default.NotificationsActive, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+            title = { Text("Enable Payment Detection?") },
+            text = {
+                Text(
+                    "Your payment account was saved successfully!\n\n" +
+                            "To automatically detect and announce incoming payments from this UPI app, UPI-Easy needs Android notification listener access.\n\n" +
+                            "Would you like to grant notification access now?"
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showNotificationGuidanceDialog = false
+                        val intent = android.content.Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+                        context.startActivity(intent)
+                    }
+                ) {
+                    Text("Enable Access")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showNotificationGuidanceDialog = false }) {
+                    Text("Later")
+                }
+            }
+        )
     }
 
     // Single Delete Confirmation
