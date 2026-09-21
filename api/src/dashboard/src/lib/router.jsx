@@ -2,7 +2,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { hasRole } from './auth.js';
 
-const RouterContext = createContext({
+const RouterContext = React.createContext({
   path: "/overview",
   navigate: () => {},
 });
@@ -14,9 +14,9 @@ export function Router({ children }) {
     return hash && hash !== "/" ? hash : "/overview";
   };
 
-  const [path, setPath] = useState(getInitialPath);
+  const [path, setPath] = React.useState(getInitialPath);
 
-  useEffect(() => {
+  React.useEffect(() => {
     const handleHashChange = () => {
       const newPath = window.location.hash.replace(/^#\/?/, "/");
       setPath(newPath && newPath !== "/" ? newPath : "/overview");
@@ -40,17 +40,17 @@ export function Router({ children }) {
 }
 
 export function useNavigate() {
-  const context = useContext(RouterContext);
+  const context = React.useContext(RouterContext);
   return context.navigate;
 }
 
 export function useLocation() {
-  const context = useContext(RouterContext);
+  const context = React.useContext(RouterContext);
   return { pathname: context.path };
 }
 
 export function Routes({ children }) {
-  const { path } = useContext(RouterContext);
+  const { path } = React.useContext(RouterContext);
   let matchedElement = null;
 
   React.Children.forEach(children, (child) => {

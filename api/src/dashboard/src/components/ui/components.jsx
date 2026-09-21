@@ -163,3 +163,15 @@ export function TabsContent({ value, activeTab, className = "", children }) {
     </div>
   );
 }
+
+// Suspense Fallback Loader
+export function SuspenseFallback({ activeTab = "overview" }) {
+  return (
+    <div className="flex flex-col items-center justify-center min-h-[300px] space-y-4 animate-pulse">
+      <div className="w-10 h-10 rounded-2xl bg-brand-500/10 border border-brand-500/20 flex items-center justify-center">
+        <div className="w-5 h-5 rounded-full border-2 border-brand-500 border-t-transparent animate-spin" />
+      </div>
+      <p className="text-xs text-muted-foreground font-mono">Loading {activeTab}...</p>
+    </div>
+  );
+}
