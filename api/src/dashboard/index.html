@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>UPI-Easy Admin Panel</title>
+  <title>UPI-Easy — Multi-Tenant SaaS Platform & Admin Console</title>
 
   <!-- Google Fonts: Plus Jakarta Sans & JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -232,64 +232,24 @@ html.light body {
 <body>
   <div id="root"></div>
 
-  <!-- Pre-compiled Native Production Bundle (Zero Runtime Transpilation) -->
+  <!-- Pre-compiled Native Production Bundle (Zero Babel, Zero Runtime Transpilation) -->
   <script>
-"use strict";
-var UpiEasyApp = (() => {
-  var __create = Object.create;
-  var __defProp = Object.defineProperty;
-  var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
-  var __getOwnPropNames = Object.getOwnPropertyNames;
-  var __getProtoOf = Object.getPrototypeOf;
-  var __hasOwnProp = Object.prototype.hasOwnProperty;
-  var __commonJS = (cb, mod) => function __require() {
-    try {
-      return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
-    } catch (e) {
-      throw mod = 0, e;
-    }
-  };
-  var __export = (target, all) => {
-    for (var name in all)
-      __defProp(target, name, { get: all[name], enumerable: true });
-  };
-  var __copyProps = (to, from, except, desc) => {
-    if (from && typeof from === "object" || typeof from === "function") {
-      for (let key of __getOwnPropNames(from))
-        if (!__hasOwnProp.call(to, key) && key !== except)
-          __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
-    }
-    return to;
-  };
-  var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(
-    // If the importer is in node compatibility mode or this is not an ESM
-    // file that has been converted to a CommonJS file using a Babel-
-    // compatible transform (i.e. "__esModule" has not been set), then set
-    // "default" to the CommonJS "module.exports" for node compatibility.
-    isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
-    mod
-  ));
-  var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
-
-  // react-global:react
-  var require_react = __commonJS({
-    "react-global:react"(exports, module) {
-      module.exports = window.React;
-    }
-  });
-
-  // api/src/dashboard/src/App.jsx
-  var App_exports = {};
-  __export(App_exports, {
-    App: () => App,
-    default: () => App_default
-  });
-  var import_react16 = __toESM(require_react(), 1);
-
-  // api/src/dashboard/src/lib/router.jsx
-  var import_react = __toESM(require_react(), 1);
-
-  // api/src/dashboard/src/lib/auth.js
+(function() {
+  const {
+    useState,
+    useEffect,
+    useMemo,
+    useRef,
+    useCallback,
+    useContext,
+    createContext,
+    Suspense,
+    Fragment,
+    startTransition,
+    Children,
+    isValidElement,
+    cloneElement
+  } = React;
   function parseJwtPayload(token) {
     if (!token || typeof token !== "string") return null;
     try {
@@ -349,73 +309,6 @@ var UpiEasyApp = (() => {
     const requiredLevel = hierarchy[requiredRole?.toUpperCase()] || 0;
     return currentLevel >= requiredLevel;
   }
-
-  // api/src/dashboard/src/lib/router.jsx
-  var RouterContext = import_react.default.createContext({
-    path: "/overview",
-    navigate: () => {
-    }
-  });
-  function Router({ children }) {
-    const getInitialPath = () => {
-      const hash = window.location.hash.replace(/^#\/?/, "/");
-      return hash && hash !== "/" ? hash : "/overview";
-    };
-    const [path, setPath] = import_react.default.useState(getInitialPath);
-    import_react.default.useEffect(() => {
-      const handleHashChange = () => {
-        const newPath = window.location.hash.replace(/^#\/?/, "/");
-        setPath(newPath && newPath !== "/" ? newPath : "/overview");
-      };
-      window.addEventListener("hashchange", handleHashChange);
-      return () => window.removeEventListener("hashchange", handleHashChange);
-    }, []);
-    const navigate = (newPath) => {
-      const normalized = newPath.startsWith("/") ? newPath : `/${newPath}`;
-      window.location.hash = `#${normalized}`;
-      setPath(normalized);
-    };
-    return /* @__PURE__ */ import_react.default.createElement(RouterContext.Provider, { value: { path, navigate } }, children);
-  }
-  function useNavigate() {
-    const context = import_react.default.useContext(RouterContext);
-    return context.navigate;
-  }
-  function useLocation() {
-    const context = import_react.default.useContext(RouterContext);
-    return { pathname: context.path };
-  }
-  function Routes({ children }) {
-    const { path } = import_react.default.useContext(RouterContext);
-    let matchedElement = null;
-    import_react.default.Children.forEach(children, (child) => {
-      if (!import_react.default.isValidElement(child)) return;
-      if (child.props.path === path || child.props.path === "*" && !matchedElement) {
-        matchedElement = child.props.element;
-      }
-    });
-    return matchedElement;
-  }
-  function Route({ path, element }) {
-    return element;
-  }
-  function ProtectedRoute({
-    isAuthenticated,
-    userRole,
-    requiredRole,
-    fallback,
-    children
-  }) {
-    if (!isAuthenticated) {
-      return /* @__PURE__ */ import_react.default.createElement("div", { className: "p-8 text-center text-muted-foreground" }, /* @__PURE__ */ import_react.default.createElement("p", { className: "font-semibold text-sm text-foreground" }, "Authentication Required"), /* @__PURE__ */ import_react.default.createElement("p", { className: "text-xs mt-1" }, "Please sign in to access this section."));
-    }
-    if (requiredRole && !hasRole(userRole, requiredRole)) {
-      return /* @__PURE__ */ import_react.default.createElement("div", { className: "p-8 text-center text-muted-foreground" }, /* @__PURE__ */ import_react.default.createElement("p", { className: "font-semibold text-sm text-destructive" }, "Access Restricted"), /* @__PURE__ */ import_react.default.createElement("p", { className: "text-xs mt-1" }, "Your role (", userRole || "MEMBER", ") lacks permission for this view. Requires ", requiredRole, "."));
-    }
-    return children;
-  }
-
-  // api/src/dashboard/src/lib/api.js
   function createApiClient(getToken, onUnauthorized, onLatency) {
     return async function apiFetch(endpoint, options = {}) {
       const token = typeof getToken === "function" ? getToken() : getToken;
@@ -454,14 +347,716 @@ var UpiEasyApp = (() => {
       }
     };
   }
-
-  // api/src/dashboard/src/components/ui/components.jsx
-  var import_react2 = __toESM(require_react(), 1);
-  function SuspenseFallback({ activeTab = "overview" }) {
-    return /* @__PURE__ */ import_react2.default.createElement("div", { className: "flex flex-col items-center justify-center min-h-[300px] space-y-4 animate-pulse" }, /* @__PURE__ */ import_react2.default.createElement("div", { className: "w-10 h-10 rounded-2xl bg-brand-500/10 border border-brand-500/20 flex items-center justify-center" }, /* @__PURE__ */ import_react2.default.createElement("div", { className: "w-5 h-5 rounded-full border-2 border-brand-500 border-t-transparent animate-spin" })), /* @__PURE__ */ import_react2.default.createElement("p", { className: "text-xs text-muted-foreground font-mono" }, "Loading ", activeTab, "..."));
+  const RouterContext = React.createContext({
+    path: "/overview",
+    navigate: () => {
+    }
+  });
+  function Router({ children }) {
+    const getInitialPath = () => {
+      const hash = window.location.hash.replace(/^#\/?/, "/");
+      return hash && hash !== "/" ? hash : "/overview";
+    };
+    const [path, setPath] = React.useState(getInitialPath);
+    React.useEffect(() => {
+      const handleHashChange = () => {
+        const newPath = window.location.hash.replace(/^#\/?/, "/");
+        setPath(newPath && newPath !== "/" ? newPath : "/overview");
+      };
+      window.addEventListener("hashchange", handleHashChange);
+      return () => window.removeEventListener("hashchange", handleHashChange);
+    }, []);
+    const navigate = (newPath) => {
+      const normalized = newPath.startsWith("/") ? newPath : `/${newPath}`;
+      window.location.hash = `#${normalized}`;
+      setPath(normalized);
+    };
+    return /* @__PURE__ */ React.createElement(RouterContext.Provider, { value: { path, navigate } }, children);
   }
-
-  // api/src/dashboard/src/components/Navbar.jsx
+  function useNavigate() {
+    const context = React.useContext(RouterContext);
+    return context.navigate;
+  }
+  function useLocation() {
+    const context = React.useContext(RouterContext);
+    return { pathname: context.path };
+  }
+  function Routes({ children }) {
+    const { path } = React.useContext(RouterContext);
+    let matchedElement = null;
+    React.Children.forEach(children, (child) => {
+      if (!React.isValidElement(child)) return;
+      if (child.props.path === path || child.props.path === "*" && !matchedElement) {
+        matchedElement = child.props.element;
+      }
+    });
+    return matchedElement;
+  }
+  function Route({ path, element }) {
+    return element;
+  }
+  function ProtectedRoute({
+    isAuthenticated,
+    userRole,
+    requiredRole,
+    fallback,
+    children
+  }) {
+    if (!isAuthenticated) {
+      return /* @__PURE__ */ React.createElement("div", { className: "p-8 text-center text-muted-foreground" }, /* @__PURE__ */ React.createElement("p", { className: "font-semibold text-sm text-foreground" }, "Authentication Required"), /* @__PURE__ */ React.createElement("p", { className: "text-xs mt-1" }, "Please sign in to access this section."));
+    }
+    if (requiredRole && !hasRole(userRole, requiredRole)) {
+      return /* @__PURE__ */ React.createElement("div", { className: "p-8 text-center text-muted-foreground" }, /* @__PURE__ */ React.createElement("p", { className: "font-semibold text-sm text-destructive" }, "Access Restricted"), /* @__PURE__ */ React.createElement("p", { className: "text-xs mt-1" }, "Your role (", userRole || "MEMBER", ") lacks permission for this view. Requires ", requiredRole, "."));
+    }
+    return children;
+  }
+  function Link({ to, className = "", children, ...props }) {
+    const navigate = useNavigate();
+    return /* @__PURE__ */ React.createElement(
+      "a",
+      {
+        href: `#${to.startsWith("/") ? to : `/${to}`}`,
+        onClick: (e) => {
+          e.preventDefault();
+          navigate(to);
+        },
+        className,
+        ...props
+      },
+      children
+    );
+  }
+  function Icon({ children, className = "w-4 h-4", ...props }) {
+    return /* @__PURE__ */ React.createElement(
+      "svg",
+      {
+        xmlns: "http://www.w3.org/2000/svg",
+        viewBox: "0 0 24 24",
+        fill: "none",
+        stroke: "currentColor",
+        strokeWidth: "2",
+        strokeLinecap: "round",
+        strokeLinejoin: "round",
+        className,
+        ...props
+      },
+      children
+    );
+  }
+  function IconActivity(props) {
+    return /* @__PURE__ */ React.createElement(Icon, { ...props }, /* @__PURE__ */ React.createElement("path", { d: "M22 12h-4l-3 9L9 3l-3 9H2" }));
+  }
+  function IconArrowUpRight(props) {
+    return /* @__PURE__ */ React.createElement(Icon, { ...props }, /* @__PURE__ */ React.createElement("line", { x1: "7", y1: "17", x2: "17", y2: "7" }), /* @__PURE__ */ React.createElement("polyline", { points: "7 7 17 7 17 17" }));
+  }
+  function IconCheck(props) {
+    return /* @__PURE__ */ React.createElement(Icon, { ...props }, /* @__PURE__ */ React.createElement("polyline", { points: "20 6 9 17 4 12" }));
+  }
+  function IconCopy(props) {
+    return /* @__PURE__ */ React.createElement(Icon, { ...props }, /* @__PURE__ */ React.createElement("rect", { width: "14", height: "14", x: "8", y: "8", rx: "2", ry: "2" }), /* @__PURE__ */ React.createElement("path", { d: "M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" }));
+  }
+  function IconCreditCard(props) {
+    return /* @__PURE__ */ React.createElement(Icon, { ...props }, /* @__PURE__ */ React.createElement("rect", { width: "20", height: "14", x: "2", y: "5", rx: "2" }), /* @__PURE__ */ React.createElement("line", { x1: "2", x2: "22", y1: "10", y2: "10" }));
+  }
+  function IconDatabase(props) {
+    return /* @__PURE__ */ React.createElement(Icon, { ...props }, /* @__PURE__ */ React.createElement("ellipse", { cx: "12", cy: "5", rx: "9", ry: "3" }), /* @__PURE__ */ React.createElement("path", { d: "M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" }), /* @__PURE__ */ React.createElement("path", { d: "M3 12c0 1.66 4 3 9 3s9-1.34 9-3" }));
+  }
+  function IconDownload(props) {
+    return /* @__PURE__ */ React.createElement(Icon, { ...props }, /* @__PURE__ */ React.createElement("path", { d: "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" }), /* @__PURE__ */ React.createElement("polyline", { points: "7 10 12 15 17 10" }), /* @__PURE__ */ React.createElement("line", { x1: "12", x2: "12", y1: "15", y2: "3" }));
+  }
+  function IconEdit(props) {
+    return /* @__PURE__ */ React.createElement(Icon, { ...props }, /* @__PURE__ */ React.createElement("path", { d: "M12 20h9" }), /* @__PURE__ */ React.createElement("path", { d: "M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" }));
+  }
+  function IconExternalLink(props) {
+    return /* @__PURE__ */ React.createElement(Icon, { ...props }, /* @__PURE__ */ React.createElement("path", { d: "M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" }), /* @__PURE__ */ React.createElement("polyline", { points: "15 3 21 3 21 9" }), /* @__PURE__ */ React.createElement("line", { x1: "10", x2: "21", y1: "14", y2: "3" }));
+  }
+  function IconEye(props) {
+    return /* @__PURE__ */ React.createElement(Icon, { ...props }, /* @__PURE__ */ React.createElement("path", { d: "M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" }), /* @__PURE__ */ React.createElement("circle", { cx: "12", cy: "12", r: "3" }));
+  }
+  function IconHeartPulse(props) {
+    return /* @__PURE__ */ React.createElement(Icon, { ...props }, /* @__PURE__ */ React.createElement("path", { d: "M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" }), /* @__PURE__ */ React.createElement("path", { d: "M3.22 12H9.5l.5-1 2 4.5 2-7 1.5 3.5h5.27" }));
+  }
+  function IconLayers(props) {
+    return /* @__PURE__ */ React.createElement(Icon, { ...props }, /* @__PURE__ */ React.createElement("path", { d: "m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z" }), /* @__PURE__ */ React.createElement("path", { d: "m22 12.5-8.58 3.91a2 2 0 0 1-1.66 0L3.18 12.5" }), /* @__PURE__ */ React.createElement("path", { d: "m22 17.5-8.58 3.91a2 2 0 0 1-1.66 0L3.18 17.5" }));
+  }
+  function IconLock(props) {
+    return /* @__PURE__ */ React.createElement(Icon, { ...props }, /* @__PURE__ */ React.createElement("rect", { width: "18", height: "11", x: "3", y: "11", rx: "2", ry: "2" }), /* @__PURE__ */ React.createElement("path", { d: "M7 11V7a5 5 0 0 1 10 0v4" }));
+  }
+  function IconLogOut(props) {
+    return /* @__PURE__ */ React.createElement(Icon, { ...props }, /* @__PURE__ */ React.createElement("path", { d: "M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" }), /* @__PURE__ */ React.createElement("polyline", { points: "16 17 21 12 16 7" }), /* @__PURE__ */ React.createElement("line", { x1: "21", x2: "9", y1: "12", y2: "12" }));
+  }
+  function IconMenu(props) {
+    return /* @__PURE__ */ React.createElement(Icon, { ...props }, /* @__PURE__ */ React.createElement("line", { x1: "4", x2: "20", y1: "12", y2: "12" }), /* @__PURE__ */ React.createElement("line", { x1: "4", x2: "20", y1: "6", y2: "6" }), /* @__PURE__ */ React.createElement("line", { x1: "4", x2: "20", y1: "18", y2: "18" }));
+  }
+  function IconMoon(props) {
+    return /* @__PURE__ */ React.createElement(Icon, { ...props }, /* @__PURE__ */ React.createElement("path", { d: "M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" }));
+  }
+  function IconMoreVertical(props) {
+    return /* @__PURE__ */ React.createElement(Icon, { ...props }, /* @__PURE__ */ React.createElement("circle", { cx: "12", cy: "12", r: "1" }), /* @__PURE__ */ React.createElement("circle", { cx: "12", cy: "5", r: "1" }), /* @__PURE__ */ React.createElement("circle", { cx: "12", cy: "19", r: "1" }));
+  }
+  function IconPlus(props) {
+    return /* @__PURE__ */ React.createElement(Icon, { ...props }, /* @__PURE__ */ React.createElement("path", { d: "M5 12h14" }), /* @__PURE__ */ React.createElement("path", { d: "M12 5v14" }));
+  }
+  function IconQrCode(props) {
+    return /* @__PURE__ */ React.createElement(Icon, { ...props }, /* @__PURE__ */ React.createElement("rect", { width: "5", height: "5", x: "3", y: "3", rx: "1" }), /* @__PURE__ */ React.createElement("rect", { width: "5", height: "5", x: "16", y: "3", rx: "1" }), /* @__PURE__ */ React.createElement("rect", { width: "5", height: "5", x: "3", y: "16", rx: "1" }), /* @__PURE__ */ React.createElement("path", { d: "M21 16h-3a2 2 0 0 0-2 2v3" }), /* @__PURE__ */ React.createElement("path", { d: "M21 21v.01" }), /* @__PURE__ */ React.createElement("path", { d: "M12 7v3a2 2 0 0 1-2 2H7" }), /* @__PURE__ */ React.createElement("path", { d: "M3 12h.01" }), /* @__PURE__ */ React.createElement("path", { d: "M12 3h.01" }), /* @__PURE__ */ React.createElement("path", { d: "M12 16v.01" }), /* @__PURE__ */ React.createElement("path", { d: "M16 12h1" }), /* @__PURE__ */ React.createElement("path", { d: "M21 12v.01" }), /* @__PURE__ */ React.createElement("path", { d: "M12 21v-1" }));
+  }
+  function IconRefreshCw(props) {
+    return /* @__PURE__ */ React.createElement(Icon, { ...props }, /* @__PURE__ */ React.createElement("path", { d: "M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" }), /* @__PURE__ */ React.createElement("path", { d: "M21 3v5h-5" }), /* @__PURE__ */ React.createElement("path", { d: "M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" }), /* @__PURE__ */ React.createElement("path", { d: "M3 21v-5h5" }));
+  }
+  function IconSearch(props) {
+    return /* @__PURE__ */ React.createElement(Icon, { ...props }, /* @__PURE__ */ React.createElement("circle", { cx: "11", cy: "11", r: "8" }), /* @__PURE__ */ React.createElement("path", { d: "m21 21-4.3-4.3" }));
+  }
+  function IconSettings(props) {
+    return /* @__PURE__ */ React.createElement(Icon, { ...props }, /* @__PURE__ */ React.createElement("path", { d: "M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" }), /* @__PURE__ */ React.createElement("circle", { cx: "12", cy: "12", r: "3" }));
+  }
+  function IconShield(props) {
+    return /* @__PURE__ */ React.createElement(Icon, { ...props }, /* @__PURE__ */ React.createElement("path", { d: "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10" }));
+  }
+  function IconSun(props) {
+    return /* @__PURE__ */ React.createElement(Icon, { ...props }, /* @__PURE__ */ React.createElement("circle", { cx: "12", cy: "12", r: "4" }), /* @__PURE__ */ React.createElement("path", { d: "M12 2v2" }), /* @__PURE__ */ React.createElement("path", { d: "M12 20v2" }), /* @__PURE__ */ React.createElement("path", { d: "m4.93 4.93 1.41 1.41" }), /* @__PURE__ */ React.createElement("path", { d: "m17.66 17.66 1.41 1.41" }), /* @__PURE__ */ React.createElement("path", { d: "M2 12h2" }), /* @__PURE__ */ React.createElement("path", { d: "M20 12h2" }), /* @__PURE__ */ React.createElement("path", { d: "m6.34 17.66-1.41 1.41" }), /* @__PURE__ */ React.createElement("path", { d: "m19.07 4.93-1.41 1.41" }));
+  }
+  function IconTrash2(props) {
+    return /* @__PURE__ */ React.createElement(Icon, { ...props }, /* @__PURE__ */ React.createElement("path", { d: "M3 6h18" }), /* @__PURE__ */ React.createElement("path", { d: "M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" }), /* @__PURE__ */ React.createElement("path", { d: "M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" }), /* @__PURE__ */ React.createElement("line", { x1: "10", x2: "10", y1: "11", y2: "17" }), /* @__PURE__ */ React.createElement("line", { x1: "14", x2: "14", y1: "11", y2: "17" }));
+  }
+  function IconTrendingUp(props) {
+    return /* @__PURE__ */ React.createElement(Icon, { ...props }, /* @__PURE__ */ React.createElement("polyline", { points: "22 7 13.5 15.5 8.5 10.5 2 17" }), /* @__PURE__ */ React.createElement("polyline", { points: "16 7 22 7 22 13" }));
+  }
+  function IconUserCheck(props) {
+    return /* @__PURE__ */ React.createElement(Icon, { ...props }, /* @__PURE__ */ React.createElement("path", { d: "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" }), /* @__PURE__ */ React.createElement("circle", { cx: "9", cy: "7", r: "4" }), /* @__PURE__ */ React.createElement("polyline", { points: "16 11 18 13 22 9" }));
+  }
+  function IconUsers(props) {
+    return /* @__PURE__ */ React.createElement(Icon, { ...props }, /* @__PURE__ */ React.createElement("path", { d: "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" }), /* @__PURE__ */ React.createElement("circle", { cx: "9", cy: "7", r: "4" }), /* @__PURE__ */ React.createElement("path", { d: "M22 21v-2a4 4 0 0 0-3-3.87" }), /* @__PURE__ */ React.createElement("path", { d: "M16 3.13a4 4 0 0 1 0 7.75" }));
+  }
+  function IconWallet(props) {
+    return /* @__PURE__ */ React.createElement(Icon, { ...props }, /* @__PURE__ */ React.createElement("path", { d: "M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1" }), /* @__PURE__ */ React.createElement("path", { d: "M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4" }));
+  }
+  function IconLandmark(props) {
+    return /* @__PURE__ */ React.createElement(Icon, { ...props }, /* @__PURE__ */ React.createElement("line", { x1: "3", y1: "22", x2: "21", y2: "22" }), /* @__PURE__ */ React.createElement("line", { x1: "6", y1: "18", x2: "6", y2: "11" }), /* @__PURE__ */ React.createElement("line", { x1: "10", y1: "18", x2: "10", y2: "11" }), /* @__PURE__ */ React.createElement("line", { x1: "14", y1: "18", x2: "14", y2: "11" }), /* @__PURE__ */ React.createElement("line", { x1: "18", y1: "18", x2: "18", y2: "11" }), /* @__PURE__ */ React.createElement("polygon", { points: "12 2 20 7 4 7" }));
+  }
+  function IconBuilding(props) {
+    return /* @__PURE__ */ React.createElement(Icon, { ...props }, /* @__PURE__ */ React.createElement("rect", { width: "16", height: "20", x: "4", y: "2", rx: "2", ry: "2" }), /* @__PURE__ */ React.createElement("path", { d: "M9 22v-4h6v4" }), /* @__PURE__ */ React.createElement("path", { d: "M8 6h.01" }), /* @__PURE__ */ React.createElement("path", { d: "M16 6h.01" }), /* @__PURE__ */ React.createElement("path", { d: "M12 6h.01" }), /* @__PURE__ */ React.createElement("path", { d: "M12 10h.01" }), /* @__PURE__ */ React.createElement("path", { d: "M12 14h.01" }), /* @__PURE__ */ React.createElement("path", { d: "M16 10h.01" }), /* @__PURE__ */ React.createElement("path", { d: "M16 14h.01" }), /* @__PURE__ */ React.createElement("path", { d: "M8 10h.01" }), /* @__PURE__ */ React.createElement("path", { d: "M8 14h.01" }));
+  }
+  function IconStar(props) {
+    return /* @__PURE__ */ React.createElement(Icon, { ...props }, /* @__PURE__ */ React.createElement("polygon", { points: "12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" }));
+  }
+  function IconX(props) {
+    return /* @__PURE__ */ React.createElement(Icon, { ...props }, /* @__PURE__ */ React.createElement("path", { d: "M18 6 6 18" }), /* @__PURE__ */ React.createElement("path", { d: "m6 6 12 12" }));
+  }
+  function Button({
+    className = "",
+    variant = "default",
+    size = "default",
+    type = "button",
+    children,
+    disabled = false,
+    ...props
+  }) {
+    const baseClasses = "inline-flex items-center justify-center whitespace-nowrap rounded-xl text-xs font-semibold ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 select-none";
+    const variantClasses = {
+      default: "bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm",
+      destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90 shadow-sm",
+      outline: "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
+      secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+      ghost: "hover:bg-accent hover:text-accent-foreground",
+      link: "text-primary underline-offset-4 hover:underline",
+      brand: "bg-brand-600 hover:bg-brand-500 text-white shadow-md shadow-brand-500/20"
+    };
+    const sizeClasses = {
+      default: "h-9 px-4 py-2",
+      sm: "h-8 rounded-lg px-3 text-[11px]",
+      lg: "h-10 rounded-xl px-8 text-sm",
+      icon: "h-9 w-9 p-0"
+    };
+    const vClass = variantClasses[variant] || variantClasses.default;
+    const sClass = sizeClasses[size] || sizeClasses.default;
+    return /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        type,
+        disabled,
+        className: `${baseClasses} ${vClass} ${sClass} ${className}`,
+        ...props
+      },
+      children
+    );
+  }
+  function Card({ className = "", children, ...props }) {
+    return /* @__PURE__ */ React.createElement(
+      "div",
+      {
+        className: `rounded-2xl border bg-card text-card-foreground shadow-sm transition-colors ${className}`,
+        ...props
+      },
+      children
+    );
+  }
+  function CardHeader({ className = "", children, ...props }) {
+    return /* @__PURE__ */ React.createElement(
+      "div",
+      {
+        className: `flex flex-col space-y-1.5 p-5 sm:p-6 ${className}`,
+        ...props
+      },
+      children
+    );
+  }
+  function CardTitle({ className = "", children, ...props }) {
+    return /* @__PURE__ */ React.createElement(
+      "h3",
+      {
+        className: `text-base sm:text-lg font-bold leading-none tracking-tight text-foreground ${className}`,
+        ...props
+      },
+      children
+    );
+  }
+  function CardDescription({ className = "", children, ...props }) {
+    return /* @__PURE__ */ React.createElement(
+      "p",
+      {
+        className: `text-xs text-muted-foreground ${className}`,
+        ...props
+      },
+      children
+    );
+  }
+  function CardContent({ className = "", children, ...props }) {
+    return /* @__PURE__ */ React.createElement("div", { className: `p-5 sm:p-6 pt-0 ${className}`, ...props }, children);
+  }
+  function CardFooter({ className = "", children, ...props }) {
+    return /* @__PURE__ */ React.createElement(
+      "div",
+      {
+        className: `flex items-center p-5 sm:p-6 pt-0 ${className}`,
+        ...props
+      },
+      children
+    );
+  }
+  function Badge({ className = "", variant = "default", children, ...props }) {
+    const baseClasses = "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2";
+    const variantClasses = {
+      default: "border-transparent bg-primary text-primary-foreground hover:bg-primary/80",
+      secondary: "border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80",
+      destructive: "border-transparent bg-destructive/15 text-destructive border-destructive/20",
+      outline: "text-foreground",
+      success: "border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+      warning: "border-amber-500/20 bg-amber-500/10 text-amber-600 dark:text-amber-400",
+      cyan: "border-cyan-500/20 bg-cyan-500/10 text-cyan-600 dark:text-cyan-400"
+    };
+    const vClass = variantClasses[variant] || variantClasses.default;
+    return /* @__PURE__ */ React.createElement("div", { className: `${baseClasses} ${vClass} ${className}`, ...props }, children);
+  }
+  function Input({ className = "", type = "text", ...props }) {
+    return /* @__PURE__ */ React.createElement(
+      "input",
+      {
+        type,
+        className: `flex h-9 w-full rounded-xl border border-input bg-background px-3 py-1 text-xs text-foreground shadow-sm transition-colors file:border-0 file:bg-transparent file:text-xs file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 ${className}`,
+        ...props
+      }
+    );
+  }
+  function Label({ className = "", children, ...props }) {
+    return /* @__PURE__ */ React.createElement(
+      "label",
+      {
+        className: `text-xs font-semibold leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 text-foreground select-none ${className}`,
+        ...props
+      },
+      children
+    );
+  }
+  function Table({ className = "", children, ...props }) {
+    return /* @__PURE__ */ React.createElement("div", { className: "relative w-full overflow-auto" }, /* @__PURE__ */ React.createElement(
+      "table",
+      {
+        className: `w-full caption-bottom text-xs text-left ${className}`,
+        ...props
+      },
+      children
+    ));
+  }
+  function TableHeader({ className = "", children, ...props }) {
+    return /* @__PURE__ */ React.createElement("thead", { className: `border-b border-border bg-muted/40 [&_tr]:border-b ${className}`, ...props }, children);
+  }
+  function TableBody({ className = "", children, ...props }) {
+    return /* @__PURE__ */ React.createElement("tbody", { className: `[&_tr:last-child]:border-0 divide-y divide-border ${className}`, ...props }, children);
+  }
+  function TableFooter({ className = "", children, ...props }) {
+    return /* @__PURE__ */ React.createElement(
+      "tfoot",
+      {
+        className: `border-t bg-muted/50 font-medium [&>tr]:last:border-b-0 ${className}`,
+        ...props
+      },
+      children
+    );
+  }
+  function TableRow({ className = "", children, ...props }) {
+    return /* @__PURE__ */ React.createElement(
+      "tr",
+      {
+        className: `border-b border-border transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted ${className}`,
+        ...props
+      },
+      children
+    );
+  }
+  function TableHead({ className = "", children, ...props }) {
+    return /* @__PURE__ */ React.createElement(
+      "th",
+      {
+        className: `h-10 px-4 text-left align-middle font-semibold text-muted-foreground [&:has([role=checkbox])]:pr-0 uppercase tracking-wider text-[11px] ${className}`,
+        ...props
+      },
+      children
+    );
+  }
+  function TableCell({ className = "", children, ...props }) {
+    return /* @__PURE__ */ React.createElement(
+      "td",
+      {
+        className: `p-4 align-middle [&:has([role=checkbox])]:pr-0 text-foreground ${className}`,
+        ...props
+      },
+      children
+    );
+  }
+  function TableCaption({ className = "", children, ...props }) {
+    return /* @__PURE__ */ React.createElement(
+      "caption",
+      {
+        className: `mt-4 text-xs text-muted-foreground ${className}`,
+        ...props
+      },
+      children
+    );
+  }
+  function Dialog({ open, onOpenChange, children }) {
+    if (!open) return null;
+    return /* @__PURE__ */ React.createElement("div", { className: "fixed inset-0 z-50 flex items-center justify-center p-4" }, /* @__PURE__ */ React.createElement(
+      "div",
+      {
+        className: "fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity animate-fade-in",
+        onClick: () => onOpenChange?.(false)
+      }
+    ), /* @__PURE__ */ React.createElement("div", { className: "relative z-50 w-full max-w-lg animate-in zoom-in-95 duration-200" }, children));
+  }
+  function DialogContent({ className = "", children, ...props }) {
+    return /* @__PURE__ */ React.createElement(
+      "div",
+      {
+        className: `relative w-full rounded-2xl border border-border bg-card p-6 shadow-2xl text-card-foreground ${className}`,
+        ...props
+      },
+      children
+    );
+  }
+  function DialogHeader({ className = "", children, ...props }) {
+    return /* @__PURE__ */ React.createElement(
+      "div",
+      {
+        className: `flex flex-col space-y-1.5 text-left mb-4 ${className}`,
+        ...props
+      },
+      children
+    );
+  }
+  function DialogTitle({ className = "", children, ...props }) {
+    return /* @__PURE__ */ React.createElement(
+      "h3",
+      {
+        className: `text-lg font-bold leading-none tracking-tight text-foreground ${className}`,
+        ...props
+      },
+      children
+    );
+  }
+  function DialogDescription({ className = "", children, ...props }) {
+    return /* @__PURE__ */ React.createElement(
+      "p",
+      {
+        className: `text-xs text-muted-foreground mt-1 ${className}`,
+        ...props
+      },
+      children
+    );
+  }
+  function DialogFooter({ className = "", children, ...props }) {
+    return /* @__PURE__ */ React.createElement(
+      "div",
+      {
+        className: `flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2 gap-2 mt-6 ${className}`,
+        ...props
+      },
+      children
+    );
+  }
+  function Sheet({ open, onOpenChange, children }) {
+    if (!open) return null;
+    return /* @__PURE__ */ React.createElement("div", { className: "fixed inset-0 z-50 overflow-hidden" }, /* @__PURE__ */ React.createElement(
+      "div",
+      {
+        className: "fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity",
+        onClick: () => onOpenChange?.(false)
+      }
+    ), children);
+  }
+  function SheetContent({
+    side = "bottom",
+    className = "",
+    children,
+    onClose,
+    ...props
+  }) {
+    const sideClasses = {
+      top: "inset-x-0 top-0 border-b animate-in slide-in-from-top duration-300",
+      bottom: "inset-x-0 bottom-0 border-t rounded-t-3xl max-h-[85vh] overflow-y-auto animate-bottom-sheet-up",
+      left: "inset-y-0 left-0 h-full w-3/4 max-w-sm border-r animate-in slide-in-from-left duration-300",
+      right: "inset-y-0 right-0 h-full w-3/4 max-w-sm border-l animate-in slide-in-from-right duration-300"
+    };
+    return /* @__PURE__ */ React.createElement(
+      "div",
+      {
+        className: `fixed z-50 gap-4 bg-card p-6 shadow-2xl transition ease-in-out border-border text-card-foreground ${sideClasses[side] || sideClasses.bottom} ${className}`,
+        ...props
+      },
+      side === "bottom" && /* @__PURE__ */ React.createElement("div", { className: "w-12 h-1.5 rounded-full bg-muted-foreground/25 mx-auto -mt-2 mb-4" }),
+      children
+    );
+  }
+  function SheetHeader({ className = "", children, ...props }) {
+    return /* @__PURE__ */ React.createElement(
+      "div",
+      {
+        className: `flex flex-col space-y-1.5 text-left mb-4 ${className}`,
+        ...props
+      },
+      children
+    );
+  }
+  function SheetTitle({ className = "", children, ...props }) {
+    return /* @__PURE__ */ React.createElement(
+      "h3",
+      {
+        className: `text-base font-bold leading-none tracking-tight text-foreground ${className}`,
+        ...props
+      },
+      children
+    );
+  }
+  function SheetDescription({ className = "", children, ...props }) {
+    return /* @__PURE__ */ React.createElement(
+      "p",
+      {
+        className: `text-xs text-muted-foreground ${className}`,
+        ...props
+      },
+      children
+    );
+  }
+  function SheetFooter({ className = "", children, ...props }) {
+    return /* @__PURE__ */ React.createElement(
+      "div",
+      {
+        className: `flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2 gap-2 mt-6 ${className}`,
+        ...props
+      },
+      children
+    );
+  }
+  function Skeleton({ className = "", ...props }) {
+    return /* @__PURE__ */ React.createElement(
+      "div",
+      {
+        className: `animate-pulse rounded-md bg-muted/60 ${className}`,
+        ...props
+      }
+    );
+  }
+  function Avatar({ className = "", children, ...props }) {
+    return /* @__PURE__ */ React.createElement(
+      "div",
+      {
+        className: `relative flex h-9 w-9 shrink-0 overflow-hidden rounded-full border border-border ${className}`,
+        ...props
+      },
+      children
+    );
+  }
+  function AvatarImage({ src, alt = "", className = "", ...props }) {
+    if (!src) return null;
+    return /* @__PURE__ */ React.createElement(
+      "img",
+      {
+        src,
+        alt,
+        className: `aspect-square h-full w-full object-cover ${className}`,
+        ...props
+      }
+    );
+  }
+  function AvatarFallback({ className = "", children, ...props }) {
+    return /* @__PURE__ */ React.createElement(
+      "div",
+      {
+        className: `flex h-full w-full items-center justify-center rounded-full bg-muted font-bold text-xs text-muted-foreground ${className}`,
+        ...props
+      },
+      children
+    );
+  }
+  function Separator({
+    orientation = "horizontal",
+    className = "",
+    ...props
+  }) {
+    return /* @__PURE__ */ React.createElement(
+      "div",
+      {
+        role: "separator",
+        "aria-orientation": orientation,
+        className: `shrink-0 bg-border ${orientation === "horizontal" ? "h-[1px] w-full" : "h-full w-[1px]"} ${className}`,
+        ...props
+      }
+    );
+  }
+  function Alert({ className = "", variant = "default", children, ...props }) {
+    const variantClasses = {
+      default: "bg-background text-foreground border-border",
+      destructive: "border-destructive/50 text-destructive bg-destructive/10 dark:border-destructive",
+      success: "border-emerald-500/30 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10"
+    };
+    return /* @__PURE__ */ React.createElement(
+      "div",
+      {
+        role: "alert",
+        className: `relative w-full rounded-xl border p-4 text-xs [&>svg]:absolute [&>svg]:left-4 [&>svg]:top-4 [&>svg+div]:translate-y-[-3px] [&:has(svg)]:pl-11 ${variantClasses[variant] || variantClasses.default} ${className}`,
+        ...props
+      },
+      children
+    );
+  }
+  function AlertTitle({ className = "", children, ...props }) {
+    return /* @__PURE__ */ React.createElement(
+      "h5",
+      {
+        className: `mb-1 font-semibold leading-none tracking-tight ${className}`,
+        ...props
+      },
+      children
+    );
+  }
+  function AlertDescription({ className = "", children, ...props }) {
+    return /* @__PURE__ */ React.createElement(
+      "div",
+      {
+        className: `text-xs text-muted-foreground [&_p]:leading-relaxed ${className}`,
+        ...props
+      },
+      children
+    );
+  }
+  function Tabs({ value, onValueChange, className = "", children }) {
+    return /* @__PURE__ */ React.createElement("div", { className: `space-y-4 ${className}` }, React.Children.map(children, (child) => {
+      if (!child) return null;
+      return React.cloneElement(child, { activeTab: value, setActiveTab: onValueChange });
+    }));
+  }
+  function TabsList({ className = "", activeTab, setActiveTab, children }) {
+    return /* @__PURE__ */ React.createElement(
+      "div",
+      {
+        className: `inline-flex h-10 items-center justify-center rounded-xl bg-muted p-1 text-muted-foreground ${className}`
+      },
+      React.Children.map(children, (child) => {
+        if (!child) return null;
+        return React.cloneElement(child, { activeTab, setActiveTab });
+      })
+    );
+  }
+  function TabsTrigger({
+    value,
+    activeTab,
+    setActiveTab,
+    className = "",
+    children,
+    ...props
+  }) {
+    const isSelected = activeTab === value;
+    return /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        type: "button",
+        role: "tab",
+        "aria-selected": isSelected,
+        onClick: () => setActiveTab?.(value),
+        className: `inline-flex items-center justify-center whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-semibold ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 ${isSelected ? "bg-background text-foreground shadow-sm" : "hover:text-foreground"} ${className}`,
+        ...props
+      },
+      children
+    );
+  }
+  function TabsContent({ value, activeTab, className = "", children }) {
+    if (activeTab !== value) return null;
+    return /* @__PURE__ */ React.createElement(
+      "div",
+      {
+        role: "tabpanel",
+        className: `ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${className}`
+      },
+      children
+    );
+  }
+  function SuspenseFallback({ activeTab = "overview" }) {
+    return /* @__PURE__ */ React.createElement("div", { className: "flex flex-col items-center justify-center min-h-[300px] space-y-4 animate-pulse" }, /* @__PURE__ */ React.createElement("div", { className: "w-10 h-10 rounded-2xl bg-brand-500/10 border border-brand-500/20 flex items-center justify-center" }, /* @__PURE__ */ React.createElement("div", { className: "w-5 h-5 rounded-full border-2 border-brand-500 border-t-transparent animate-spin" })), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-muted-foreground font-mono" }, "Loading ", activeTab, "..."));
+  }
+  function Modal({ isOpen, onClose, title, subtitle, children, maxWidth = "max-w-xl" }) {
+    if (!isOpen) return null;
+    return /* @__PURE__ */ React.createElement(Dialog, { open: isOpen, onOpenChange: (open) => !open && onClose() }, /* @__PURE__ */ React.createElement(DialogContent, { className: `w-full ${maxWidth} max-h-[90vh] flex flex-col p-0 overflow-hidden` }, /* @__PURE__ */ React.createElement("div", { className: "px-6 py-4 border-b border-border flex items-center justify-between" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement(DialogTitle, null, title), subtitle && /* @__PURE__ */ React.createElement(DialogDescription, null, subtitle)), /* @__PURE__ */ React.createElement(
+      Button,
+      {
+        variant: "ghost",
+        size: "icon",
+        onClick: onClose,
+        className: "h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground"
+      },
+      /* @__PURE__ */ React.createElement(IconX, { className: "w-4 h-4" })
+    )), /* @__PURE__ */ React.createElement("div", { className: "p-6 overflow-y-auto space-y-4" }, children)));
+  }
+  function renderActionIcon(icon) {
+    if (!icon) return null;
+    if (React.isValidElement(icon)) return icon;
+    if (typeof icon === "function") return React.createElement(icon, { className: "w-4 h-4 text-muted-foreground" });
+    return /* @__PURE__ */ React.createElement("span", { className: "text-sm" }, icon);
+  }
+  function BottomSheet({ isOpen, onClose, title, subtitle, actions = [], children }) {
+    if (!isOpen) return null;
+    return /* @__PURE__ */ React.createElement(Sheet, { open: isOpen, onOpenChange: (open) => !open && onClose() }, /* @__PURE__ */ React.createElement(SheetContent, { side: "bottom", className: "sm:max-w-lg sm:mx-auto sm:rounded-2xl sm:bottom-6 sm:border" }, /* @__PURE__ */ React.createElement(SheetHeader, { className: "pb-3 border-b border-border flex flex-row items-center justify-between" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement(SheetTitle, null, title), subtitle && /* @__PURE__ */ React.createElement(SheetDescription, null, subtitle)), /* @__PURE__ */ React.createElement(
+      Button,
+      {
+        variant: "ghost",
+        size: "icon",
+        onClick: onClose,
+        className: "h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground"
+      },
+      /* @__PURE__ */ React.createElement(IconX, { className: "w-4 h-4" })
+    )), actions.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "py-3 space-y-2" }, actions.map((act, i) => /* @__PURE__ */ React.createElement(
+      Button,
+      {
+        key: i,
+        variant: act.variant === "danger" ? "destructive" : act.variant === "success" ? "outline" : "secondary",
+        onClick: () => {
+          onClose();
+          act.onClick();
+        },
+        className: `w-full justify-between h-10 px-4 rounded-xl ${act.variant === "success" ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20" : ""}`
+      },
+      /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2.5" }, /* @__PURE__ */ React.createElement("span", { className: "flex items-center justify-center w-5 h-5" }, renderActionIcon(act.icon)), /* @__PURE__ */ React.createElement("span", null, act.label)),
+      /* @__PURE__ */ React.createElement(IconArrowUpRight, { className: "w-3.5 h-3.5 opacity-60" })
+    ))), children && /* @__PURE__ */ React.createElement("div", { className: "py-2 overflow-y-auto max-h-[60vh]" }, children)));
+  }
   function Navbar({
     user,
     organizations,
@@ -513,9 +1108,6 @@ var UpiEasyApp = (() => {
       /* @__PURE__ */ React.createElement("span", { className: "hidden sm:inline" }, "Logout")
     ))));
   }
-  var Navbar_default = Navbar;
-
-  // api/src/dashboard/src/components/Sidebar.jsx
   function Sidebar({ activeTab, onSelectTab, activeOrg }) {
     const navItems = [
       { id: "overview", label: "Overview", icon: /* @__PURE__ */ React.createElement(IconActivity, { className: "w-4 h-4" }) },
@@ -546,9 +1138,6 @@ var UpiEasyApp = (() => {
       )
     ))), /* @__PURE__ */ React.createElement("div", { className: "p-3 rounded-xl bg-muted/40 border border-border text-[11px] text-muted-foreground" }, /* @__PURE__ */ React.createElement("div", { className: "font-bold text-foreground truncate" }, activeOrg?.name || "Store"), /* @__PURE__ */ React.createElement("div", { className: "truncate font-mono text-[10px] mt-0.5" }, activeOrg?.id || "\u2014")));
   }
-  var Sidebar_default = Sidebar;
-
-  // api/src/dashboard/src/components/BottomNav.jsx
   function BottomNav({ activeTab, onSelectTab, onOpenMoreSheet }) {
     const primaryTabs = [
       { id: "overview", label: "Overview", icon: /* @__PURE__ */ React.createElement(IconActivity, { className: "w-5 h-5" }) },
@@ -575,216 +1164,409 @@ var UpiEasyApp = (() => {
       /* @__PURE__ */ React.createElement("span", { className: "text-[10px] mt-1" }, "More")
     ));
   }
-  var BottomNav_default = BottomNav;
-
-  // api/src/dashboard/src/components/BottomSheet.jsx
-  var import_react6 = __toESM(require_react(), 1);
-
-  // api/src/dashboard/src/components/ui/sheet.jsx
-  var import_react3 = __toESM(require_react(), 1);
-  function Sheet({ open, onOpenChange, children }) {
-    if (!open) return null;
-    return /* @__PURE__ */ import_react3.default.createElement("div", { className: "fixed inset-0 z-50 overflow-hidden" }, /* @__PURE__ */ import_react3.default.createElement(
-      "div",
-      {
-        className: "fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity",
-        onClick: () => onOpenChange?.(false)
-      }
-    ), children);
-  }
-  function SheetContent({
-    side = "bottom",
-    className = "",
-    children,
+  function RecordPaymentModal({
+    isOpen,
     onClose,
-    ...props
+    activeOrg,
+    defaultVpa,
+    onSubmitPayment
   }) {
-    const sideClasses = {
-      top: "inset-x-0 top-0 border-b animate-in slide-in-from-top duration-300",
-      bottom: "inset-x-0 bottom-0 border-t rounded-t-3xl max-h-[85vh] overflow-y-auto animate-bottom-sheet-up",
-      left: "inset-y-0 left-0 h-full w-3/4 max-w-sm border-r animate-in slide-in-from-left duration-300",
-      right: "inset-y-0 right-0 h-full w-3/4 max-w-sm border-l animate-in slide-in-from-right duration-300"
-    };
-    return /* @__PURE__ */ import_react3.default.createElement(
-      "div",
+    return /* @__PURE__ */ React.createElement(
+      Modal,
       {
-        className: `fixed z-50 gap-4 bg-card p-6 shadow-2xl transition ease-in-out border-border text-card-foreground ${sideClasses[side] || sideClasses.bottom} ${className}`,
-        ...props
+        isOpen,
+        onClose,
+        title: "Record Counter Payment",
+        subtitle: "Simulate verified incoming UPI collection"
       },
-      side === "bottom" && /* @__PURE__ */ import_react3.default.createElement("div", { className: "w-12 h-1.5 rounded-full bg-muted-foreground/25 mx-auto -mt-2 mb-4" }),
-      children
-    );
-  }
-  function SheetHeader({ className = "", children, ...props }) {
-    return /* @__PURE__ */ import_react3.default.createElement(
-      "div",
-      {
-        className: `flex flex-col space-y-1.5 text-left mb-4 ${className}`,
-        ...props
-      },
-      children
-    );
-  }
-  function SheetTitle({ className = "", children, ...props }) {
-    return /* @__PURE__ */ import_react3.default.createElement(
-      "h3",
-      {
-        className: `text-base font-bold leading-none tracking-tight text-foreground ${className}`,
-        ...props
-      },
-      children
-    );
-  }
-  function SheetDescription({ className = "", children, ...props }) {
-    return /* @__PURE__ */ import_react3.default.createElement(
-      "p",
-      {
-        className: `text-xs text-muted-foreground ${className}`,
-        ...props
-      },
-      children
-    );
-  }
-
-  // api/src/dashboard/src/components/ui/button.jsx
-  var import_react4 = __toESM(require_react(), 1);
-  function Button2({
-    className = "",
-    variant = "default",
-    size = "default",
-    type = "button",
-    children,
-    disabled = false,
-    ...props
-  }) {
-    const baseClasses = "inline-flex items-center justify-center whitespace-nowrap rounded-xl text-xs font-semibold ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 select-none";
-    const variantClasses = {
-      default: "bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm",
-      destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90 shadow-sm",
-      outline: "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
-      secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-      ghost: "hover:bg-accent hover:text-accent-foreground",
-      link: "text-primary underline-offset-4 hover:underline",
-      brand: "bg-brand-600 hover:bg-brand-500 text-white shadow-md shadow-brand-500/20"
-    };
-    const sizeClasses = {
-      default: "h-9 px-4 py-2",
-      sm: "h-8 rounded-lg px-3 text-[11px]",
-      lg: "h-10 rounded-xl px-8 text-sm",
-      icon: "h-9 w-9 p-0"
-    };
-    const vClass = variantClasses[variant] || variantClasses.default;
-    const sClass = sizeClasses[size] || sizeClasses.default;
-    return /* @__PURE__ */ import_react4.default.createElement(
-      "button",
-      {
-        type,
-        disabled,
-        className: `${baseClasses} ${vClass} ${sClass} ${className}`,
-        ...props
-      },
-      children
-    );
-  }
-
-  // api/src/dashboard/src/components/ui/icons.jsx
-  var import_react5 = __toESM(require_react(), 1);
-  function Icon({ children, className = "w-4 h-4", ...props }) {
-    return /* @__PURE__ */ import_react5.default.createElement(
-      "svg",
-      {
-        xmlns: "http://www.w3.org/2000/svg",
-        viewBox: "0 0 24 24",
-        fill: "none",
-        stroke: "currentColor",
-        strokeWidth: "2",
-        strokeLinecap: "round",
-        strokeLinejoin: "round",
-        className,
-        ...props
-      },
-      children
-    );
-  }
-  function IconArrowUpRight2(props) {
-    return /* @__PURE__ */ import_react5.default.createElement(Icon, { ...props }, /* @__PURE__ */ import_react5.default.createElement("line", { x1: "7", y1: "17", x2: "17", y2: "7" }), /* @__PURE__ */ import_react5.default.createElement("polyline", { points: "7 7 17 7 17 17" }));
-  }
-  function IconCopy(props) {
-    return /* @__PURE__ */ import_react5.default.createElement(Icon, { ...props }, /* @__PURE__ */ import_react5.default.createElement("rect", { width: "14", height: "14", x: "8", y: "8", rx: "2", ry: "2" }), /* @__PURE__ */ import_react5.default.createElement("path", { d: "M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" }));
-  }
-  function IconDatabase2(props) {
-    return /* @__PURE__ */ import_react5.default.createElement(Icon, { ...props }, /* @__PURE__ */ import_react5.default.createElement("ellipse", { cx: "12", cy: "5", rx: "9", ry: "3" }), /* @__PURE__ */ import_react5.default.createElement("path", { d: "M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" }), /* @__PURE__ */ import_react5.default.createElement("path", { d: "M3 12c0 1.66 4 3 9 3s9-1.34 9-3" }));
-  }
-  function IconEdit(props) {
-    return /* @__PURE__ */ import_react5.default.createElement(Icon, { ...props }, /* @__PURE__ */ import_react5.default.createElement("path", { d: "M12 20h9" }), /* @__PURE__ */ import_react5.default.createElement("path", { d: "M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" }));
-  }
-  function IconExternalLink(props) {
-    return /* @__PURE__ */ import_react5.default.createElement(Icon, { ...props }, /* @__PURE__ */ import_react5.default.createElement("path", { d: "M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" }), /* @__PURE__ */ import_react5.default.createElement("polyline", { points: "15 3 21 3 21 9" }), /* @__PURE__ */ import_react5.default.createElement("line", { x1: "10", x2: "21", y1: "14", y2: "3" }));
-  }
-  function IconEye(props) {
-    return /* @__PURE__ */ import_react5.default.createElement(Icon, { ...props }, /* @__PURE__ */ import_react5.default.createElement("path", { d: "M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" }), /* @__PURE__ */ import_react5.default.createElement("circle", { cx: "12", cy: "12", r: "3" }));
-  }
-  function IconHeartPulse2(props) {
-    return /* @__PURE__ */ import_react5.default.createElement(Icon, { ...props }, /* @__PURE__ */ import_react5.default.createElement("path", { d: "M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" }), /* @__PURE__ */ import_react5.default.createElement("path", { d: "M3.22 12H9.5l.5-1 2 4.5 2-7 1.5 3.5h5.27" }));
-  }
-  function IconLock2(props) {
-    return /* @__PURE__ */ import_react5.default.createElement(Icon, { ...props }, /* @__PURE__ */ import_react5.default.createElement("rect", { width: "18", height: "11", x: "3", y: "11", rx: "2", ry: "2" }), /* @__PURE__ */ import_react5.default.createElement("path", { d: "M7 11V7a5 5 0 0 1 10 0v4" }));
-  }
-  function IconQrCode2(props) {
-    return /* @__PURE__ */ import_react5.default.createElement(Icon, { ...props }, /* @__PURE__ */ import_react5.default.createElement("rect", { width: "5", height: "5", x: "3", y: "3", rx: "1" }), /* @__PURE__ */ import_react5.default.createElement("rect", { width: "5", height: "5", x: "16", y: "3", rx: "1" }), /* @__PURE__ */ import_react5.default.createElement("rect", { width: "5", height: "5", x: "3", y: "16", rx: "1" }), /* @__PURE__ */ import_react5.default.createElement("path", { d: "M21 16h-3a2 2 0 0 0-2 2v3" }), /* @__PURE__ */ import_react5.default.createElement("path", { d: "M21 21v.01" }), /* @__PURE__ */ import_react5.default.createElement("path", { d: "M12 7v3a2 2 0 0 1-2 2H7" }), /* @__PURE__ */ import_react5.default.createElement("path", { d: "M3 12h.01" }), /* @__PURE__ */ import_react5.default.createElement("path", { d: "M12 3h.01" }), /* @__PURE__ */ import_react5.default.createElement("path", { d: "M12 16v.01" }), /* @__PURE__ */ import_react5.default.createElement("path", { d: "M16 12h1" }), /* @__PURE__ */ import_react5.default.createElement("path", { d: "M21 12v.01" }), /* @__PURE__ */ import_react5.default.createElement("path", { d: "M12 21v-1" }));
-  }
-  function IconTrash2(props) {
-    return /* @__PURE__ */ import_react5.default.createElement(Icon, { ...props }, /* @__PURE__ */ import_react5.default.createElement("path", { d: "M3 6h18" }), /* @__PURE__ */ import_react5.default.createElement("path", { d: "M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" }), /* @__PURE__ */ import_react5.default.createElement("path", { d: "M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" }), /* @__PURE__ */ import_react5.default.createElement("line", { x1: "10", x2: "10", y1: "11", y2: "17" }), /* @__PURE__ */ import_react5.default.createElement("line", { x1: "14", x2: "14", y1: "11", y2: "17" }));
-  }
-  function IconLandmark(props) {
-    return /* @__PURE__ */ import_react5.default.createElement(Icon, { ...props }, /* @__PURE__ */ import_react5.default.createElement("line", { x1: "3", y1: "22", x2: "21", y2: "22" }), /* @__PURE__ */ import_react5.default.createElement("line", { x1: "6", y1: "18", x2: "6", y2: "11" }), /* @__PURE__ */ import_react5.default.createElement("line", { x1: "10", y1: "18", x2: "10", y2: "11" }), /* @__PURE__ */ import_react5.default.createElement("line", { x1: "14", y1: "18", x2: "14", y2: "11" }), /* @__PURE__ */ import_react5.default.createElement("line", { x1: "18", y1: "18", x2: "18", y2: "11" }), /* @__PURE__ */ import_react5.default.createElement("polygon", { points: "12 2 20 7 4 7" }));
-  }
-  function IconBuilding(props) {
-    return /* @__PURE__ */ import_react5.default.createElement(Icon, { ...props }, /* @__PURE__ */ import_react5.default.createElement("rect", { width: "16", height: "20", x: "4", y: "2", rx: "2", ry: "2" }), /* @__PURE__ */ import_react5.default.createElement("path", { d: "M9 22v-4h6v4" }), /* @__PURE__ */ import_react5.default.createElement("path", { d: "M8 6h.01" }), /* @__PURE__ */ import_react5.default.createElement("path", { d: "M16 6h.01" }), /* @__PURE__ */ import_react5.default.createElement("path", { d: "M12 6h.01" }), /* @__PURE__ */ import_react5.default.createElement("path", { d: "M12 10h.01" }), /* @__PURE__ */ import_react5.default.createElement("path", { d: "M12 14h.01" }), /* @__PURE__ */ import_react5.default.createElement("path", { d: "M16 10h.01" }), /* @__PURE__ */ import_react5.default.createElement("path", { d: "M16 14h.01" }), /* @__PURE__ */ import_react5.default.createElement("path", { d: "M8 10h.01" }), /* @__PURE__ */ import_react5.default.createElement("path", { d: "M8 14h.01" }));
-  }
-  function IconStar(props) {
-    return /* @__PURE__ */ import_react5.default.createElement(Icon, { ...props }, /* @__PURE__ */ import_react5.default.createElement("polygon", { points: "12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" }));
-  }
-  function IconX2(props) {
-    return /* @__PURE__ */ import_react5.default.createElement(Icon, { ...props }, /* @__PURE__ */ import_react5.default.createElement("path", { d: "M18 6 6 18" }), /* @__PURE__ */ import_react5.default.createElement("path", { d: "m6 6 12 12" }));
-  }
-
-  // api/src/dashboard/src/components/BottomSheet.jsx
-  function renderActionIcon(icon) {
-    if (!icon) return null;
-    if (import_react6.default.isValidElement(icon)) return icon;
-    if (typeof icon === "function") return import_react6.default.createElement(icon, { className: "w-4 h-4 text-muted-foreground" });
-    return /* @__PURE__ */ import_react6.default.createElement("span", { className: "text-sm" }, icon);
-  }
-  function BottomSheet({ isOpen, onClose, title, subtitle, actions = [], children }) {
-    if (!isOpen) return null;
-    return /* @__PURE__ */ import_react6.default.createElement(Sheet, { open: isOpen, onOpenChange: (open) => !open && onClose() }, /* @__PURE__ */ import_react6.default.createElement(SheetContent, { side: "bottom", className: "sm:max-w-lg sm:mx-auto sm:rounded-2xl sm:bottom-6 sm:border" }, /* @__PURE__ */ import_react6.default.createElement(SheetHeader, { className: "pb-3 border-b border-border flex flex-row items-center justify-between" }, /* @__PURE__ */ import_react6.default.createElement("div", null, /* @__PURE__ */ import_react6.default.createElement(SheetTitle, null, title), subtitle && /* @__PURE__ */ import_react6.default.createElement(SheetDescription, null, subtitle)), /* @__PURE__ */ import_react6.default.createElement(
-      Button2,
-      {
-        variant: "ghost",
-        size: "icon",
-        onClick: onClose,
-        className: "h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground"
-      },
-      /* @__PURE__ */ import_react6.default.createElement(IconX2, { className: "w-4 h-4" })
-    )), actions.length > 0 && /* @__PURE__ */ import_react6.default.createElement("div", { className: "py-3 space-y-2" }, actions.map((act, i) => /* @__PURE__ */ import_react6.default.createElement(
-      Button2,
-      {
-        key: i,
-        variant: act.variant === "danger" ? "destructive" : act.variant === "success" ? "outline" : "secondary",
-        onClick: () => {
-          onClose();
-          act.onClick();
+      /* @__PURE__ */ React.createElement("form", { onSubmit: onSubmitPayment, className: "space-y-4 text-xs" }, /* @__PURE__ */ React.createElement("div", { className: "space-y-1.5" }, /* @__PURE__ */ React.createElement(Label, null, "Amount (INR)"), /* @__PURE__ */ React.createElement("div", { className: "relative" }, /* @__PURE__ */ React.createElement("span", { className: "absolute inset-y-0 left-0 pl-3 flex items-center text-muted-foreground font-bold" }, "\u20B9"), /* @__PURE__ */ React.createElement(
+        Input,
+        {
+          type: "number",
+          step: "0.01",
+          name: "amount",
+          defaultValue: "250.00",
+          required: true,
+          className: "pl-8 text-base font-bold"
+        }
+      ))), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-2 gap-3" }, /* @__PURE__ */ React.createElement("div", { className: "space-y-1.5" }, /* @__PURE__ */ React.createElement(Label, null, "Customer Name"), /* @__PURE__ */ React.createElement(
+        Input,
+        {
+          type: "text",
+          name: "payerName",
+          defaultValue: "Karan Patel"
+        }
+      )), /* @__PURE__ */ React.createElement("div", { className: "space-y-1.5" }, /* @__PURE__ */ React.createElement(Label, null, "Customer UPI VPA"), /* @__PURE__ */ React.createElement(
+        Input,
+        {
+          type: "text",
+          name: "payerVpa",
+          defaultValue: "karan@okhdfcbank",
+          className: "font-mono"
+        }
+      ))), /* @__PURE__ */ React.createElement("div", { className: "space-y-1.5" }, /* @__PURE__ */ React.createElement(Label, null, "Reference Note"), /* @__PURE__ */ React.createElement(
+        Input,
+        {
+          type: "text",
+          name: "note",
+          defaultValue: "Counter Bill #409"
+        }
+      )), /* @__PURE__ */ React.createElement("div", { className: "pt-2 flex justify-end gap-2" }, /* @__PURE__ */ React.createElement(
+        Button,
+        {
+          variant: "outline",
+          type: "button",
+          onClick: onClose
         },
-        className: `w-full justify-between h-10 px-4 rounded-xl ${act.variant === "success" ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20" : ""}`
-      },
-      /* @__PURE__ */ import_react6.default.createElement("div", { className: "flex items-center gap-2.5" }, /* @__PURE__ */ import_react6.default.createElement("span", { className: "flex items-center justify-center w-5 h-5" }, renderActionIcon(act.icon)), /* @__PURE__ */ import_react6.default.createElement("span", null, act.label)),
-      /* @__PURE__ */ import_react6.default.createElement(IconArrowUpRight2, { className: "w-3.5 h-3.5 opacity-60" })
-    ))), children && /* @__PURE__ */ import_react6.default.createElement("div", { className: "py-2 overflow-y-auto max-h-[60vh]" }, children)));
+        "Cancel"
+      ), /* @__PURE__ */ React.createElement(
+        Button,
+        {
+          variant: "brand",
+          type: "submit"
+        },
+        "Record Payment"
+      )))
+    );
   }
-  var BottomSheet_default = BottomSheet;
-
-  // api/src/dashboard/src/pages/LoginPage.jsx
+  function UpiAccountModal({
+    isOpen,
+    onClose,
+    initialData = null,
+    activeOrg,
+    onSubmitUpi
+  }) {
+    const isEditing = Boolean(initialData);
+    return /* @__PURE__ */ React.createElement(
+      Modal,
+      {
+        isOpen,
+        onClose,
+        title: isEditing ? "Edit UPI Account" : "Add UPI Account",
+        subtitle: isEditing ? `Updating ${initialData.vpa}` : "Connect a new VPA to this merchant organization"
+      },
+      /* @__PURE__ */ React.createElement("form", { onSubmit: onSubmitUpi, className: "space-y-4 text-xs" }, /* @__PURE__ */ React.createElement("div", { className: "space-y-1.5" }, /* @__PURE__ */ React.createElement(Label, null, "UPI VPA"), /* @__PURE__ */ React.createElement(
+        Input,
+        {
+          type: "text",
+          name: "vpa",
+          defaultValue: initialData?.vpa || "",
+          placeholder: "e.g. storename@okhdfcbank",
+          required: true,
+          className: "font-mono"
+        }
+      )), /* @__PURE__ */ React.createElement("div", { className: "space-y-1.5" }, /* @__PURE__ */ React.createElement(Label, null, "Payee Name"), /* @__PURE__ */ React.createElement(
+        Input,
+        {
+          type: "text",
+          name: "payeeName",
+          defaultValue: initialData?.payeeName || activeOrg?.name || "",
+          required: true
+        }
+      )), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-2 gap-3" }, /* @__PURE__ */ React.createElement("div", { className: "space-y-1.5" }, /* @__PURE__ */ React.createElement(Label, null, "MCC Code"), /* @__PURE__ */ React.createElement(
+        Input,
+        {
+          type: "text",
+          name: "mcc",
+          defaultValue: initialData?.merchantCategoryCode || "5411",
+          className: "font-mono"
+        }
+      )), /* @__PURE__ */ React.createElement("div", { className: "flex items-center pt-5" }, /* @__PURE__ */ React.createElement("label", { className: "flex items-center gap-2 text-foreground font-semibold cursor-pointer" }, /* @__PURE__ */ React.createElement(
+        "input",
+        {
+          type: "checkbox",
+          name: "isDefault",
+          defaultChecked: isEditing ? initialData?.isDefault : true,
+          className: "rounded text-primary"
+        }
+      ), /* @__PURE__ */ React.createElement("span", null, isEditing ? "Set as Default" : "Primary Default")))), /* @__PURE__ */ React.createElement("div", { className: "pt-2 flex justify-end gap-2" }, /* @__PURE__ */ React.createElement(
+        Button,
+        {
+          variant: "outline",
+          type: "button",
+          onClick: onClose
+        },
+        "Cancel"
+      ), /* @__PURE__ */ React.createElement(
+        Button,
+        {
+          variant: "brand",
+          type: "submit"
+        },
+        isEditing ? "Update Account" : "Save Account"
+      )))
+    );
+  }
+  function QrCodeModal({
+    upiAccount,
+    onClose,
+    onCopyLink
+  }) {
+    const [customAmount, setCustomAmount] = useState("");
+    if (!upiAccount) return null;
+    const amt = parseFloat(customAmount);
+    const upiUri = `upi://pay?pa=${encodeURIComponent(upiAccount.vpa)}&pn=${encodeURIComponent(upiAccount.payeeName)}&cu=INR${!isNaN(amt) && amt > 0 ? `&am=${amt.toFixed(2)}` : ""}`;
+    const safeUpiUri = sanitizeUrl(upiUri);
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(safeUpiUri)}`;
+    return /* @__PURE__ */ React.createElement(
+      Modal,
+      {
+        isOpen: Boolean(upiAccount),
+        onClose,
+        title: "Store QR Code",
+        subtitle: `Pay to ${upiAccount.vpa}`
+      },
+      /* @__PURE__ */ React.createElement("div", { className: "space-y-4 text-center" }, /* @__PURE__ */ React.createElement("div", { className: "bg-white p-4 rounded-2xl w-60 h-60 mx-auto shadow-xl flex items-center justify-center border" }, /* @__PURE__ */ React.createElement("img", { src: qrUrl, alt: "UPI QR", className: "w-full h-full object-contain" })), /* @__PURE__ */ React.createElement("div", { className: "text-left bg-muted/40 p-3 rounded-xl border border-border space-y-2" }, /* @__PURE__ */ React.createElement(Label, null, "Custom Amount (Optional)"), /* @__PURE__ */ React.createElement(
+        Input,
+        {
+          type: "number",
+          placeholder: "Enter amount (\u20B9)",
+          value: customAmount,
+          onChange: (e) => setCustomAmount(e.target.value),
+          className: "font-bold"
+        }
+      )), /* @__PURE__ */ React.createElement("div", { className: "flex gap-2 justify-center" }, /* @__PURE__ */ React.createElement(
+        Button,
+        {
+          variant: "outline",
+          onClick: () => onCopyLink(safeUpiUri),
+          className: "gap-1.5"
+        },
+        /* @__PURE__ */ React.createElement(IconCopy, { className: "w-3.5 h-3.5" }),
+        /* @__PURE__ */ React.createElement("span", null, "Copy Link")
+      ), /* @__PURE__ */ React.createElement(
+        "a",
+        {
+          href: safeUpiUri,
+          rel: "noopener noreferrer",
+          className: "inline-flex items-center justify-center rounded-xl px-4 py-2 text-xs font-bold bg-brand-600 hover:bg-brand-500 text-white shadow-md transition gap-1.5"
+        },
+        /* @__PURE__ */ React.createElement(IconExternalLink, { className: "w-3.5 h-3.5" }),
+        /* @__PURE__ */ React.createElement("span", null, "Open UPI App")
+      )))
+    );
+  }
+  function StaffModal({
+    isOpen,
+    onClose,
+    initialData = null,
+    onSubmitStaff
+  }) {
+    const isEditing = Boolean(initialData);
+    return /* @__PURE__ */ React.createElement(
+      Modal,
+      {
+        isOpen,
+        onClose,
+        title: isEditing ? "Edit Staff Member" : "Add Staff Member",
+        subtitle: isEditing ? `Updating ${initialData.fullName || initialData.mobileNumber}` : "Assign mobile number and role access"
+      },
+      /* @__PURE__ */ React.createElement("form", { onSubmit: onSubmitStaff, className: "space-y-4 text-xs" }, !isEditing ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "space-y-1.5" }, /* @__PURE__ */ React.createElement(Label, null, "Full Name"), /* @__PURE__ */ React.createElement(
+        Input,
+        {
+          type: "text",
+          name: "name",
+          placeholder: "e.g. Sunil Verma",
+          required: true
+        }
+      )), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-2 gap-3" }, /* @__PURE__ */ React.createElement("div", { className: "space-y-1.5" }, /* @__PURE__ */ React.createElement(Label, null, "Mobile Number"), /* @__PURE__ */ React.createElement(
+        Input,
+        {
+          type: "tel",
+          name: "mobile",
+          placeholder: "9876543210",
+          required: true,
+          className: "font-mono"
+        }
+      )), /* @__PURE__ */ React.createElement("div", { className: "space-y-1.5" }, /* @__PURE__ */ React.createElement(Label, null, "Email (Optional)"), /* @__PURE__ */ React.createElement(
+        Input,
+        {
+          type: "email",
+          name: "email",
+          placeholder: "staff@store.com"
+        }
+      )))) : null, /* @__PURE__ */ React.createElement("div", { className: "space-y-1.5" }, /* @__PURE__ */ React.createElement(Label, null, "Assigned Role"), /* @__PURE__ */ React.createElement(
+        "select",
+        {
+          name: "role",
+          defaultValue: initialData?.role || "CASHIER",
+          className: "w-full h-9 bg-background border border-input rounded-xl px-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+        },
+        /* @__PURE__ */ React.createElement("option", { value: "CASHIER", className: "bg-card text-card-foreground" }, "\u{1F4B3} CASHIER \u2014 Collect payments & show QR"),
+        /* @__PURE__ */ React.createElement("option", { value: "MANAGER", className: "bg-card text-card-foreground" }, "\u{1F4BC} MANAGER \u2014 Manage staff & refunds"),
+        /* @__PURE__ */ React.createElement("option", { value: "ACCOUNTANT", className: "bg-card text-card-foreground" }, "\u{1F4CA} ACCOUNTANT \u2014 View reports & ledger")
+      )), isEditing && /* @__PURE__ */ React.createElement("div", { className: "space-y-1.5" }, /* @__PURE__ */ React.createElement(Label, null, "Access Status"), /* @__PURE__ */ React.createElement(
+        "select",
+        {
+          name: "status",
+          defaultValue: initialData?.status || "ACTIVE",
+          className: "w-full h-9 bg-background border border-input rounded-xl px-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+        },
+        /* @__PURE__ */ React.createElement("option", { value: "ACTIVE", className: "bg-card text-card-foreground" }, "ACTIVE"),
+        /* @__PURE__ */ React.createElement("option", { value: "SUSPENDED", className: "bg-card text-card-foreground" }, "SUSPENDED")
+      )), /* @__PURE__ */ React.createElement("div", { className: "pt-2 flex justify-end gap-2" }, /* @__PURE__ */ React.createElement(
+        Button,
+        {
+          variant: "outline",
+          type: "button",
+          onClick: onClose
+        },
+        "Cancel"
+      ), /* @__PURE__ */ React.createElement(
+        Button,
+        {
+          variant: "brand",
+          type: "submit"
+        },
+        isEditing ? "Update Staff" : "Add Member"
+      )))
+    );
+  }
+  function BankAccountModal({
+    isOpen,
+    onClose,
+    activeOrg,
+    onSubmitBank
+  }) {
+    return /* @__PURE__ */ React.createElement(
+      Modal,
+      {
+        isOpen,
+        onClose,
+        title: "Link Bank Account",
+        subtitle: "Connect settlement bank destination"
+      },
+      /* @__PURE__ */ React.createElement("form", { onSubmit: onSubmitBank, className: "space-y-4 text-xs" }, /* @__PURE__ */ React.createElement("div", { className: "space-y-1.5" }, /* @__PURE__ */ React.createElement(Label, null, "Bank Name"), /* @__PURE__ */ React.createElement(
+        Input,
+        {
+          type: "text",
+          name: "bankName",
+          placeholder: "e.g. HDFC Bank",
+          required: true
+        }
+      )), /* @__PURE__ */ React.createElement("div", { className: "space-y-1.5" }, /* @__PURE__ */ React.createElement(Label, null, "Account Holder Name"), /* @__PURE__ */ React.createElement(
+        Input,
+        {
+          type: "text",
+          name: "holderName",
+          defaultValue: activeOrg?.name || "",
+          required: true
+        }
+      )), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-2 gap-3" }, /* @__PURE__ */ React.createElement("div", { className: "space-y-1.5" }, /* @__PURE__ */ React.createElement(Label, null, "Account Number"), /* @__PURE__ */ React.createElement(
+        Input,
+        {
+          type: "text",
+          name: "accountNumber",
+          placeholder: "1234567890",
+          required: true,
+          className: "font-mono"
+        }
+      )), /* @__PURE__ */ React.createElement("div", { className: "space-y-1.5" }, /* @__PURE__ */ React.createElement(Label, null, "IFSC Code"), /* @__PURE__ */ React.createElement(
+        Input,
+        {
+          type: "text",
+          name: "ifsc",
+          placeholder: "HDFC0001234",
+          required: true,
+          className: "font-mono uppercase"
+        }
+      ))), /* @__PURE__ */ React.createElement("div", { className: "space-y-1.5" }, /* @__PURE__ */ React.createElement(Label, null, "Account Type"), /* @__PURE__ */ React.createElement(
+        "select",
+        {
+          name: "type",
+          defaultValue: "CURRENT",
+          className: "w-full h-9 bg-background border border-input rounded-xl px-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+        },
+        /* @__PURE__ */ React.createElement("option", { value: "CURRENT", className: "bg-card text-card-foreground" }, "CURRENT"),
+        /* @__PURE__ */ React.createElement("option", { value: "SAVINGS", className: "bg-card text-card-foreground" }, "SAVINGS"),
+        /* @__PURE__ */ React.createElement("option", { value: "OVERDRAFT", className: "bg-card text-card-foreground" }, "OVERDRAFT")
+      )), /* @__PURE__ */ React.createElement("div", { className: "pt-2 flex justify-end gap-2" }, /* @__PURE__ */ React.createElement(
+        Button,
+        {
+          variant: "outline",
+          type: "button",
+          onClick: onClose
+        },
+        "Cancel"
+      ), /* @__PURE__ */ React.createElement(
+        Button,
+        {
+          variant: "brand",
+          type: "submit"
+        },
+        "Link Account"
+      )))
+    );
+  }
+  function TableRowModal({
+    isOpen,
+    onClose,
+    selectedTable,
+    columns = [],
+    initialRow = null,
+    onSubmitRow
+  }) {
+    const isEditing = Boolean(initialRow);
+    return /* @__PURE__ */ React.createElement(
+      Modal,
+      {
+        isOpen,
+        onClose,
+        title: isEditing ? `Edit ${selectedTable} Row` : `Insert in ${selectedTable}`,
+        subtitle: isEditing ? "Update column values" : "New row entry"
+      },
+      /* @__PURE__ */ React.createElement("form", { onSubmit: onSubmitRow, className: "space-y-3 text-xs max-h-[60vh] overflow-y-auto pr-1" }, columns.map((col) => /* @__PURE__ */ React.createElement("div", { key: col.name, className: "space-y-1" }, /* @__PURE__ */ React.createElement(Label, { className: "font-mono" }, col.name, " ", col.isPrimary && /* @__PURE__ */ React.createElement("span", { className: "text-amber-500 font-bold" }, "(PRIMARY)"), !col.isPrimary && /* @__PURE__ */ React.createElement("span", { className: "text-muted-foreground font-normal" }, " (", col.type, ")")), /* @__PURE__ */ React.createElement(
+        Input,
+        {
+          type: "text",
+          name: col.name,
+          defaultValue: initialRow ? initialRow[col.name] ?? "" : "",
+          disabled: isEditing && col.isPrimary,
+          placeholder: !isEditing && col.isPrimary ? "Auto-generated if empty" : "",
+          className: `font-mono ${isEditing && col.isPrimary ? "opacity-60 cursor-not-allowed" : ""}`
+        }
+      ))), /* @__PURE__ */ React.createElement("div", { className: "pt-3 flex justify-end gap-2" }, /* @__PURE__ */ React.createElement(
+        Button,
+        {
+          variant: "outline",
+          type: "button",
+          onClick: onClose
+        },
+        "Cancel"
+      ), /* @__PURE__ */ React.createElement(
+        Button,
+        {
+          variant: "brand",
+          type: "submit",
+          className: !isEditing ? "bg-amber-600 hover:bg-amber-500 shadow-amber-500/20" : ""
+        },
+        isEditing ? "Save Changes" : "Insert"
+      )))
+    );
+  }
+  function TransactionDetailModal({
+    transaction,
+    onClose
+  }) {
+    if (!transaction) return null;
+    return /* @__PURE__ */ React.createElement(
+      Modal,
+      {
+        isOpen: Boolean(transaction),
+        onClose,
+        title: "Transaction Audit Record",
+        subtitle: transaction.referenceNumber || transaction.id
+      },
+      /* @__PURE__ */ React.createElement("div", { className: "space-y-4 text-xs" }, /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-2 gap-3 p-4 rounded-xl bg-muted/40 border border-border" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("span", { className: "text-muted-foreground block" }, "Amount"), /* @__PURE__ */ React.createElement("span", { className: "text-xl font-black text-foreground" }, "\u20B9", Number(transaction.amount).toFixed(2))), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("span", { className: "text-muted-foreground block" }, "Status"), /* @__PURE__ */ React.createElement(
+        Badge,
+        {
+          variant: transaction.status === "SUCCESS" ? "success" : "warning",
+          className: "mt-1 font-bold"
+        },
+        transaction.status
+      )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("span", { className: "text-muted-foreground block" }, "Customer"), /* @__PURE__ */ React.createElement("span", { className: "font-semibold text-foreground" }, transaction.payerName || "Unknown")), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("span", { className: "text-muted-foreground block" }, "Customer VPA"), /* @__PURE__ */ React.createElement("span", { className: "font-mono text-foreground" }, transaction.payerVpa || "\u2014")), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("span", { className: "text-muted-foreground block" }, "Payee VPA"), /* @__PURE__ */ React.createElement("span", { className: "font-mono text-brand-600 dark:text-cyan-400" }, transaction.payeeVpa)), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("span", { className: "text-muted-foreground block" }, "Method"), /* @__PURE__ */ React.createElement("span", { className: "text-foreground" }, transaction.provider || "UPI", " \xB7 ", transaction.paymentMethod || "APP"))), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h4", { className: "font-bold text-foreground mb-1.5" }, "JSON Payload"), /* @__PURE__ */ React.createElement("pre", { className: "p-3 rounded-xl bg-muted/60 border border-border text-[11px] font-mono text-foreground overflow-x-auto" }, JSON.stringify(transaction, null, 2))))
+    );
+  }
   function LoginPage({ onLoginSuccess, theme, onToggleTheme, pingMs }) {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
@@ -911,9 +1693,6 @@ var UpiEasyApp = (() => {
       )
     )), /* @__PURE__ */ React.createElement("div", { className: "mt-8 text-center text-[10px] text-muted-foreground flex items-center justify-center gap-1.5" }, /* @__PURE__ */ React.createElement(IconLock, { className: "w-3 h-3" }), /* @__PURE__ */ React.createElement("span", null, "Protected by Google OAuth 2.0 & HMAC-SHA256 Encryption"))));
   }
-  var LoginPage_default = LoginPage;
-
-  // api/src/dashboard/src/pages/OverviewPage.jsx
   function OverviewPage({ stats, onOpenNewTxn, onOpenNewUpi, onNavigate, onInspectTxn }) {
     return /* @__PURE__ */ React.createElement("div", { className: "space-y-6 animate-fade-in max-w-7xl mx-auto" }, /* @__PURE__ */ React.createElement("div", { className: "flex flex-col sm:flex-row sm:items-center justify-between gap-4" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h2", { className: "text-xl sm:text-2xl font-extrabold tracking-tight text-foreground" }, "Dashboard Overview"), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-muted-foreground mt-0.5" }, "Real-time merchant collections, UPI volume and transaction status")), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ React.createElement(
       Button,
@@ -1000,9 +1779,6 @@ var UpiEasyApp = (() => {
       /* @__PURE__ */ React.createElement(IconArrowUpRight, { className: "w-3.5 h-3.5 opacity-50" })
     )))));
   }
-  var OverviewPage_default = OverviewPage;
-
-  // api/src/dashboard/src/pages/TransactionsPage.jsx
   function TransactionsPage({
     transactions,
     loading,
@@ -1098,9 +1874,6 @@ var UpiEasyApp = (() => {
       /* @__PURE__ */ React.createElement(IconMoreVertical, { className: "w-3 h-3" })
     ))))))));
   }
-  var TransactionsPage_default = TransactionsPage;
-
-  // api/src/dashboard/src/pages/UpiPage.jsx
   function UpiPage({ upiAccounts, onOpenNewUpi, onSelectUpiAction }) {
     return /* @__PURE__ */ React.createElement("div", { className: "space-y-6 animate-fade-in max-w-7xl mx-auto" }, /* @__PURE__ */ React.createElement("div", { className: "flex flex-col sm:flex-row sm:items-center justify-between gap-4" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h2", { className: "text-xl sm:text-2xl font-extrabold tracking-tight text-foreground" }, "UPI Accounts & QR Codes"), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-muted-foreground mt-0.5" }, "Manage Virtual Payment Addresses (VPAs) and store counter QR codes")), /* @__PURE__ */ React.createElement(
       Button,
@@ -1142,9 +1915,6 @@ var UpiEasyApp = (() => {
       ))
     ))));
   }
-  var UpiPage_default = UpiPage;
-
-  // api/src/dashboard/src/pages/StaffPage.jsx
   function StaffPage({ staffList, invitesList, onOpenInviteStaff, onSelectStaffAction }) {
     return /* @__PURE__ */ React.createElement("div", { className: "space-y-6 animate-fade-in max-w-7xl mx-auto" }, /* @__PURE__ */ React.createElement("div", { className: "flex flex-col sm:flex-row sm:items-center justify-between gap-4" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h2", { className: "text-xl sm:text-2xl font-extrabold tracking-tight text-foreground" }, "Staff & Team Access"), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-muted-foreground mt-0.5" }, "Manage store cashiers, managers, role permissions and account statuses")), /* @__PURE__ */ React.createElement(
       Button,
@@ -1182,9 +1952,6 @@ var UpiEasyApp = (() => {
       /* @__PURE__ */ React.createElement(IconMoreVertical, { className: "w-3 h-3" })
     ))))))), /* @__PURE__ */ React.createElement(Card, { className: "p-5" }, /* @__PURE__ */ React.createElement(CardTitle, { className: "text-sm font-bold mb-1" }, "Role Permissions Matrix"), /* @__PURE__ */ React.createElement(CardDescription, { className: "mb-4" }, "Permissions assigned across standard organizational roles"), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs" }, /* @__PURE__ */ React.createElement("div", { className: "p-3.5 rounded-xl bg-muted/40 border border-border" }, /* @__PURE__ */ React.createElement("div", { className: "font-bold text-amber-500 dark:text-amber-400 flex items-center gap-1.5" }, /* @__PURE__ */ React.createElement(IconShield, { className: "w-3.5 h-3.5" }), " OWNER"), /* @__PURE__ */ React.createElement("div", { className: "text-muted-foreground mt-1.5" }, "Full control, manage settlements, audit logs, and assign permissions.")), /* @__PURE__ */ React.createElement("div", { className: "p-3.5 rounded-xl bg-muted/40 border border-border" }, /* @__PURE__ */ React.createElement("div", { className: "font-bold text-indigo-500 dark:text-indigo-400 flex items-center gap-1.5" }, /* @__PURE__ */ React.createElement(IconUsers, { className: "w-3.5 h-3.5" }), " MANAGER"), /* @__PURE__ */ React.createElement("div", { className: "text-muted-foreground mt-1.5" }, "Staff management, UPI accounts, initiate refunds, view reports.")), /* @__PURE__ */ React.createElement("div", { className: "p-3.5 rounded-xl bg-muted/40 border border-border" }, /* @__PURE__ */ React.createElement("div", { className: "font-bold text-emerald-500 dark:text-emerald-400 flex items-center gap-1.5" }, /* @__PURE__ */ React.createElement(IconCreditCard, { className: "w-3.5 h-3.5" }), " CASHIER"), /* @__PURE__ */ React.createElement("div", { className: "text-muted-foreground mt-1.5" }, "Generate dynamic QR codes, record customer payments, verify receipts.")), /* @__PURE__ */ React.createElement("div", { className: "p-3.5 rounded-xl bg-muted/40 border border-border" }, /* @__PURE__ */ React.createElement("div", { className: "font-bold text-cyan-500 dark:text-cyan-400 flex items-center gap-1.5" }, /* @__PURE__ */ React.createElement(IconActivity, { className: "w-3.5 h-3.5" }), " ACCOUNTANT"), /* @__PURE__ */ React.createElement("div", { className: "text-muted-foreground mt-1.5" }, "Read-only transaction ledger access, export statements to CSV.")))));
   }
-  var StaffPage_default = StaffPage;
-
-  // api/src/dashboard/src/pages/AccountsPage.jsx
   function AccountsPage({ bankAccounts, onOpenNewBank }) {
     return /* @__PURE__ */ React.createElement("div", { className: "space-y-6 animate-fade-in max-w-7xl mx-auto" }, /* @__PURE__ */ React.createElement("div", { className: "flex flex-col sm:flex-row sm:items-center justify-between gap-4" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h2", { className: "text-xl sm:text-2xl font-extrabold tracking-tight text-foreground" }, "Settlement Bank Accounts"), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-muted-foreground mt-0.5" }, "Bank accounts linked for automated merchant payment settlement")), /* @__PURE__ */ React.createElement(
       Button,
@@ -1198,9 +1965,6 @@ var UpiEasyApp = (() => {
       /* @__PURE__ */ React.createElement("span", null, "Link New Bank Account")
     )), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-2 gap-5" }, bankAccounts.map((acc) => /* @__PURE__ */ React.createElement(Card, { key: acc.id, className: "p-6 space-y-4" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between" }, /* @__PURE__ */ React.createElement(CardTitle, { className: "text-base font-bold" }, acc.bankName), /* @__PURE__ */ React.createElement(Badge, { variant: "cyan", className: "text-[10px] font-bold" }, acc.accountType)), /* @__PURE__ */ React.createElement("div", { className: "p-4 rounded-xl bg-muted/40 border border-border space-y-2 text-xs" }, /* @__PURE__ */ React.createElement("div", { className: "flex justify-between" }, /* @__PURE__ */ React.createElement("span", { className: "text-muted-foreground" }, "Account Holder:"), /* @__PURE__ */ React.createElement("span", { className: "font-semibold text-foreground" }, acc.accountHolderName)), /* @__PURE__ */ React.createElement("div", { className: "flex justify-between font-mono" }, /* @__PURE__ */ React.createElement("span", { className: "text-muted-foreground" }, "Account Number:"), /* @__PURE__ */ React.createElement("span", { className: "text-foreground font-semibold" }, acc.accountNumberMasked)), /* @__PURE__ */ React.createElement("div", { className: "flex justify-between font-mono" }, /* @__PURE__ */ React.createElement("span", { className: "text-muted-foreground" }, "IFSC Code:"), /* @__PURE__ */ React.createElement("span", { className: "text-brand-600 dark:text-cyan-400 font-semibold" }, acc.ifscCode)))))));
   }
-  var AccountsPage_default = AccountsPage;
-
-  // api/src/dashboard/src/pages/ProfilePage.jsx
   function ProfilePage({ activeOrg, onSaveProfile }) {
     return /* @__PURE__ */ React.createElement("div", { className: "space-y-6 animate-fade-in max-w-4xl mx-auto" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h2", { className: "text-xl sm:text-2xl font-extrabold tracking-tight text-foreground" }, "Business Profile"), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-muted-foreground mt-0.5" }, "Manage legal entity registration, GSTIN, PAN, and store metadata")), /* @__PURE__ */ React.createElement(Card, { className: "p-6 space-y-5" }, /* @__PURE__ */ React.createElement("form", { onSubmit: onSaveProfile, className: "space-y-4 text-xs" }, /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 sm:grid-cols-2 gap-4" }, /* @__PURE__ */ React.createElement("div", { className: "space-y-1.5" }, /* @__PURE__ */ React.createElement(Label, null, "Trading Store Name"), /* @__PURE__ */ React.createElement(
       Input,
@@ -1258,9 +2022,6 @@ var UpiEasyApp = (() => {
       "Save Profile"
     )))));
   }
-  var ProfilePage_default = ProfilePage;
-
-  // api/src/dashboard/src/pages/TablesPage.jsx
   function TablesPage({
     tables,
     selectedTable,
@@ -1321,9 +2082,6 @@ var UpiEasyApp = (() => {
       )));
     }))))));
   }
-  var TablesPage_default = TablesPage;
-
-  // api/src/dashboard/src/pages/HealthPage.jsx
   function HealthPage({ healthData, pingMs, onRefresh, onResetSeed }) {
     return /* @__PURE__ */ React.createElement("div", { className: "space-y-6 animate-fade-in max-w-7xl mx-auto" }, /* @__PURE__ */ React.createElement("div", { className: "flex flex-col sm:flex-row sm:items-center justify-between gap-4" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h2", { className: "text-xl sm:text-2xl font-extrabold tracking-tight text-foreground" }, "System Telemetry & Health"), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-muted-foreground mt-0.5" }, "Process telemetry, SQLite database status, memory allocation, and latency")), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ React.createElement(
       Button,
@@ -1346,505 +2104,12 @@ var UpiEasyApp = (() => {
       "Re-seed System Baseline"
     ))), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" }, /* @__PURE__ */ React.createElement(Card, { className: "p-5" }, /* @__PURE__ */ React.createElement(CardDescription, { className: "text-xs font-bold uppercase tracking-wider" }, "Gateway Status"), /* @__PURE__ */ React.createElement("div", { className: "text-2xl font-extrabold text-emerald-600 dark:text-emerald-400 mt-2 flex items-center gap-2" }, /* @__PURE__ */ React.createElement("span", { className: "w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" }), healthData?.status?.toUpperCase() || "ONLINE"), /* @__PURE__ */ React.createElement("div", { className: "text-xs text-muted-foreground mt-2 font-mono" }, "Uptime: ", Math.floor((healthData?.uptimeSeconds || 0) / 60), " mins")), /* @__PURE__ */ React.createElement(Card, { className: "p-5" }, /* @__PURE__ */ React.createElement(CardDescription, { className: "text-xs font-bold uppercase tracking-wider" }, "Memory Allocation"), /* @__PURE__ */ React.createElement("div", { className: "text-2xl font-extrabold text-foreground mt-2" }, healthData?.memory?.rssMb || "0", " ", /* @__PURE__ */ React.createElement("span", { className: "text-xs font-normal text-muted-foreground" }, "MB RSS")), /* @__PURE__ */ React.createElement("div", { className: "text-xs text-muted-foreground mt-2 font-mono" }, "Heap: ", healthData?.memory?.heapUsedMb || "0", " / ", healthData?.memory?.heapTotalMb || "0", " MB")), /* @__PURE__ */ React.createElement(Card, { className: "p-5" }, /* @__PURE__ */ React.createElement(CardDescription, { className: "text-xs font-bold uppercase tracking-wider" }, "API Roundtrip Latency"), /* @__PURE__ */ React.createElement("div", { className: "text-2xl font-extrabold text-brand-600 dark:text-cyan-400 mt-2 font-mono" }, pingMs ? `${pingMs}ms` : "1ms"), /* @__PURE__ */ React.createElement("div", { className: "text-xs text-emerald-600 dark:text-emerald-400 mt-2" }, "Local SQLite query bus")), /* @__PURE__ */ React.createElement(Card, { className: "p-5" }, /* @__PURE__ */ React.createElement(CardDescription, { className: "text-xs font-bold uppercase tracking-wider" }, "Runtime Platform"), /* @__PURE__ */ React.createElement("div", { className: "text-2xl font-extrabold text-indigo-600 dark:text-indigo-400 mt-2 truncate" }, healthData?.nodeVersion || "Node.js"), /* @__PURE__ */ React.createElement("div", { className: "text-xs text-muted-foreground mt-2 font-mono" }, "Platform: ", healthData?.platform || "win32"))), /* @__PURE__ */ React.createElement(Card, { className: "p-6 space-y-4" }, /* @__PURE__ */ React.createElement(CardTitle, { className: "text-base font-bold" }, "Database Table Storage Records"), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3" }, Object.entries(healthData?.tables || {}).map(([table, count]) => /* @__PURE__ */ React.createElement("div", { key: table, className: "p-3.5 rounded-xl bg-muted/40 border border-border" }, /* @__PURE__ */ React.createElement("div", { className: "text-[11px] text-muted-foreground truncate font-mono" }, table), /* @__PURE__ */ React.createElement("div", { className: "text-lg font-bold text-foreground mt-1 font-mono" }, count))))));
   }
-  var HealthPage_default = HealthPage;
-
-  // api/src/dashboard/src/components/modals/RecordPaymentModal.jsx
-  var import_react8 = __toESM(require_react(), 1);
-
-  // api/src/dashboard/src/components/Modal.jsx
-  function Modal({ isOpen, onClose, title, subtitle, children, maxWidth = "max-w-xl" }) {
-    if (!isOpen) return null;
-    return /* @__PURE__ */ React.createElement(Dialog, { open: isOpen, onOpenChange: (open) => !open && onClose() }, /* @__PURE__ */ React.createElement(DialogContent, { className: `w-full ${maxWidth} max-h-[90vh] flex flex-col p-0 overflow-hidden` }, /* @__PURE__ */ React.createElement("div", { className: "px-6 py-4 border-b border-border flex items-center justify-between" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement(DialogTitle, null, title), subtitle && /* @__PURE__ */ React.createElement(DialogDescription, null, subtitle)), /* @__PURE__ */ React.createElement(
-      Button,
-      {
-        variant: "ghost",
-        size: "icon",
-        onClick: onClose,
-        className: "h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground"
-      },
-      /* @__PURE__ */ React.createElement(IconX, { className: "w-4 h-4" })
-    )), /* @__PURE__ */ React.createElement("div", { className: "p-6 overflow-y-auto space-y-4" }, children)));
-  }
-
-  // api/src/dashboard/src/components/ui/input.jsx
-  var import_react7 = __toESM(require_react(), 1);
-  function Input2({ className = "", type = "text", ...props }) {
-    return /* @__PURE__ */ import_react7.default.createElement(
-      "input",
-      {
-        type,
-        className: `flex h-9 w-full rounded-xl border border-input bg-background px-3 py-1 text-xs text-foreground shadow-sm transition-colors file:border-0 file:bg-transparent file:text-xs file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 ${className}`,
-        ...props
-      }
-    );
-  }
-  function Label2({ className = "", children, ...props }) {
-    return /* @__PURE__ */ import_react7.default.createElement(
-      "label",
-      {
-        className: `text-xs font-semibold leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 text-foreground select-none ${className}`,
-        ...props
-      },
-      children
-    );
-  }
-
-  // api/src/dashboard/src/components/modals/RecordPaymentModal.jsx
-  function RecordPaymentModal({
-    isOpen,
-    onClose,
-    activeOrg,
-    defaultVpa,
-    onSubmitPayment
-  }) {
-    return /* @__PURE__ */ import_react8.default.createElement(
-      Modal,
-      {
-        isOpen,
-        onClose,
-        title: "Record Counter Payment",
-        subtitle: "Simulate verified incoming UPI collection"
-      },
-      /* @__PURE__ */ import_react8.default.createElement("form", { onSubmit: onSubmitPayment, className: "space-y-4 text-xs" }, /* @__PURE__ */ import_react8.default.createElement("div", { className: "space-y-1.5" }, /* @__PURE__ */ import_react8.default.createElement(Label2, null, "Amount (INR)"), /* @__PURE__ */ import_react8.default.createElement("div", { className: "relative" }, /* @__PURE__ */ import_react8.default.createElement("span", { className: "absolute inset-y-0 left-0 pl-3 flex items-center text-muted-foreground font-bold" }, "\u20B9"), /* @__PURE__ */ import_react8.default.createElement(
-        Input2,
-        {
-          type: "number",
-          step: "0.01",
-          name: "amount",
-          defaultValue: "250.00",
-          required: true,
-          className: "pl-8 text-base font-bold"
-        }
-      ))), /* @__PURE__ */ import_react8.default.createElement("div", { className: "grid grid-cols-2 gap-3" }, /* @__PURE__ */ import_react8.default.createElement("div", { className: "space-y-1.5" }, /* @__PURE__ */ import_react8.default.createElement(Label2, null, "Customer Name"), /* @__PURE__ */ import_react8.default.createElement(
-        Input2,
-        {
-          type: "text",
-          name: "payerName",
-          defaultValue: "Karan Patel"
-        }
-      )), /* @__PURE__ */ import_react8.default.createElement("div", { className: "space-y-1.5" }, /* @__PURE__ */ import_react8.default.createElement(Label2, null, "Customer UPI VPA"), /* @__PURE__ */ import_react8.default.createElement(
-        Input2,
-        {
-          type: "text",
-          name: "payerVpa",
-          defaultValue: "karan@okhdfcbank",
-          className: "font-mono"
-        }
-      ))), /* @__PURE__ */ import_react8.default.createElement("div", { className: "space-y-1.5" }, /* @__PURE__ */ import_react8.default.createElement(Label2, null, "Reference Note"), /* @__PURE__ */ import_react8.default.createElement(
-        Input2,
-        {
-          type: "text",
-          name: "note",
-          defaultValue: "Counter Bill #409"
-        }
-      )), /* @__PURE__ */ import_react8.default.createElement("div", { className: "pt-2 flex justify-end gap-2" }, /* @__PURE__ */ import_react8.default.createElement(
-        Button2,
-        {
-          variant: "outline",
-          type: "button",
-          onClick: onClose
-        },
-        "Cancel"
-      ), /* @__PURE__ */ import_react8.default.createElement(
-        Button2,
-        {
-          variant: "brand",
-          type: "submit"
-        },
-        "Record Payment"
-      )))
-    );
-  }
-  var RecordPaymentModal_default = RecordPaymentModal;
-
-  // api/src/dashboard/src/components/modals/UpiAccountModal.jsx
-  var import_react9 = __toESM(require_react(), 1);
-  function UpiAccountModal({
-    isOpen,
-    onClose,
-    initialData = null,
-    activeOrg,
-    onSubmitUpi
-  }) {
-    const isEditing = Boolean(initialData);
-    return /* @__PURE__ */ import_react9.default.createElement(
-      Modal,
-      {
-        isOpen,
-        onClose,
-        title: isEditing ? "Edit UPI Account" : "Add UPI Account",
-        subtitle: isEditing ? `Updating ${initialData.vpa}` : "Connect a new VPA to this merchant organization"
-      },
-      /* @__PURE__ */ import_react9.default.createElement("form", { onSubmit: onSubmitUpi, className: "space-y-4 text-xs" }, /* @__PURE__ */ import_react9.default.createElement("div", { className: "space-y-1.5" }, /* @__PURE__ */ import_react9.default.createElement(Label2, null, "UPI VPA"), /* @__PURE__ */ import_react9.default.createElement(
-        Input2,
-        {
-          type: "text",
-          name: "vpa",
-          defaultValue: initialData?.vpa || "",
-          placeholder: "e.g. storename@okhdfcbank",
-          required: true,
-          className: "font-mono"
-        }
-      )), /* @__PURE__ */ import_react9.default.createElement("div", { className: "space-y-1.5" }, /* @__PURE__ */ import_react9.default.createElement(Label2, null, "Payee Name"), /* @__PURE__ */ import_react9.default.createElement(
-        Input2,
-        {
-          type: "text",
-          name: "payeeName",
-          defaultValue: initialData?.payeeName || activeOrg?.name || "",
-          required: true
-        }
-      )), /* @__PURE__ */ import_react9.default.createElement("div", { className: "grid grid-cols-2 gap-3" }, /* @__PURE__ */ import_react9.default.createElement("div", { className: "space-y-1.5" }, /* @__PURE__ */ import_react9.default.createElement(Label2, null, "MCC Code"), /* @__PURE__ */ import_react9.default.createElement(
-        Input2,
-        {
-          type: "text",
-          name: "mcc",
-          defaultValue: initialData?.merchantCategoryCode || "5411",
-          className: "font-mono"
-        }
-      )), /* @__PURE__ */ import_react9.default.createElement("div", { className: "flex items-center pt-5" }, /* @__PURE__ */ import_react9.default.createElement("label", { className: "flex items-center gap-2 text-foreground font-semibold cursor-pointer" }, /* @__PURE__ */ import_react9.default.createElement(
-        "input",
-        {
-          type: "checkbox",
-          name: "isDefault",
-          defaultChecked: isEditing ? initialData?.isDefault : true,
-          className: "rounded text-primary"
-        }
-      ), /* @__PURE__ */ import_react9.default.createElement("span", null, isEditing ? "Set as Default" : "Primary Default")))), /* @__PURE__ */ import_react9.default.createElement("div", { className: "pt-2 flex justify-end gap-2" }, /* @__PURE__ */ import_react9.default.createElement(
-        Button2,
-        {
-          variant: "outline",
-          type: "button",
-          onClick: onClose
-        },
-        "Cancel"
-      ), /* @__PURE__ */ import_react9.default.createElement(
-        Button2,
-        {
-          variant: "brand",
-          type: "submit"
-        },
-        isEditing ? "Update Account" : "Save Account"
-      )))
-    );
-  }
-  var UpiAccountModal_default = UpiAccountModal;
-
-  // api/src/dashboard/src/components/modals/QrCodeModal.jsx
-  var import_react10 = __toESM(require_react(), 1);
-  function QrCodeModal({
-    upiAccount,
-    onClose,
-    onCopyLink
-  }) {
-    const [customAmount, setCustomAmount] = (0, import_react10.useState)("");
-    if (!upiAccount) return null;
-    const amt = parseFloat(customAmount);
-    const upiUri = `upi://pay?pa=${encodeURIComponent(upiAccount.vpa)}&pn=${encodeURIComponent(upiAccount.payeeName)}&cu=INR${!isNaN(amt) && amt > 0 ? `&am=${amt.toFixed(2)}` : ""}`;
-    const safeUpiUri = sanitizeUrl(upiUri);
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(safeUpiUri)}`;
-    return /* @__PURE__ */ import_react10.default.createElement(
-      Modal,
-      {
-        isOpen: Boolean(upiAccount),
-        onClose,
-        title: "Store QR Code",
-        subtitle: `Pay to ${upiAccount.vpa}`
-      },
-      /* @__PURE__ */ import_react10.default.createElement("div", { className: "space-y-4 text-center" }, /* @__PURE__ */ import_react10.default.createElement("div", { className: "bg-white p-4 rounded-2xl w-60 h-60 mx-auto shadow-xl flex items-center justify-center border" }, /* @__PURE__ */ import_react10.default.createElement("img", { src: qrUrl, alt: "UPI QR", className: "w-full h-full object-contain" })), /* @__PURE__ */ import_react10.default.createElement("div", { className: "text-left bg-muted/40 p-3 rounded-xl border border-border space-y-2" }, /* @__PURE__ */ import_react10.default.createElement(Label2, null, "Custom Amount (Optional)"), /* @__PURE__ */ import_react10.default.createElement(
-        Input2,
-        {
-          type: "number",
-          placeholder: "Enter amount (\u20B9)",
-          value: customAmount,
-          onChange: (e) => setCustomAmount(e.target.value),
-          className: "font-bold"
-        }
-      )), /* @__PURE__ */ import_react10.default.createElement("div", { className: "flex gap-2 justify-center" }, /* @__PURE__ */ import_react10.default.createElement(
-        Button2,
-        {
-          variant: "outline",
-          onClick: () => onCopyLink(safeUpiUri),
-          className: "gap-1.5"
-        },
-        /* @__PURE__ */ import_react10.default.createElement(IconCopy, { className: "w-3.5 h-3.5" }),
-        /* @__PURE__ */ import_react10.default.createElement("span", null, "Copy Link")
-      ), /* @__PURE__ */ import_react10.default.createElement(
-        "a",
-        {
-          href: safeUpiUri,
-          rel: "noopener noreferrer",
-          className: "inline-flex items-center justify-center rounded-xl px-4 py-2 text-xs font-bold bg-brand-600 hover:bg-brand-500 text-white shadow-md transition gap-1.5"
-        },
-        /* @__PURE__ */ import_react10.default.createElement(IconExternalLink, { className: "w-3.5 h-3.5" }),
-        /* @__PURE__ */ import_react10.default.createElement("span", null, "Open UPI App")
-      )))
-    );
-  }
-  var QrCodeModal_default = QrCodeModal;
-
-  // api/src/dashboard/src/components/modals/StaffModal.jsx
-  var import_react11 = __toESM(require_react(), 1);
-  function StaffModal({
-    isOpen,
-    onClose,
-    initialData = null,
-    onSubmitStaff
-  }) {
-    const isEditing = Boolean(initialData);
-    return /* @__PURE__ */ import_react11.default.createElement(
-      Modal,
-      {
-        isOpen,
-        onClose,
-        title: isEditing ? "Edit Staff Member" : "Add Staff Member",
-        subtitle: isEditing ? `Updating ${initialData.fullName || initialData.mobileNumber}` : "Assign mobile number and role access"
-      },
-      /* @__PURE__ */ import_react11.default.createElement("form", { onSubmit: onSubmitStaff, className: "space-y-4 text-xs" }, !isEditing ? /* @__PURE__ */ import_react11.default.createElement(import_react11.default.Fragment, null, /* @__PURE__ */ import_react11.default.createElement("div", { className: "space-y-1.5" }, /* @__PURE__ */ import_react11.default.createElement(Label2, null, "Full Name"), /* @__PURE__ */ import_react11.default.createElement(
-        Input2,
-        {
-          type: "text",
-          name: "name",
-          placeholder: "e.g. Sunil Verma",
-          required: true
-        }
-      )), /* @__PURE__ */ import_react11.default.createElement("div", { className: "grid grid-cols-2 gap-3" }, /* @__PURE__ */ import_react11.default.createElement("div", { className: "space-y-1.5" }, /* @__PURE__ */ import_react11.default.createElement(Label2, null, "Mobile Number"), /* @__PURE__ */ import_react11.default.createElement(
-        Input2,
-        {
-          type: "tel",
-          name: "mobile",
-          placeholder: "9876543210",
-          required: true,
-          className: "font-mono"
-        }
-      )), /* @__PURE__ */ import_react11.default.createElement("div", { className: "space-y-1.5" }, /* @__PURE__ */ import_react11.default.createElement(Label2, null, "Email (Optional)"), /* @__PURE__ */ import_react11.default.createElement(
-        Input2,
-        {
-          type: "email",
-          name: "email",
-          placeholder: "staff@store.com"
-        }
-      )))) : null, /* @__PURE__ */ import_react11.default.createElement("div", { className: "space-y-1.5" }, /* @__PURE__ */ import_react11.default.createElement(Label2, null, "Assigned Role"), /* @__PURE__ */ import_react11.default.createElement(
-        "select",
-        {
-          name: "role",
-          defaultValue: initialData?.role || "CASHIER",
-          className: "w-full h-9 bg-background border border-input rounded-xl px-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-        },
-        /* @__PURE__ */ import_react11.default.createElement("option", { value: "CASHIER", className: "bg-card text-card-foreground" }, "\u{1F4B3} CASHIER \u2014 Collect payments & show QR"),
-        /* @__PURE__ */ import_react11.default.createElement("option", { value: "MANAGER", className: "bg-card text-card-foreground" }, "\u{1F4BC} MANAGER \u2014 Manage staff & refunds"),
-        /* @__PURE__ */ import_react11.default.createElement("option", { value: "ACCOUNTANT", className: "bg-card text-card-foreground" }, "\u{1F4CA} ACCOUNTANT \u2014 View reports & ledger")
-      )), isEditing && /* @__PURE__ */ import_react11.default.createElement("div", { className: "space-y-1.5" }, /* @__PURE__ */ import_react11.default.createElement(Label2, null, "Access Status"), /* @__PURE__ */ import_react11.default.createElement(
-        "select",
-        {
-          name: "status",
-          defaultValue: initialData?.status || "ACTIVE",
-          className: "w-full h-9 bg-background border border-input rounded-xl px-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-        },
-        /* @__PURE__ */ import_react11.default.createElement("option", { value: "ACTIVE", className: "bg-card text-card-foreground" }, "ACTIVE"),
-        /* @__PURE__ */ import_react11.default.createElement("option", { value: "SUSPENDED", className: "bg-card text-card-foreground" }, "SUSPENDED")
-      )), /* @__PURE__ */ import_react11.default.createElement("div", { className: "pt-2 flex justify-end gap-2" }, /* @__PURE__ */ import_react11.default.createElement(
-        Button2,
-        {
-          variant: "outline",
-          type: "button",
-          onClick: onClose
-        },
-        "Cancel"
-      ), /* @__PURE__ */ import_react11.default.createElement(
-        Button2,
-        {
-          variant: "brand",
-          type: "submit"
-        },
-        isEditing ? "Update Staff" : "Add Member"
-      )))
-    );
-  }
-  var StaffModal_default = StaffModal;
-
-  // api/src/dashboard/src/components/modals/BankAccountModal.jsx
-  var import_react12 = __toESM(require_react(), 1);
-  function BankAccountModal({
-    isOpen,
-    onClose,
-    activeOrg,
-    onSubmitBank
-  }) {
-    return /* @__PURE__ */ import_react12.default.createElement(
-      Modal,
-      {
-        isOpen,
-        onClose,
-        title: "Link Bank Account",
-        subtitle: "Connect settlement bank destination"
-      },
-      /* @__PURE__ */ import_react12.default.createElement("form", { onSubmit: onSubmitBank, className: "space-y-4 text-xs" }, /* @__PURE__ */ import_react12.default.createElement("div", { className: "space-y-1.5" }, /* @__PURE__ */ import_react12.default.createElement(Label2, null, "Bank Name"), /* @__PURE__ */ import_react12.default.createElement(
-        Input2,
-        {
-          type: "text",
-          name: "bankName",
-          placeholder: "e.g. HDFC Bank",
-          required: true
-        }
-      )), /* @__PURE__ */ import_react12.default.createElement("div", { className: "space-y-1.5" }, /* @__PURE__ */ import_react12.default.createElement(Label2, null, "Account Holder Name"), /* @__PURE__ */ import_react12.default.createElement(
-        Input2,
-        {
-          type: "text",
-          name: "holderName",
-          defaultValue: activeOrg?.name || "",
-          required: true
-        }
-      )), /* @__PURE__ */ import_react12.default.createElement("div", { className: "grid grid-cols-2 gap-3" }, /* @__PURE__ */ import_react12.default.createElement("div", { className: "space-y-1.5" }, /* @__PURE__ */ import_react12.default.createElement(Label2, null, "Account Number"), /* @__PURE__ */ import_react12.default.createElement(
-        Input2,
-        {
-          type: "text",
-          name: "accountNumber",
-          placeholder: "1234567890",
-          required: true,
-          className: "font-mono"
-        }
-      )), /* @__PURE__ */ import_react12.default.createElement("div", { className: "space-y-1.5" }, /* @__PURE__ */ import_react12.default.createElement(Label2, null, "IFSC Code"), /* @__PURE__ */ import_react12.default.createElement(
-        Input2,
-        {
-          type: "text",
-          name: "ifsc",
-          placeholder: "HDFC0001234",
-          required: true,
-          className: "font-mono uppercase"
-        }
-      ))), /* @__PURE__ */ import_react12.default.createElement("div", { className: "space-y-1.5" }, /* @__PURE__ */ import_react12.default.createElement(Label2, null, "Account Type"), /* @__PURE__ */ import_react12.default.createElement(
-        "select",
-        {
-          name: "type",
-          defaultValue: "CURRENT",
-          className: "w-full h-9 bg-background border border-input rounded-xl px-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-        },
-        /* @__PURE__ */ import_react12.default.createElement("option", { value: "CURRENT", className: "bg-card text-card-foreground" }, "CURRENT"),
-        /* @__PURE__ */ import_react12.default.createElement("option", { value: "SAVINGS", className: "bg-card text-card-foreground" }, "SAVINGS"),
-        /* @__PURE__ */ import_react12.default.createElement("option", { value: "OVERDRAFT", className: "bg-card text-card-foreground" }, "OVERDRAFT")
-      )), /* @__PURE__ */ import_react12.default.createElement("div", { className: "pt-2 flex justify-end gap-2" }, /* @__PURE__ */ import_react12.default.createElement(
-        Button2,
-        {
-          variant: "outline",
-          type: "button",
-          onClick: onClose
-        },
-        "Cancel"
-      ), /* @__PURE__ */ import_react12.default.createElement(
-        Button2,
-        {
-          variant: "brand",
-          type: "submit"
-        },
-        "Link Account"
-      )))
-    );
-  }
-  var BankAccountModal_default = BankAccountModal;
-
-  // api/src/dashboard/src/components/modals/TableRowModal.jsx
-  var import_react13 = __toESM(require_react(), 1);
-  function TableRowModal({
-    isOpen,
-    onClose,
-    selectedTable,
-    columns = [],
-    initialRow = null,
-    onSubmitRow
-  }) {
-    const isEditing = Boolean(initialRow);
-    return /* @__PURE__ */ import_react13.default.createElement(
-      Modal,
-      {
-        isOpen,
-        onClose,
-        title: isEditing ? `Edit ${selectedTable} Row` : `Insert in ${selectedTable}`,
-        subtitle: isEditing ? "Update column values" : "New row entry"
-      },
-      /* @__PURE__ */ import_react13.default.createElement("form", { onSubmit: onSubmitRow, className: "space-y-3 text-xs max-h-[60vh] overflow-y-auto pr-1" }, columns.map((col) => /* @__PURE__ */ import_react13.default.createElement("div", { key: col.name, className: "space-y-1" }, /* @__PURE__ */ import_react13.default.createElement(Label2, { className: "font-mono" }, col.name, " ", col.isPrimary && /* @__PURE__ */ import_react13.default.createElement("span", { className: "text-amber-500 font-bold" }, "(PRIMARY)"), !col.isPrimary && /* @__PURE__ */ import_react13.default.createElement("span", { className: "text-muted-foreground font-normal" }, " (", col.type, ")")), /* @__PURE__ */ import_react13.default.createElement(
-        Input2,
-        {
-          type: "text",
-          name: col.name,
-          defaultValue: initialRow ? initialRow[col.name] ?? "" : "",
-          disabled: isEditing && col.isPrimary,
-          placeholder: !isEditing && col.isPrimary ? "Auto-generated if empty" : "",
-          className: `font-mono ${isEditing && col.isPrimary ? "opacity-60 cursor-not-allowed" : ""}`
-        }
-      ))), /* @__PURE__ */ import_react13.default.createElement("div", { className: "pt-3 flex justify-end gap-2" }, /* @__PURE__ */ import_react13.default.createElement(
-        Button2,
-        {
-          variant: "outline",
-          type: "button",
-          onClick: onClose
-        },
-        "Cancel"
-      ), /* @__PURE__ */ import_react13.default.createElement(
-        Button2,
-        {
-          variant: "brand",
-          type: "submit",
-          className: !isEditing ? "bg-amber-600 hover:bg-amber-500 shadow-amber-500/20" : ""
-        },
-        isEditing ? "Save Changes" : "Insert"
-      )))
-    );
-  }
-  var TableRowModal_default = TableRowModal;
-
-  // api/src/dashboard/src/components/modals/TransactionDetailModal.jsx
-  var import_react15 = __toESM(require_react(), 1);
-
-  // api/src/dashboard/src/components/ui/badge.jsx
-  var import_react14 = __toESM(require_react(), 1);
-  function Badge2({ className = "", variant = "default", children, ...props }) {
-    const baseClasses = "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2";
-    const variantClasses = {
-      default: "border-transparent bg-primary text-primary-foreground hover:bg-primary/80",
-      secondary: "border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80",
-      destructive: "border-transparent bg-destructive/15 text-destructive border-destructive/20",
-      outline: "text-foreground",
-      success: "border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
-      warning: "border-amber-500/20 bg-amber-500/10 text-amber-600 dark:text-amber-400",
-      cyan: "border-cyan-500/20 bg-cyan-500/10 text-cyan-600 dark:text-cyan-400"
-    };
-    const vClass = variantClasses[variant] || variantClasses.default;
-    return /* @__PURE__ */ import_react14.default.createElement("div", { className: `${baseClasses} ${vClass} ${className}`, ...props }, children);
-  }
-
-  // api/src/dashboard/src/components/modals/TransactionDetailModal.jsx
-  function TransactionDetailModal({
-    transaction,
-    onClose
-  }) {
-    if (!transaction) return null;
-    return /* @__PURE__ */ import_react15.default.createElement(
-      Modal,
-      {
-        isOpen: Boolean(transaction),
-        onClose,
-        title: "Transaction Audit Record",
-        subtitle: transaction.referenceNumber || transaction.id
-      },
-      /* @__PURE__ */ import_react15.default.createElement("div", { className: "space-y-4 text-xs" }, /* @__PURE__ */ import_react15.default.createElement("div", { className: "grid grid-cols-2 gap-3 p-4 rounded-xl bg-muted/40 border border-border" }, /* @__PURE__ */ import_react15.default.createElement("div", null, /* @__PURE__ */ import_react15.default.createElement("span", { className: "text-muted-foreground block" }, "Amount"), /* @__PURE__ */ import_react15.default.createElement("span", { className: "text-xl font-black text-foreground" }, "\u20B9", Number(transaction.amount).toFixed(2))), /* @__PURE__ */ import_react15.default.createElement("div", null, /* @__PURE__ */ import_react15.default.createElement("span", { className: "text-muted-foreground block" }, "Status"), /* @__PURE__ */ import_react15.default.createElement(
-        Badge2,
-        {
-          variant: transaction.status === "SUCCESS" ? "success" : "warning",
-          className: "mt-1 font-bold"
-        },
-        transaction.status
-      )), /* @__PURE__ */ import_react15.default.createElement("div", null, /* @__PURE__ */ import_react15.default.createElement("span", { className: "text-muted-foreground block" }, "Customer"), /* @__PURE__ */ import_react15.default.createElement("span", { className: "font-semibold text-foreground" }, transaction.payerName || "Unknown")), /* @__PURE__ */ import_react15.default.createElement("div", null, /* @__PURE__ */ import_react15.default.createElement("span", { className: "text-muted-foreground block" }, "Customer VPA"), /* @__PURE__ */ import_react15.default.createElement("span", { className: "font-mono text-foreground" }, transaction.payerVpa || "\u2014")), /* @__PURE__ */ import_react15.default.createElement("div", null, /* @__PURE__ */ import_react15.default.createElement("span", { className: "text-muted-foreground block" }, "Payee VPA"), /* @__PURE__ */ import_react15.default.createElement("span", { className: "font-mono text-brand-600 dark:text-cyan-400" }, transaction.payeeVpa)), /* @__PURE__ */ import_react15.default.createElement("div", null, /* @__PURE__ */ import_react15.default.createElement("span", { className: "text-muted-foreground block" }, "Method"), /* @__PURE__ */ import_react15.default.createElement("span", { className: "text-foreground" }, transaction.provider || "UPI", " \xB7 ", transaction.paymentMethod || "APP"))), /* @__PURE__ */ import_react15.default.createElement("div", null, /* @__PURE__ */ import_react15.default.createElement("h4", { className: "font-bold text-foreground mb-1.5" }, "JSON Payload"), /* @__PURE__ */ import_react15.default.createElement("pre", { className: "p-3 rounded-xl bg-muted/60 border border-border text-[11px] font-mono text-foreground overflow-x-auto" }, JSON.stringify(transaction, null, 2))))
-    );
-  }
-  var TransactionDetailModal_default = TransactionDetailModal;
-
-  // api/src/dashboard/src/App.jsx
   function AppContent() {
     const navigate = useNavigate();
     const location = useLocation();
     const activeTab = location.pathname.replace(/^\//, "") || "overview";
-    const [theme, setTheme] = (0, import_react16.useState)(() => localStorage.getItem("upieasy_theme") || "dark");
-    (0, import_react16.useEffect)(() => {
+    const [theme, setTheme] = useState(() => localStorage.getItem("upieasy_theme") || "dark");
+    useEffect(() => {
       const root = document.documentElement;
       if (theme === "dark") {
         root.classList.add("dark");
@@ -1855,43 +2120,43 @@ var UpiEasyApp = (() => {
       }
       localStorage.setItem("upieasy_theme", theme);
     }, [theme]);
-    const [auth, setAuth] = (0, import_react16.useState)(() => getStoredAuth());
+    const [auth, setAuth] = useState(() => getStoredAuth());
     const token = auth.token;
     const user = auth.user;
-    const [organizations, setOrganizations] = (0, import_react16.useState)([]);
-    const [activeOrg, setActiveOrg] = (0, import_react16.useState)(null);
-    const [pingMs, setPingMs] = (0, import_react16.useState)(null);
-    const [isSyncing, setIsSyncing] = (0, import_react16.useState)(false);
-    const [dashboardStats, setDashboardStats] = (0, import_react16.useState)(null);
-    const [transactions, setTransactions] = (0, import_react16.useState)([]);
-    const [txnLoading, setTxnLoading] = (0, import_react16.useState)(false);
-    const [txnSearch, setTxnSearch] = (0, import_react16.useState)("");
-    const [txnStatus, setTxnStatus] = (0, import_react16.useState)("");
-    const [upiAccounts, setUpiAccounts] = (0, import_react16.useState)([]);
-    const [staffList, setStaffList] = (0, import_react16.useState)([]);
-    const [invitesList, setInvitesList] = (0, import_react16.useState)([]);
-    const [bankAccounts, setBankAccounts] = (0, import_react16.useState)([]);
-    const [adminTables, setAdminTables] = (0, import_react16.useState)([]);
-    const [selectedTable, setSelectedTable] = (0, import_react16.useState)("transactions");
-    const [tableData, setTableData] = (0, import_react16.useState)({ rows: [], columns: [], total: 0 });
-    const [tableLoading, setTableLoading] = (0, import_react16.useState)(false);
-    const [tableSearch, setTableSearch] = (0, import_react16.useState)("");
-    const [tableOffset, setTableOffset] = (0, import_react16.useState)(0);
-    const [healthData, setHealthData] = (0, import_react16.useState)(null);
-    const [bottomSheetConfig, setBottomSheetConfig] = (0, import_react16.useState)(null);
-    const [showNewTxnModal, setShowNewTxnModal] = (0, import_react16.useState)(false);
-    const [showUpiModal, setShowUpiModal] = (0, import_react16.useState)(null);
-    const [showQrModal, setShowQrModal] = (0, import_react16.useState)(null);
-    const [showStaffModal, setShowStaffModal] = (0, import_react16.useState)(null);
-    const [showNewBankModal, setShowNewBankModal] = (0, import_react16.useState)(false);
-    const [showTableRowModal, setShowTableRowModal] = (0, import_react16.useState)(null);
-    const [inspectTxn, setInspectTxn] = (0, import_react16.useState)(null);
-    const [toast, setToast] = (0, import_react16.useState)(null);
+    const [organizations, setOrganizations] = useState([]);
+    const [activeOrg, setActiveOrg] = useState(null);
+    const [pingMs, setPingMs] = useState(null);
+    const [isSyncing, setIsSyncing] = useState(false);
+    const [dashboardStats, setDashboardStats] = useState(null);
+    const [transactions, setTransactions] = useState([]);
+    const [txnLoading, setTxnLoading] = useState(false);
+    const [txnSearch, setTxnSearch] = useState("");
+    const [txnStatus, setTxnStatus] = useState("");
+    const [upiAccounts, setUpiAccounts] = useState([]);
+    const [staffList, setStaffList] = useState([]);
+    const [invitesList, setInvitesList] = useState([]);
+    const [bankAccounts, setBankAccounts] = useState([]);
+    const [adminTables, setAdminTables] = useState([]);
+    const [selectedTable, setSelectedTable] = useState("transactions");
+    const [tableData, setTableData] = useState({ rows: [], columns: [], total: 0 });
+    const [tableLoading, setTableLoading] = useState(false);
+    const [tableSearch, setTableSearch] = useState("");
+    const [tableOffset, setTableOffset] = useState(0);
+    const [healthData, setHealthData] = useState(null);
+    const [bottomSheetConfig, setBottomSheetConfig] = useState(null);
+    const [showNewTxnModal, setShowNewTxnModal] = useState(false);
+    const [showUpiModal, setShowUpiModal] = useState(null);
+    const [showQrModal, setShowQrModal] = useState(null);
+    const [showStaffModal, setShowStaffModal] = useState(null);
+    const [showNewBankModal, setShowNewBankModal] = useState(false);
+    const [showTableRowModal, setShowTableRowModal] = useState(null);
+    const [inspectTxn, setInspectTxn] = useState(null);
+    const [toast, setToast] = useState(null);
     const showToast = (message, type = "success") => {
       setToast({ message, type });
       setTimeout(() => setToast(null), 3500);
     };
-    const apiFetch = (0, import_react16.useMemo)(() => {
+    const apiFetch = useMemo(() => {
       return createApiClient(
         () => token,
         () => {
@@ -1935,7 +2200,7 @@ var UpiEasyApp = (() => {
       setActiveOrg(org);
       localStorage.setItem("upieasy_active_org_id", org.id);
     };
-    (0, import_react16.useEffect)(() => {
+    useEffect(() => {
       if (token) loadOrganizations();
     }, [token]);
     const loadOverview = async () => {
@@ -2021,7 +2286,7 @@ var UpiEasyApp = (() => {
         showToast(err.message, "error");
       }
     };
-    (0, import_react16.useEffect)(() => {
+    useEffect(() => {
       if (!token || !activeOrg) return;
       if (activeTab === "overview") loadOverview();
       else if (activeTab === "transactions") loadTransactions();
@@ -2031,12 +2296,12 @@ var UpiEasyApp = (() => {
       else if (activeTab === "tables") loadTables();
       else if (activeTab === "health") loadHealth();
     }, [token, activeOrg, activeTab]);
-    (0, import_react16.useEffect)(() => {
+    useEffect(() => {
       if (activeTab === "tables" && selectedTable) {
         loadTableData();
       }
     }, [activeTab, selectedTable, tableSearch, tableOffset]);
-    (0, import_react16.useEffect)(() => {
+    useEffect(() => {
       if (!token || !activeOrg) return;
       let isMounted = true;
       const interval = setInterval(async () => {
@@ -2056,7 +2321,7 @@ var UpiEasyApp = (() => {
         clearInterval(interval);
       };
     }, [token, activeOrg, activeTab]);
-    (0, import_react16.useEffect)(() => {
+    useEffect(() => {
       const onFocus = () => {
         if (token && activeOrg) {
           if (activeTab === "overview") loadOverview();
@@ -2087,7 +2352,7 @@ var UpiEasyApp = (() => {
           },
           {
             label: "Issue Refund",
-            icon: IconArrowUpRight2,
+            icon: IconArrowUpRight,
             onClick: () => showToast("Refund initiated to customer account")
           }
         ]
@@ -2104,7 +2369,7 @@ var UpiEasyApp = (() => {
         actions: [
           {
             label: "Generate Counter QR Code",
-            icon: IconQrCode2,
+            icon: IconQrCode,
             onClick: () => setShowQrModal(upi)
           },
           {
@@ -2159,7 +2424,7 @@ var UpiEasyApp = (() => {
           },
           {
             label: member.status === "ACTIVE" ? "Suspend Member Access" : "Activate Member Access",
-            icon: IconLock2,
+            icon: IconLock,
             variant: member.status === "ACTIVE" ? "danger" : "success",
             onClick: async () => {
               const nextStatus = member.status === "ACTIVE" ? "SUSPENDED" : "ACTIVE";
@@ -2238,14 +2503,14 @@ var UpiEasyApp = (() => {
         actions: [
           { label: "Settlement Bank Accounts", icon: IconLandmark, onClick: () => navigate("/accounts") },
           { label: "Business Profile & Registration", icon: IconBuilding, onClick: () => navigate("/orgs") },
-          { label: "Database Table Explorer (Admin)", icon: IconDatabase2, onClick: () => navigate("/tables") },
-          { label: "System Health Diagnostics", icon: IconHeartPulse2, onClick: () => navigate("/health") }
+          { label: "Database Table Explorer (Admin)", icon: IconDatabase, onClick: () => navigate("/tables") },
+          { label: "System Health Diagnostics", icon: IconHeartPulse, onClick: () => navigate("/health") }
         ]
       });
     };
     if (!token) {
-      return /* @__PURE__ */ import_react16.default.createElement(
-        LoginPage_default,
+      return /* @__PURE__ */ React.createElement(
+        LoginPage,
         {
           onLoginSuccess: handleLoginSuccess,
           theme,
@@ -2254,8 +2519,8 @@ var UpiEasyApp = (() => {
         }
       );
     }
-    return /* @__PURE__ */ import_react16.default.createElement("div", { className: "min-h-screen flex flex-col bg-background text-foreground transition-colors" }, /* @__PURE__ */ import_react16.default.createElement(
-      Navbar_default,
+    return /* @__PURE__ */ React.createElement("div", { className: "min-h-screen flex flex-col bg-background text-foreground transition-colors" }, /* @__PURE__ */ React.createElement(
+      Navbar,
       {
         user,
         organizations,
@@ -2267,15 +2532,15 @@ var UpiEasyApp = (() => {
         pingMs,
         isSyncing
       }
-    ), /* @__PURE__ */ import_react16.default.createElement("div", { className: "flex-1 flex overflow-hidden" }, /* @__PURE__ */ import_react16.default.createElement(
-      Sidebar_default,
+    ), /* @__PURE__ */ React.createElement("div", { className: "flex-1 flex overflow-hidden" }, /* @__PURE__ */ React.createElement(
+      Sidebar,
       {
         activeTab,
         onSelectTab: (tabId) => navigate(`/${tabId}`),
         activeOrg
       }
-    ), /* @__PURE__ */ import_react16.default.createElement("main", { className: "flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto pb-24 md:pb-8" }, /* @__PURE__ */ import_react16.default.createElement(import_react16.Suspense, { fallback: /* @__PURE__ */ import_react16.default.createElement(SuspenseFallback, { activeTab }) }, /* @__PURE__ */ import_react16.default.createElement(Routes, null, /* @__PURE__ */ import_react16.default.createElement(Route, { path: "/overview", element: /* @__PURE__ */ import_react16.default.createElement(
-      OverviewPage_default,
+    ), /* @__PURE__ */ React.createElement("main", { className: "flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto pb-24 md:pb-8" }, /* @__PURE__ */ React.createElement(Suspense, { fallback: /* @__PURE__ */ React.createElement(SuspenseFallback, { activeTab }) }, /* @__PURE__ */ React.createElement(Routes, null, /* @__PURE__ */ React.createElement(Route, { path: "/overview", element: /* @__PURE__ */ React.createElement(
+      OverviewPage,
       {
         stats: dashboardStats,
         onOpenNewTxn: () => setShowNewTxnModal(true),
@@ -2283,8 +2548,8 @@ var UpiEasyApp = (() => {
         onNavigate: (tab) => navigate(`/${tab}`),
         onInspectTxn: handleSelectTxnAction
       }
-    ) }), /* @__PURE__ */ import_react16.default.createElement(Route, { path: "/transactions", element: /* @__PURE__ */ import_react16.default.createElement(
-      TransactionsPage_default,
+    ) }), /* @__PURE__ */ React.createElement(Route, { path: "/transactions", element: /* @__PURE__ */ React.createElement(
+      TransactionsPage,
       {
         transactions,
         loading: txnLoading,
@@ -2296,29 +2561,29 @@ var UpiEasyApp = (() => {
         onOpenNewTxn: () => setShowNewTxnModal(true),
         onSelectTxnAction: handleSelectTxnAction
       }
-    ) }), /* @__PURE__ */ import_react16.default.createElement(Route, { path: "/upi", element: /* @__PURE__ */ import_react16.default.createElement(
-      UpiPage_default,
+    ) }), /* @__PURE__ */ React.createElement(Route, { path: "/upi", element: /* @__PURE__ */ React.createElement(
+      UpiPage,
       {
         upiAccounts,
         onOpenNewUpi: () => setShowUpiModal({}),
         onSelectUpiAction: handleSelectUpiAction
       }
-    ) }), /* @__PURE__ */ import_react16.default.createElement(Route, { path: "/staff", element: /* @__PURE__ */ import_react16.default.createElement(
-      StaffPage_default,
+    ) }), /* @__PURE__ */ React.createElement(Route, { path: "/staff", element: /* @__PURE__ */ React.createElement(
+      StaffPage,
       {
         staffList,
         invitesList,
         onOpenInviteStaff: () => setShowStaffModal({}),
         onSelectStaffAction: handleSelectStaffAction
       }
-    ) }), /* @__PURE__ */ import_react16.default.createElement(Route, { path: "/accounts", element: /* @__PURE__ */ import_react16.default.createElement(
-      AccountsPage_default,
+    ) }), /* @__PURE__ */ React.createElement(Route, { path: "/accounts", element: /* @__PURE__ */ React.createElement(
+      AccountsPage,
       {
         bankAccounts,
         onOpenNewBank: () => setShowNewBankModal(true)
       }
-    ) }), /* @__PURE__ */ import_react16.default.createElement(Route, { path: "/orgs", element: /* @__PURE__ */ import_react16.default.createElement(
-      ProfilePage_default,
+    ) }), /* @__PURE__ */ React.createElement(Route, { path: "/orgs", element: /* @__PURE__ */ React.createElement(
+      ProfilePage,
       {
         activeOrg,
         onSaveProfile: async (e) => {
@@ -2342,8 +2607,8 @@ var UpiEasyApp = (() => {
           }
         }
       }
-    ) }), /* @__PURE__ */ import_react16.default.createElement(Route, { path: "/tables", element: /* @__PURE__ */ import_react16.default.createElement(ProtectedRoute, { isAuthenticated: Boolean(token), userRole: activeOrg?.role, requiredRole: "MANAGER" }, /* @__PURE__ */ import_react16.default.createElement(
-      TablesPage_default,
+    ) }), /* @__PURE__ */ React.createElement(Route, { path: "/tables", element: /* @__PURE__ */ React.createElement(ProtectedRoute, { isAuthenticated: Boolean(token), userRole: activeOrg?.role, requiredRole: "MANAGER" }, /* @__PURE__ */ React.createElement(
+      TablesPage,
       {
         tables: adminTables,
         selectedTable,
@@ -2359,8 +2624,8 @@ var UpiEasyApp = (() => {
         onOpenInsertModal: () => setShowTableRowModal({ mode: "insert" }),
         onSelectRowAction: handleSelectTableRowAction
       }
-    )) }), /* @__PURE__ */ import_react16.default.createElement(Route, { path: "/health", element: /* @__PURE__ */ import_react16.default.createElement(
-      HealthPage_default,
+    )) }), /* @__PURE__ */ React.createElement(Route, { path: "/health", element: /* @__PURE__ */ React.createElement(
+      HealthPage,
       {
         healthData,
         pingMs,
@@ -2375,8 +2640,8 @@ var UpiEasyApp = (() => {
           }
         }
       }
-    ) }), /* @__PURE__ */ import_react16.default.createElement(Route, { path: "*", element: /* @__PURE__ */ import_react16.default.createElement(
-      OverviewPage_default,
+    ) }), /* @__PURE__ */ React.createElement(Route, { path: "*", element: /* @__PURE__ */ React.createElement(
+      OverviewPage,
       {
         stats: dashboardStats,
         onOpenNewTxn: () => setShowNewTxnModal(true),
@@ -2384,15 +2649,15 @@ var UpiEasyApp = (() => {
         onNavigate: (tab) => navigate(`/${tab}`),
         onInspectTxn: handleSelectTxnAction
       }
-    ) }))))), /* @__PURE__ */ import_react16.default.createElement(
-      BottomNav_default,
+    ) }))))), /* @__PURE__ */ React.createElement(
+      BottomNav,
       {
         activeTab,
         onSelectTab: (tabId) => navigate(`/${tabId}`),
         onOpenMoreSheet: handleOpenMoreSheet
       }
-    ), /* @__PURE__ */ import_react16.default.createElement(
-      BottomSheet_default,
+    ), /* @__PURE__ */ React.createElement(
+      BottomSheet,
       {
         isOpen: Boolean(bottomSheetConfig),
         onClose: () => setBottomSheetConfig(null),
@@ -2400,8 +2665,8 @@ var UpiEasyApp = (() => {
         subtitle: bottomSheetConfig?.subtitle,
         actions: bottomSheetConfig?.actions || []
       }
-    ), /* @__PURE__ */ import_react16.default.createElement(
-      RecordPaymentModal_default,
+    ), /* @__PURE__ */ React.createElement(
+      RecordPaymentModal,
       {
         isOpen: showNewTxnModal,
         onClose: () => setShowNewTxnModal(false),
@@ -2433,8 +2698,8 @@ var UpiEasyApp = (() => {
           }
         }
       }
-    ), /* @__PURE__ */ import_react16.default.createElement(
-      UpiAccountModal_default,
+    ), /* @__PURE__ */ React.createElement(
+      UpiAccountModal,
       {
         isOpen: Boolean(showUpiModal),
         onClose: () => setShowUpiModal(null),
@@ -2471,8 +2736,8 @@ var UpiEasyApp = (() => {
           }
         }
       }
-    ), /* @__PURE__ */ import_react16.default.createElement(
-      QrCodeModal_default,
+    ), /* @__PURE__ */ React.createElement(
+      QrCodeModal,
       {
         upiAccount: showQrModal,
         onClose: () => setShowQrModal(null),
@@ -2481,8 +2746,8 @@ var UpiEasyApp = (() => {
           showToast("Copied payment link to clipboard");
         }
       }
-    ), /* @__PURE__ */ import_react16.default.createElement(
-      StaffModal_default,
+    ), /* @__PURE__ */ React.createElement(
+      StaffModal,
       {
         isOpen: Boolean(showStaffModal),
         onClose: () => setShowStaffModal(null),
@@ -2517,8 +2782,8 @@ var UpiEasyApp = (() => {
           }
         }
       }
-    ), /* @__PURE__ */ import_react16.default.createElement(
-      BankAccountModal_default,
+    ), /* @__PURE__ */ React.createElement(
+      BankAccountModal,
       {
         isOpen: showNewBankModal,
         onClose: () => setShowNewBankModal(false),
@@ -2545,8 +2810,8 @@ var UpiEasyApp = (() => {
           }
         }
       }
-    ), /* @__PURE__ */ import_react16.default.createElement(
-      TableRowModal_default,
+    ), /* @__PURE__ */ React.createElement(
+      TableRowModal,
       {
         isOpen: Boolean(showTableRowModal),
         onClose: () => setShowTableRowModal(null),
@@ -2588,24 +2853,22 @@ var UpiEasyApp = (() => {
           }
         }
       }
-    ), /* @__PURE__ */ import_react16.default.createElement(
-      TransactionDetailModal_default,
+    ), /* @__PURE__ */ React.createElement(
+      TransactionDetailModal,
       {
         transaction: inspectTxn,
         onClose: () => setInspectTxn(null)
       }
-    ), toast && /* @__PURE__ */ import_react16.default.createElement("div", { className: "fixed bottom-20 md:bottom-6 right-6 z-50 flex items-center gap-3 px-4 py-3 rounded-xl border border-border bg-card shadow-2xl animate-fade-in text-xs font-semibold text-card-foreground" }, /* @__PURE__ */ import_react16.default.createElement("div", { className: `w-2 h-2 rounded-full ${toast.type === "error" ? "bg-destructive" : toast.type === "info" ? "bg-blue-500" : "bg-emerald-500"}` }), /* @__PURE__ */ import_react16.default.createElement("span", null, toast.message), /* @__PURE__ */ import_react16.default.createElement("button", { onClick: () => setToast(null), className: "ml-2 text-muted-foreground hover:text-foreground" }, "\u2715")));
+    ), toast && /* @__PURE__ */ React.createElement("div", { className: "fixed bottom-20 md:bottom-6 right-6 z-50 flex items-center gap-3 px-4 py-3 rounded-xl border border-border bg-card shadow-2xl animate-fade-in text-xs font-semibold text-card-foreground" }, /* @__PURE__ */ React.createElement("div", { className: `w-2 h-2 rounded-full ${toast.type === "error" ? "bg-destructive" : toast.type === "info" ? "bg-blue-500" : "bg-emerald-500"}` }), /* @__PURE__ */ React.createElement("span", null, toast.message), /* @__PURE__ */ React.createElement("button", { onClick: () => setToast(null), className: "ml-2 text-muted-foreground hover:text-foreground" }, "\u2715")));
   }
   function App() {
-    return /* @__PURE__ */ import_react16.default.createElement(Router, null, /* @__PURE__ */ import_react16.default.createElement(AppContent, null));
+    return /* @__PURE__ */ React.createElement(Router, null, /* @__PURE__ */ React.createElement(AppContent, null));
   }
-  var App_default = App;
-  var rootElement = document.getElementById("root");
+  const rootElement = document.getElementById("root");
   if (rootElement && typeof ReactDOM !== "undefined") {
     const root = ReactDOM.createRoot(rootElement);
-    root.render(/* @__PURE__ */ import_react16.default.createElement(App, null));
+    root.render(/* @__PURE__ */ React.createElement(App, null));
   }
-  return __toCommonJS(App_exports);
 })();
 
   </script>

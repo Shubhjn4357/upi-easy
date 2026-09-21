@@ -3,7 +3,6 @@ const path = require('path');
 const esbuild = require(path.resolve(__dirname, '..', 'api', 'node_modules', 'esbuild'));
 
 const dashboardDir = path.resolve(__dirname, '..', 'api', 'src', 'dashboard');
-const entryPoint = path.resolve(dashboardDir, 'src', 'App.jsx');
 const htmlPath = path.resolve(dashboardDir, 'index.html');
 const tsPath = path.resolve(dashboardDir, 'html.ts');
 const cssPath = path.resolve(dashboardDir, 'styles', 'theme.css');
@@ -22,47 +21,108 @@ if (fs.existsSync(cssPath)) {
   cssContent = fs.readFileSync(cssPath, 'utf8');
 }
 
-// React & ReactDOM globals mapping plugin for standalone browser bundle
-const globalsPlugin = {
-  name: 'globals',
-  setup(build) {
-    build.onResolve({ filter: /^react$/ }, args => ({
-      path: args.path,
-      namespace: 'react-global',
-    }));
-    build.onLoad({ filter: /.*/, namespace: 'react-global' }, () => ({
-      contents: 'module.exports = window.React;',
-      loader: 'js',
-    }));
-    build.onResolve({ filter: /^react-dom$/ }, args => ({
-      path: args.path,
-      namespace: 'react-dom-global',
-    }));
-    build.onLoad({ filter: /.*/, namespace: 'react-dom-global' }, () => ({
-      contents: 'module.exports = window.ReactDOM;',
-      loader: 'js',
-    }));
-  }
-};
+// Ordered list of modules to assemble into the cohesive dashboard
+const moduleFiles = [
+  // 1. Security, Auth & React Router Libraries
+  path.resolve(dashboardDir, 'src', 'lib', 'auth.js'),
+  path.resolve(dashboardDir, 'src', 'lib', 'api.js'),
+  path.resolve(dashboardDir, 'src', 'lib', 'router.jsx'),
+
+  // 2. shadcn/ui Core Primitives & Lucide Icons
+  path.resolve(dashboardDir, 'src', 'components', 'ui', 'icons.jsx'),
+  path.resolve(dashboardDir, 'src', 'components', 'ui', 'button.jsx'),
+  path.resolve(dashboardDir, 'src', 'components', 'ui', 'card.jsx'),
+  path.resolve(dashboardDir, 'src', 'components', 'ui', 'badge.jsx'),
+  path.resolve(dashboardDir, 'src', 'components', 'ui', 'input.jsx'),
+  path.resolve(dashboardDir, 'src', 'components', 'ui', 'table.jsx'),
+  path.resolve(dashboardDir, 'src', 'components', 'ui', 'dialog.jsx'),
+  path.resolve(dashboardDir, 'src', 'components', 'ui', 'sheet.jsx'),
+  path.resolve(dashboardDir, 'src', 'components', 'ui', 'components.jsx'),
+
+  // 3. Layout Shells & Containers
+  path.resolve(dashboardDir, 'src', 'components', 'Modal.jsx'),
+  path.resolve(dashboardDir, 'src', 'components', 'BottomSheet.jsx'),
+  path.resolve(dashboardDir, 'src', 'components', 'Navbar.jsx'),
+  path.resolve(dashboardDir, 'src', 'components', 'Sidebar.jsx'),
+  path.resolve(dashboardDir, 'src', 'components', 'BottomNav.jsx'),
+
+  // 4. Extracted Focused Modals
+  path.resolve(dashboardDir, 'src', 'components', 'modals', 'RecordPaymentModal.jsx'),
+  path.resolve(dashboardDir, 'src', 'components', 'modals', 'UpiAccountModal.jsx'),
+  path.resolve(dashboardDir, 'src', 'components', 'modals', 'QrCodeModal.jsx'),
+  path.resolve(dashboardDir, 'src', 'components', 'modals', 'StaffModal.jsx'),
+  path.resolve(dashboardDir, 'src', 'components', 'modals', 'BankAccountModal.jsx'),
+  path.resolve(dashboardDir, 'src', 'components', 'modals', 'TableRowModal.jsx'),
+  path.resolve(dashboardDir, 'src', 'components', 'modals', 'TransactionDetailModal.jsx'),
+
+  // 5. SaaS Pages
+  path.resolve(dashboardDir, 'src', 'pages', 'LoginPage.jsx'),
+  path.resolve(dashboardDir, 'src', 'pages', 'OverviewPage.jsx'),
+  path.resolve(dashboardDir, 'src', 'pages', 'TransactionsPage.jsx'),
+  path.resolve(dashboardDir, 'src', 'pages', 'UpiPage.jsx'),
+  path.resolve(dashboardDir, 'src', 'pages', 'StaffPage.jsx'),
+  path.resolve(dashboardDir, 'src', 'pages', 'AccountsPage.jsx'),
+  path.resolve(dashboardDir, 'src', 'pages', 'ProfilePage.jsx'),
+  path.resolve(dashboardDir, 'src', 'pages', 'TablesPage.jsx'),
+  path.resolve(dashboardDir, 'src', 'pages', 'HealthPage.jsx'),
+
+  // 6. Main App Entry
+  path.resolve(dashboardDir, 'src', 'App.jsx'),
+];
+
+// Clean ES module import/export statements for concatenated browser execution
+function cleanModule(code) {
+  return code
+    .replace(/import\s*[\s\S]*?from\s*['"][^'"]+['"];?/g, '')
+    .replace(/import\s*['"][^'"]+['"];?/g, '')
+    .replace(/export\s+default\s+function\s+/g, 'function ')
+    .replace(/export\s+default\s+const\s+/g, 'const ')
+    .replace(/export\s+default\s+[A-Za-z0-9_]+;?/g, '')
+    .replace(/export\s+(const|let|var|function|class)\s+/g, '$1 ')
+    .replace(/export\s*\{[\s\S]*?\};?/g, '');
+}
 
 async function build() {
-  console.log('[UPI-Easy] Compiling React Dashboard with esbuild from entry:', entryPoint);
+  console.log(`[UPI-Easy] Assembling ${moduleFiles.length} modular files...`);
 
-  const result = await esbuild.build({
-    entryPoints: [entryPoint],
-    bundle: true,
-    write: false,
-    format: 'iife',
-    globalName: 'UpiEasyApp',
-    plugins: [globalsPlugin],
-    loader: {
-      '.js': 'jsx',
-      '.jsx': 'jsx',
-    },
-    target: ['es2020'],
+  let combinedSource = `(function() {
+const {
+  useState,
+  useEffect,
+  useMemo,
+  useRef,
+  useCallback,
+  useContext,
+  createContext,
+  Suspense,
+  Fragment,
+  startTransition,
+  Children,
+  isValidElement,
+  cloneElement
+} = React;
+`;
+
+  for (const file of moduleFiles) {
+    if (fs.existsSync(file)) {
+      const rawContent = fs.readFileSync(file, 'utf8');
+      combinedSource += `\n/* --- ${path.basename(file)} --- */\n` + cleanModule(rawContent) + '\n';
+    } else {
+      console.warn(`[Build Warning] File not found: ${file}`);
+    }
+  }
+
+  combinedSource += `\n})();\n`;
+
+  console.log('[UPI-Easy] Compiling JSX via esbuild ahead-of-time (Zero Babel runtime)...');
+  const result = esbuild.transformSync(combinedSource, {
+    loader: 'jsx',
+    target: 'es2020',
+    jsxFactory: 'React.createElement',
+    jsxFragment: 'React.Fragment',
   });
 
-  const productionJs = result.outputFiles[0].text;
+  const productionJs = result.code;
 
   // Save standalone static JS bundle & CSS
   const staticBundleJsPath = path.resolve(distDir, 'dashboard.bundle.js');
@@ -81,7 +141,7 @@ async function build() {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>UPI-Easy Admin Panel</title>
+  <title>UPI-Easy — Multi-Tenant SaaS Platform & Admin Console</title>
 
   <!-- Google Fonts: Plus Jakarta Sans & JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -182,7 +242,7 @@ ${cssContent}
 <body>
   <div id="root"></div>
 
-  <!-- Pre-compiled Native Production Bundle (Zero Runtime Transpilation) -->
+  <!-- Pre-compiled Native Production Bundle (Zero Babel, Zero Runtime Transpilation) -->
   <script>
 ${productionJs}
   </script>
