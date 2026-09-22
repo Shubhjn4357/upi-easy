@@ -61,11 +61,13 @@ fun StaffScreen(
     val orgRepository = remember { OrganizationRepository(context, apiService, database, sessionManager) }
     val currentOrgId by sessionManager.currentOrgIdFlow.collectAsState(initial = null)
     val userRole by sessionManager.userRoleFlow.collectAsState(initial = null)
-    val canManageStaff = userRole?.uppercase() != "CASHIER"
+    val isOwner = userRole?.equals("OWNER", ignoreCase = true) == true
+    val canManageStaff = isOwner || userRole?.equals("MANAGER", ignoreCase = true) == true
 
     var staffList by remember { mutableStateOf<List<StaffMemberDto>>(emptyList()) }
     var pendingDeletedIds by remember { mutableStateOf(setOf<String>()) }
     val effectiveList = staffList.filter { it.id !in pendingDeletedIds }
+    val visibleStaffList = if (isOwner) effectiveList else effectiveList.filter { !it.role.equals("OWNER", ignoreCase = true) }
     var isLoading by remember { mutableStateOf(true) }
     var isRefreshing by remember { mutableStateOf(false) }
     var showInviteBottomSheet by remember { mutableStateOf(false) }
@@ -359,7 +361,7 @@ fun StaffScreen(
                                                     color = MaterialTheme.colorScheme.onSurface
                                                 )
                                                 Text(
-                                                    text = "${staffList.size} Active Members",
+                                                    text = "${visibleStaffList.size} Active Members",
                                                     style = MaterialTheme.typography.bodySmall,
                                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                                 )
@@ -423,7 +425,7 @@ fun StaffScreen(
                                                 }
                                             }
                                         }
-                                        if (ownerCount > 0) {
+                                        if (isOwner && ownerCount > 0) {
                                             Surface(
                                                 shape = RoundedCornerShape(12.dp),
                                                 color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f),
@@ -442,7 +444,7 @@ fun StaffScreen(
                     }
 
                     items(
-                        items = effectiveList,
+                        items = visibleStaffList,
                         key = { it.id }
                     ) { staff ->
                         val isSelected = selectedIds.contains(staff.id)
@@ -590,7 +592,8 @@ fun StaffScreen(
                                         )
                                     }
 
-                                    if (!isSelectionMode) {
+                                    val canDeleteThisStaff = isOwner || (canManageStaff && !staff.role.equals("OWNER", ignoreCase = true) && !staff.role.equals("MANAGER", ignoreCase = true))
+                                    if (!isSelectionMode && canDeleteThisStaff) {
                                         Spacer(modifier = Modifier.width(6.dp))
                                         IconButton(
                                             onClick = { staffToDelete = staff },

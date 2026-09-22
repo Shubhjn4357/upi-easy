@@ -37,6 +37,8 @@ fun SettingsScreen(
     database: AppDatabase,
     onNavigateToLegal: () -> Unit = {},
     onNavigateToPaymentDetection: () -> Unit = {},
+    onNavigateToBankAccounts: () -> Unit = {},
+    onNavigateToRolesPermissions: () -> Unit = {},
     onLogout: () -> Unit
 ) {
     val context = LocalContext.current
@@ -57,6 +59,7 @@ fun SettingsScreen(
     val currentOrgPan by sessionManager.currentOrgPanFlow.collectAsState(initial = null)
     val currentOrgGstin by sessionManager.currentOrgGstinFlow.collectAsState(initial = null)
     val userRole by sessionManager.userRoleFlow.collectAsState(initial = null)
+    val isOwner = userRole?.equals("OWNER", ignoreCase = true) == true
     val userEmail by sessionManager.userEmailFlow.collectAsState(initial = null)
     val userName by sessionManager.userNameFlow.collectAsState(initial = null)
 
@@ -74,6 +77,7 @@ fun SettingsScreen(
 
     // Dialog & Sheet Visibility
     var showOrganizationSwitcher by remember { mutableStateOf(false) }
+    var showCreateOrgDialog by remember { mutableStateOf(false) }
     var showEditProfileBottomSheet by remember { mutableStateOf(false) }
     var showSignOutConfirm by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
@@ -266,6 +270,102 @@ fun SettingsScreen(
                     }
                 }
 
+                // Bento Tile: Settlement Bank Accounts (Owner only)
+                if (isOwner) {
+                    Surface(
+                        shape = RoundedCornerShape(24.dp),
+                        color = MaterialTheme.colorScheme.surface,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onNavigateToBankAccounts() }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(20.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(44.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.tertiary.copy(alpha = 0.15f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.AccountBalance,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.tertiary
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Settlement Bank Accounts",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "Link and manage settlement bank accounts for payouts",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Icon(
+                                imageVector = Icons.Default.ChevronRight,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    // Bento Tile: Roles & Permissions (Owner only)
+                    Surface(
+                        shape = RoundedCornerShape(24.dp),
+                        color = MaterialTheme.colorScheme.surface,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onNavigateToRolesPermissions() }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(20.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(44.dp)
+                                    .clip(CircleShape)
+                                    .background(BrandPrimary.copy(alpha = 0.12f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.AdminPanelSettings,
+                                    contentDescription = null,
+                                    tint = BrandPrimary
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Roles & Permissions",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "Configure what each staff role can access and do",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Icon(
+                                imageVector = Icons.Default.ChevronRight,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+
                 // Error Message Display
                 if (errorMessage != null) {
                     Surface(
@@ -289,10 +389,13 @@ fun SettingsScreen(
                 Spacer(modifier = Modifier.height(4.dp))
 
                 // Account Actions (Sign Out & Delete Account - Strictly OWNER only)
-                val isOwner = userRole?.uppercase() == "OWNER"
                 AccountActionButtons(
                     onSignOutClick = { showSignOutConfirm = true },
-                    onDeleteAccountClick = { showDeleteDialog = true },
+                    onDeleteAccountClick = {
+                        if (isOwner) {
+                            showDeleteDialog = true
+                        }
+                    },
                     canDeleteAccount = isOwner
                 )
 
@@ -301,8 +404,8 @@ fun SettingsScreen(
         }
     }
 
-    // Modal Bottom Sheet: Edit Profile & Business Details
-    if (showEditProfileBottomSheet) {
+    // Modal Bottom Sheet: Edit Profile & Business Details (Strictly OWNER only)
+    if (showEditProfileBottomSheet && isOwner) {
         EditProfileBottomSheet(
             userName = userName,
             userEmail = userEmail,
@@ -318,12 +421,13 @@ fun SettingsScreen(
         )
     }
 
-    // Dialog: Delete Account Confirmation
-    if (showDeleteDialog) {
+    // Dialog: Delete Account Confirmation (Strictly OWNER only)
+    if (showDeleteDialog && isOwner) {
         DeleteAccountConfirmDialog(
             apiService = apiService,
             sessionManager = sessionManager,
             database = database,
+            isOwner = isOwner,
             onDismiss = { showDeleteDialog = false },
             onLogout = onLogout,
             onError = { err -> errorMessage = err }
@@ -354,10 +458,22 @@ fun SettingsScreen(
             },
             onCreateFirmClick = {
                 showOrganizationSwitcher = false
+                showCreateOrgDialog = true
             },
             onDismissRequest = {
                 showOrganizationSwitcher = false
             }
+        )
+    }
+
+    // Dialog: Create Organization / Firm
+    if (showCreateOrgDialog) {
+        com.aerotech.upieasy.feature.settings.components.CreateOrganizationDialog(
+            apiService = apiService,
+            sessionManager = sessionManager,
+            database = database,
+            orgRepository = orgRepository,
+            onDismiss = { showCreateOrgDialog = false }
         )
     }
 }

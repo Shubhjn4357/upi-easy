@@ -59,6 +59,7 @@ fun AppSetupScreen(
     val apiService = remember { NetworkClient.getApiService(sessionManager) }
 
     val savedUserName by sessionManager.userNameFlow.collectAsState(initial = "")
+    val savedMobileNumber by sessionManager.mobileNumberFlow.collectAsState(initial = "")
 
     // Form inputs
     var businessName by remember { mutableStateOf("") }
@@ -82,6 +83,70 @@ fun AppSetupScreen(
     var bankName by remember { mutableStateOf("") }
     var accountNumber by remember { mutableStateOf("") }
     var ifscCode by remember { mutableStateOf("") }
+
+    LaunchedEffect(savedMobileNumber) {
+        val mobile = savedMobileNumber
+        if (mobileNumber.isBlank() && !mobile.isNullOrBlank()) {
+            mobileNumber = mobile.filter { it.isDigit() }.takeLast(10)
+        }
+    }
+
+    // Auto-skip onboarding if user already has an active firm or pending invitation (e.g. invited staff)
+    LaunchedEffect(Unit) {
+        try {
+            // 1. Check if user already belongs to an organization
+            val orgRes = apiService.getOrganizations()
+            if (orgRes.isSuccessful && orgRes.body()?.success == true) {
+                val orgs = orgRes.body()!!.organizations
+                if (orgs.isNotEmpty()) {
+                    val firstOrg = orgs[0]
+                    sessionManager.setOrganization(
+                        orgId = firstOrg.id,
+                        orgName = firstOrg.name,
+                        role = firstOrg.role,
+                        legalName = firstOrg.legalBusinessName,
+                        category = firstOrg.category,
+                        panNumber = firstOrg.panNumber,
+                        gstin = firstOrg.gstin
+                    )
+                    sessionManager.setSetupComplete(true)
+                    onSetupComplete()
+                    return@LaunchedEffect
+                }
+            }
+
+            // 2. Check if user has any pending invitations to auto-accept
+            val inviteRes = apiService.getMyInvitations()
+            if (inviteRes.isSuccessful && inviteRes.body()?.success == true) {
+                val invites = inviteRes.body()?.invitations ?: inviteRes.body()?.invites ?: emptyList()
+                val pendingInvite = invites.firstOrNull { it.status.equals("PENDING", ignoreCase = true) }
+                if (pendingInvite != null) {
+                    val acceptRes = apiService.acceptInvitation(pendingInvite.id)
+                    if (acceptRes.isSuccessful && acceptRes.body()?.success == true) {
+                        val orgRes2 = apiService.getOrganizations()
+                        if (orgRes2.isSuccessful && orgRes2.body()?.success == true) {
+                            val orgs2 = orgRes2.body()!!.organizations
+                            val target = orgs2.find { it.id == pendingInvite.organizationId } ?: orgs2.firstOrNull()
+                            if (target != null) {
+                                sessionManager.setOrganization(
+                                    orgId = target.id,
+                                    orgName = target.name,
+                                    role = target.role,
+                                    legalName = target.legalBusinessName,
+                                    category = target.category,
+                                    panNumber = target.panNumber,
+                                    gstin = target.gstin
+                                )
+                                sessionManager.setSetupComplete(true)
+                                onSetupComplete()
+                                return@LaunchedEffect
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+    }
 
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -383,12 +448,11 @@ fun AppSetupScreen(
 
                     OutlinedTextField(
                         value = mobileNumber,
-                        onValueChange = {
-                            if (it.length <= 10) {
-                                mobileNumber = it.filter { char -> char.isDigit() }
-                                if (mobileNumber.length == 10) {
-                                    openUpiDiscovery()
-                                }
+                        onValueChange = { input ->
+                            val digits = input.filter { it.isDigit() }.takeLast(10)
+                            mobileNumber = digits
+                            if (mobileNumber.length == 10) {
+                                openUpiDiscovery()
                             }
                         },
                         label = { Text("Business Mobile Number *") },
@@ -559,55 +623,69 @@ fun AppSetupScreen(
             }
 
             // Submit Button
-            val isFormValid = businessName.isNotBlank() &&
-                    mobileNumber.length == 10 &&
-                    primaryVpa.contains("@") &&
-                    payeeName.isNotBlank()
+            val bName = businessName.trim()
+            val vpa = primaryVpa.trim()
+            val phone = mobileNumber.trim()
+            val pName = payeeName.trim().ifBlank { bName }
 
             Button(
                 onClick = {
-                    if (isFormValid) {
-                        isLoading = true
-                        errorMessage = null
-                        scope.launch {
-                            try {
-                                val res = apiService.completeSetup(
-                                    AppSetupRequest(
-                                        businessName = businessName.trim(),
-                                        legalBusinessName = legalBusinessName.trim().ifBlank { null },
-                                        category = selectedCategory,
-                                        panNumber = panNumber.trim().ifBlank { null },
-                                        gstin = gstin.trim().ifBlank { null },
-                                        mobileNumber = mobileNumber.trim(),
-                                        primaryVpa = primaryVpa.trim(),
-                                        payeeName = payeeName.trim(),
-                                        bankName = bankName.ifBlank { null },
-                                        accountNumber = accountNumber.ifBlank { null },
-                                        ifscCode = ifscCode.ifBlank { null }
-                                    )
+                    if (bName.length < 2) {
+                        errorMessage = "Please enter your store or brand name."
+                        return@Button
+                    }
+                    if (phone.length != 10) {
+                        errorMessage = "Please enter a valid 10-digit mobile number."
+                        return@Button
+                    }
+                    if (!vpa.contains("@") || vpa.length < 3) {
+                        errorMessage = "Please enter a valid UPI address (e.g. store@okhdfcbank)."
+                        return@Button
+                    }
+                    isLoading = true
+                    errorMessage = null
+                    scope.launch {
+                        try {
+                            val res = apiService.completeSetup(
+                                AppSetupRequest(
+                                    businessName = bName,
+                                    legalBusinessName = legalBusinessName.trim().ifBlank { null },
+                                    category = selectedCategory,
+                                    panNumber = panNumber.trim().ifBlank { null },
+                                    gstin = gstin.trim().ifBlank { null },
+                                    mobileNumber = phone,
+                                    primaryVpa = vpa,
+                                    payeeName = pName,
+                                    bankName = bankName.ifBlank { null },
+                                    accountNumber = accountNumber.ifBlank { null },
+                                    ifscCode = ifscCode.ifBlank { null }
                                 )
+                            )
 
-                                if (res.isSuccessful && res.body()?.success == true) {
-                                    val data = res.body()!!
-                                    sessionManager.setOrganization(
-                                        orgId = data.organization.id,
-                                        orgName = data.organization.name,
-                                        role = "OWNER",
-                                        legalName = data.organization.legalBusinessName,
-                                        category = data.organization.category,
-                                        panNumber = data.organization.panNumber,
-                                        gstin = data.organization.gstin
-                                    )
-                                    sessionManager.setSetupComplete(true)
-                                    onSetupComplete()
-                                } else {
-                                    errorMessage = "Setup failed. Please check the entered UPI address and details."
-                                }
-                            } catch (e: Exception) {
-                                errorMessage = e.localizedMessage ?: "Failed to connect to backend server"
-                            } finally {
-                                isLoading = false
+                            if (res.isSuccessful && res.body()?.success == true) {
+                                val data = res.body()!!
+                                sessionManager.setOrganization(
+                                    orgId = data.organization.id,
+                                    orgName = data.organization.name,
+                                    role = "OWNER",
+                                    legalName = data.organization.legalBusinessName,
+                                    category = data.organization.category,
+                                    panNumber = data.organization.panNumber,
+                                    gstin = data.organization.gstin
+                                )
+                                sessionManager.setSetupComplete(true)
+                                onSetupComplete()
+                            } else {
+                                val errBody = res.errorBody()?.string()
+                                val parsedMsg = try {
+                                    org.json.JSONObject(errBody ?: "").optString("message", "")
+                                } catch (_: Exception) { "" }
+                                errorMessage = if (parsedMsg.isNotBlank()) parsedMsg else (res.body()?.message ?: "Setup failed (${res.code()}). Please check your UPI address and details.")
                             }
+                        } catch (e: Exception) {
+                            errorMessage = e.localizedMessage ?: "Failed to connect to backend server"
+                        } finally {
+                            isLoading = false
                         }
                     }
                 },
@@ -616,7 +694,7 @@ fun AppSetupScreen(
                     .height(54.dp),
                 shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary),
-                enabled = isFormValid && !isLoading
+                enabled = !isLoading
             ) {
                 if (isLoading) {
                     CircularProgressIndicator(color = SurfaceLight, modifier = Modifier.size(24.dp))

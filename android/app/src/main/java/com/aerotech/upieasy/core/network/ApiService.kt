@@ -53,11 +53,17 @@ data class OrganizationDto(
     val category: String? = null,
     val panNumber: String? = null,
     val gstin: String? = null,
-    val role: String,
-    val status: String
+    val role: String = "OWNER",
+    val status: String = "ACTIVE"
 )
 
-data class CreateOrgRequest(val name: String, val category: String = "RETAIL")
+data class CreateOrgRequest(
+    val name: String,
+    val legalBusinessName: String? = null,
+    val category: String = "RETAIL",
+    val panNumber: String? = null,
+    val gstin: String? = null
+)
 data class CreateOrgResponse(val success: Boolean, val organization: OrganizationDto)
 
 data class DashboardResponse(
@@ -121,10 +127,64 @@ data class UpiAccountDto(
     val id: String,
     val vpa: String,
     val payeeName: String,
-    val merchantCategoryCode: String,
-    val isDefault: Boolean,
-    val status: String,
-    val transactionCount: Int
+    val merchantCategoryCode: String = "5411",
+    val isDefault: Boolean = false,
+    val status: String = "ACTIVE",
+    val transactionCount: Int = 0,
+    val qrPayload: String? = null
+)
+
+// Settlement Bank Accounts DTOs
+data class BankAccountDto(
+    val id: String,
+    val organizationId: String,
+    val bankName: String,
+    val accountHolderName: String,
+    val accountNumberMasked: String,
+    val ifscCode: String,
+    val accountType: String = "CURRENT",
+    val isDefault: Boolean = false,
+    val status: String = "ACTIVE"
+)
+
+data class BankAccountsResponse(
+    val success: Boolean,
+    val accounts: List<BankAccountDto>
+)
+
+data class AddBankAccountRequest(
+    val bankName: String,
+    val accountHolderName: String,
+    val accountNumber: String,
+    val ifscCode: String,
+    val accountType: String = "CURRENT",
+    val isDefault: Boolean = false
+)
+
+// Roles and Permissions (RBAC) DTOs
+data class PermissionDto(
+    val id: String,
+    val name: String,
+    val description: String? = null,
+    val category: String
+)
+
+data class RoleDto(
+    val id: String,
+    val name: String,
+    val description: String? = null,
+    val isSystem: Boolean = false,
+    val permissions: List<String> = emptyList()
+)
+
+data class RolesPermissionsResponse(
+    val success: Boolean,
+    val roles: List<RoleDto>,
+    val permissions: List<PermissionDto>
+)
+
+data class UpdateRolePermissionsRequest(
+    val permissionIds: List<String>
 )
 
 data class AddUpiRequest(
@@ -467,6 +527,39 @@ interface ApiService {
         @Path("orgId") orgId: String,
         @Body request: PostObservedPaymentEventRequest
     ): Response<ObservedPaymentEventResponse>
+
+    // Settlement Bank Accounts
+    @GET("api/v1/organizations/{orgId}/accounts")
+    suspend fun getBankAccounts(@Path("orgId") orgId: String): Response<BankAccountsResponse>
+
+    @POST("api/v1/organizations/{orgId}/accounts")
+    suspend fun addBankAccount(
+        @Path("orgId") orgId: String,
+        @Body request: AddBankAccountRequest
+    ): Response<ApiResponse<Any>>
+
+    @PATCH("api/v1/organizations/{orgId}/accounts/{accountId}/default")
+    suspend fun setDefaultBankAccount(
+        @Path("orgId") orgId: String,
+        @Path("accountId") accountId: String
+    ): Response<ApiResponse<Any>>
+
+    @DELETE("api/v1/organizations/{orgId}/accounts/{accountId}")
+    suspend fun deleteBankAccount(
+        @Path("orgId") orgId: String,
+        @Path("accountId") accountId: String
+    ): Response<ApiResponse<Any>>
+
+    // Roles and Permissions (RBAC)
+    @GET("api/v1/organizations/{orgId}/roles")
+    suspend fun getRolesAndPermissions(@Path("orgId") orgId: String): Response<RolesPermissionsResponse>
+
+    @PATCH("api/v1/organizations/{orgId}/roles/{roleId}/permissions")
+    suspend fun updateRolePermissions(
+        @Path("orgId") orgId: String,
+        @Path("roleId") roleId: String,
+        @Body request: UpdateRolePermissionsRequest
+    ): Response<ApiResponse<Any>>
 }
 
 // Data Transfer Objects for Payment Accounts & Observed Events

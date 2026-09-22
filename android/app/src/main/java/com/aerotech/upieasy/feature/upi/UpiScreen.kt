@@ -62,6 +62,9 @@ fun UpiScreen(
     val database = remember { AppDatabase.getInstance(context) }
     val apiService = remember { NetworkClient.getApiService(sessionManager) }
     val currentOrgId by sessionManager.currentOrgIdFlow.collectAsState(initial = null)
+    val userRole by sessionManager.userRoleFlow.collectAsState(initial = null)
+    val isOwner = userRole?.equals("OWNER", ignoreCase = true) == true
+    val canManageUpi = isOwner
 
     val localAccounts by remember(currentOrgId) {
         if (!currentOrgId.isNullOrBlank()) {
@@ -216,7 +219,7 @@ fun UpiScreen(
             }
         },
         floatingActionButton = {
-            if (!isSelectionMode) {
+            if (!isSelectionMode && canManageUpi) {
                 FloatingActionButton(
                     onClick = { showAddBottomSheet = true },
                     containerColor = MaterialTheme.colorScheme.primary,
@@ -623,24 +626,26 @@ fun UpiScreen(
 
                                     if (!isSelectionMode) {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
-                                            IconButton(
-                                                onClick = {
-                                                    accountToEdit = item
-                                                    showEditBottomSheet = true
-                                                },
-                                                modifier = Modifier
-                                                    .size(36.dp)
-                                                    .clip(CircleShape)
-                                                    .background(PastelBlueBg)
-                                            ) {
-                                                Icon(
-                                                    Icons.Default.Edit,
-                                                    contentDescription = "Edit UPI ID",
-                                                    tint = BrandPrimary,
-                                                    modifier = Modifier.size(18.dp)
-                                                )
+                                            if (canManageUpi) {
+                                                IconButton(
+                                                    onClick = {
+                                                        accountToEdit = item
+                                                        showEditBottomSheet = true
+                                                    },
+                                                    modifier = Modifier
+                                                        .size(36.dp)
+                                                        .clip(CircleShape)
+                                                        .background(PastelBlueBg)
+                                                ) {
+                                                    Icon(
+                                                        Icons.Default.Edit,
+                                                        contentDescription = "Edit UPI ID",
+                                                        tint = BrandPrimary,
+                                                        modifier = Modifier.size(18.dp)
+                                                    )
+                                                }
+                                                Spacer(modifier = Modifier.width(6.dp))
                                             }
-                                            Spacer(modifier = Modifier.width(6.dp))
                                             IconButton(
                                                 onClick = { onNavigateToQrForVpa(item.vpa, item.payeeName) },
                                                 modifier = Modifier
@@ -650,15 +655,17 @@ fun UpiScreen(
                                             ) {
                                                 Icon(Icons.Default.QrCode, contentDescription = "QR Code", tint = BrandPrimary, modifier = Modifier.size(18.dp))
                                             }
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            IconButton(
-                                                onClick = { accountToDelete = item },
-                                                modifier = Modifier
-                                                    .size(36.dp)
-                                                    .clip(CircleShape)
-                                                    .background(PastelPink)
-                                            ) {
-                                                Icon(Icons.Default.DeleteOutline, contentDescription = "Delete", tint = FailedRed, modifier = Modifier.size(18.dp))
+                                            if (canManageUpi) {
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                IconButton(
+                                                    onClick = { accountToDelete = item },
+                                                    modifier = Modifier
+                                                        .size(36.dp)
+                                                        .clip(CircleShape)
+                                                        .background(PastelPink)
+                                                ) {
+                                                    Icon(Icons.Default.DeleteOutline, contentDescription = "Delete", tint = FailedRed, modifier = Modifier.size(18.dp))
+                                                }
                                             }
                                         }
                                     }
@@ -677,7 +684,7 @@ fun UpiScreen(
                                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
                                     )
 
-                                    if (!item.isDefault && !isSelectionMode) {
+                                    if (canManageUpi && !item.isDefault && !isSelectionMode) {
                                         TextButton(
                                             onClick = {
                                                 scope.launch {

@@ -15,7 +15,7 @@ import { transactionsRouter } from "./modules/transactions/index.js";
 import { syncRouter } from "./modules/sync/index.js";
 import { auditRouter } from "./modules/audit/index.js";
 import { notificationsRouter, orgNotificationsRouter } from "./modules/notifications/index.js";
-import { webhooksRouter } from "./modules/webhooks/index.js";
+import { rolesRouter } from "./modules/roles/index.js";
 import { invitationsRouter, getMyInvitationsHandler } from "./modules/invitations/index.js";
 import { devicesRouter } from "./modules/devices/index.js";
 import { paymentAccountsRouter, paymentAppsRouter } from "./modules/paymentAccounts/index.js";
@@ -147,7 +147,7 @@ v1.route("/notifications", notificationsRouter);
 v1.route("/payment-apps", paymentAppsRouter);
 v1.route("/organizations", paymentAccountsRouter);
 v1.route("/organizations", paymentEventsRouter);
-v1.route("/webhooks", webhooksRouter);
+v1.route("/organizations", rolesRouter);
 v1.route("/admin", adminRouter);
 
 // Development & Demo Seed Endpoint

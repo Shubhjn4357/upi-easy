@@ -9,6 +9,7 @@ export const bankAccounts = sqliteTable("bank_accounts", {
   accountNumberMasked: text("account_number_masked").notNull(), // e.g. "••••1234"
   ifscCode: text("ifsc_code").notNull(),
   accountType: text("account_type", { enum: ["CURRENT", "SAVINGS", "OVERDRAFT"] }).default("CURRENT").notNull(),
+  isDefault: integer("is_default", { mode: "boolean" }).default(false).notNull(),
   status: text("status", { enum: ["ACTIVE", "INACTIVE", "ARCHIVED"] }).default("ACTIVE").notNull(),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),

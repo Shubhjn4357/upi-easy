@@ -25,7 +25,7 @@ import kotlinx.coroutines.withContext
 fun AccountActionButtons(
     onSignOutClick: () -> Unit,
     onDeleteAccountClick: () -> Unit,
-    canDeleteAccount: Boolean = true,
+    canDeleteAccount: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -76,8 +76,6 @@ fun SignOutConfirmDialog(
     onDismiss: () -> Unit,
     onLogout: () -> Unit
 ) {
-    val scope = rememberCoroutineScope()
-
     AlertDialog(
         onDismissRequest = onDismiss,
         icon = { Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
@@ -89,19 +87,7 @@ fun SignOutConfirmDialog(
             Button(
                 onClick = {
                     onDismiss()
-                    scope.launch {
-                        try {
-                            val deviceId = sessionManager.getDeviceId()
-                            if (!deviceId.isNullOrBlank()) {
-                                apiService?.unregisterDevice(mapOf("deviceId" to deviceId))
-                            }
-                        } catch (_: Exception) {}
-                        sessionManager.clearSession()
-                        withContext(Dispatchers.IO) {
-                            database.clearAllTables()
-                        }
-                        onLogout()
-                    }
+                    onLogout()
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
             ) {
@@ -121,10 +107,19 @@ fun DeleteAccountConfirmDialog(
     apiService: ApiService,
     sessionManager: SessionManager,
     database: AppDatabase,
+    isOwner: Boolean = false,
     onDismiss: () -> Unit,
     onLogout: () -> Unit,
     onError: (String) -> Unit
 ) {
+    if (!isOwner) {
+        LaunchedEffect(Unit) {
+            onError("Only the Organization Owner can permanently delete the account.")
+            onDismiss()
+        }
+        return
+    }
+
     val scope = rememberCoroutineScope()
     var isDeleting by remember { mutableStateOf(false) }
 

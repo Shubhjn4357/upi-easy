@@ -29,12 +29,28 @@ class OrganizationRepository(
 
     suspend fun refreshOrganizations(): Result<List<OrganizationEntity>> {
         return try {
-            val response = apiService.getProfile()
-            if (response.isSuccessful && response.body()?.success == true) {
-                val memberships = response.body()?.organizations ?: emptyList()
-                val currentOrgId = sessionManager.getCurrentOrgId()
+            val orgsRes = apiService.getOrganizations()
+            val currentOrgId = sessionManager.getCurrentOrgId()
 
-                val entities = memberships.map { dto ->
+            val entities = if (orgsRes.isSuccessful && orgsRes.body()?.success == true && !orgsRes.body()?.organizations.isNullOrEmpty()) {
+                val orgs = orgsRes.body()!!.organizations
+                orgs.map { dto ->
+                    OrganizationEntity(
+                        id = dto.id,
+                        name = dto.name,
+                        legalBusinessName = dto.legalBusinessName,
+                        category = dto.category,
+                        panNumber = dto.panNumber,
+                        gstin = dto.gstin,
+                        role = dto.role,
+                        membershipStatus = dto.status,
+                        isCurrent = dto.id == currentOrgId
+                    )
+                }
+            } else {
+                val response = apiService.getProfile()
+                val memberships = response.body()?.organizations ?: emptyList()
+                memberships.map { dto ->
                     OrganizationEntity(
                         id = dto.organizationId,
                         name = dto.organizationName,
@@ -47,19 +63,34 @@ class OrganizationRepository(
                         isCurrent = dto.organizationId == currentOrgId
                     )
                 }
+            }
 
+            if (entities.isNotEmpty()) {
                 organizationDao.clearOrganizations()
                 organizationDao.insertOrganizations(entities)
 
-                // If currentOrgId is empty or not in memberships, auto-select first
-                if (currentOrgId.isNullOrBlank() && entities.isNotEmpty()) {
-                    switchOrganization(entities.first().id)
+                // Sync sessionManager with current active organization role or select first
+                val currentId = currentOrgId ?: sessionManager.getCurrentOrgId()
+                val targetOrg = if (!currentId.isNullOrBlank()) {
+                    entities.find { it.id == currentId } ?: entities.firstOrNull()
+                } else {
+                    entities.firstOrNull()
                 }
 
-                Result.success(entities)
-            } else {
-                Result.failure(Exception("Failed to fetch organizations: ${response.code()}"))
+                if (targetOrg != null) {
+                    sessionManager.setOrganization(
+                        orgId = targetOrg.id,
+                        orgName = targetOrg.name,
+                        role = targetOrg.role,
+                        legalName = targetOrg.legalBusinessName,
+                        category = targetOrg.category,
+                        panNumber = targetOrg.panNumber,
+                        gstin = targetOrg.gstin
+                    )
+                }
             }
+
+            Result.success(entities)
         } catch (e: Exception) {
             Log.e("OrganizationRepo", "Error refreshing organizations", e)
             Result.failure(e)
@@ -110,18 +141,44 @@ class OrganizationRepository(
     }
 
     suspend fun switchOrganization(organizationId: String) {
-        val org = organizationDao.getOrganizationById(organizationId) ?: return
-        sessionManager.setOrganization(
-            orgId = org.id,
-            orgName = org.name,
-            role = org.role,
-            legalName = org.legalBusinessName,
-            category = org.category,
-            panNumber = org.panNumber,
-            gstin = org.gstin
-        )
-        // Trigger background sync for newly active organization
-        SyncScheduler.triggerImmediateSync(context, organizationId)
+        var org = organizationDao.getOrganizationById(organizationId)
+        if (org == null) {
+            try {
+                val res = apiService.getOrganizations()
+                if (res.isSuccessful && res.body()?.success == true) {
+                    val dto = res.body()?.organizations?.find { it.id == organizationId }
+                    if (dto != null) {
+                        val entity = OrganizationEntity(
+                            id = dto.id,
+                            name = dto.name,
+                            legalBusinessName = dto.legalBusinessName,
+                            category = dto.category,
+                            panNumber = dto.panNumber,
+                            gstin = dto.gstin,
+                            role = dto.role,
+                            membershipStatus = dto.status,
+                            isCurrent = true
+                        )
+                        organizationDao.insertOrganization(entity)
+                        org = entity
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+
+        if (org != null) {
+            sessionManager.setOrganization(
+                orgId = org.id,
+                orgName = org.name,
+                role = org.role,
+                legalName = org.legalBusinessName,
+                category = org.category,
+                panNumber = org.panNumber,
+                gstin = org.gstin
+            )
+            // Trigger background sync for newly active organization
+            SyncScheduler.triggerImmediateSync(context, organizationId)
+        }
     }
 
     suspend fun acceptInvitation(inviteId: String): Result<String> {

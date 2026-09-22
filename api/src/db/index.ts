@@ -92,6 +92,9 @@ export function initDatabase() {
   try { sqlite.exec(`ALTER TABLE devices ADD COLUMN app_version text;`); } catch (_) {}
   try { sqlite.exec(`ALTER TABLE devices ADD COLUMN updated_at integer;`); } catch (_) {}
 
+  // Ensure is_default column on bank_accounts
+  try { sqlite.exec(`ALTER TABLE bank_accounts ADD COLUMN is_default integer DEFAULT 0 NOT NULL;`); } catch (_) {}
+
   // Ensure updated notification_preferences columns exist
   try { sqlite.exec(`ALTER TABLE notification_preferences ADD COLUMN payment_received integer DEFAULT 1 NOT NULL;`); } catch (_) {}
   try { sqlite.exec(`ALTER TABLE notification_preferences ADD COLUMN payment_sent integer DEFAULT 1 NOT NULL;`); } catch (_) {}
@@ -203,7 +206,6 @@ function seedPermissionsAndRoles() {
       "perm_evt_ingest",
       "perm_acc_read",
       "perm_upi_read",
-      "perm_upi_manage",
       "perm_qr_create",
       "perm_staff_read",
       "perm_staff_manage",

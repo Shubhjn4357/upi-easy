@@ -99,12 +99,37 @@ class MainActivity : FragmentActivity() {
                     try {
                         val token = sessionManager.getAccessToken()
                         initialToken = token
-                        val isComplete = sessionManager.isSetupCompleteFlow.first()
-                        val currentOrg = sessionManager.currentOrgIdFlow.first()
+                        var isComplete = sessionManager.isSetupCompleteFlow.first()
+                        var currentOrg = sessionManager.currentOrgIdFlow.first()
                         val bioEnabled = sessionManager.biometricLockFlow.first()
 
-                        if (!token.isNullOrBlank() && bioEnabled) {
-                            isAppLocked = true
+                        if (!token.isNullOrBlank()) {
+                            if (bioEnabled) {
+                                isAppLocked = true
+                            }
+                            // Auto-detect if user already belongs to an organization (e.g. staff invite)
+                            try {
+                                val api = NetworkClient.getApiService(sessionManager)
+                                val orgRes = api.getOrganizations()
+                                if (orgRes.isSuccessful && orgRes.body()?.success == true) {
+                                    val orgs = orgRes.body()!!.organizations
+                                    if (orgs.isNotEmpty()) {
+                                        val active = orgs.find { it.id == currentOrg } ?: orgs[0]
+                                        sessionManager.setOrganization(
+                                            orgId = active.id,
+                                            orgName = active.name,
+                                            role = active.role ?: "MEMBER",
+                                            legalName = active.legalBusinessName,
+                                            category = active.category,
+                                            panNumber = active.panNumber,
+                                            gstin = active.gstin
+                                        )
+                                        sessionManager.setSetupComplete(true)
+                                        isComplete = true
+                                        currentOrg = active.id
+                                    }
+                                }
+                            } catch (_: Exception) {}
                         }
 
                         resolvedStartDestination = when {
@@ -199,18 +224,19 @@ class MainActivity : FragmentActivity() {
                     }
 
                     LaunchedEffect(token, currentOrgId) {
-                        if (!token.isNullOrBlank() && currentOrgId.isNullOrBlank()) {
+                        if (!token.isNullOrBlank()) {
                             try {
                                 val api = NetworkClient.getApiService(sessionManager)
                                 val res = api.getOrganizations()
                                 if (res.isSuccessful && res.body()?.success == true) {
                                     val orgs = res.body()!!.organizations
                                     if (orgs.isNotEmpty()) {
-                                        val o = orgs[0]
+                                        val currentId = currentOrgId ?: sessionManager.getCurrentOrgId()
+                                        val o = orgs.find { it.id == currentId } ?: orgs[0]
                                         sessionManager.setOrganization(
                                             orgId = o.id,
                                             orgName = o.name,
-                                            role = o.role,
+                                            role = o.role ?: "MEMBER",
                                             legalName = o.legalBusinessName,
                                             category = o.category,
                                             panNumber = o.panNumber,
@@ -294,6 +320,8 @@ class MainActivity : FragmentActivity() {
                                 },
                                 onNavigateToLegal = { navController.navigate("legal") },
                                 onNavigateToPaymentDetection = { navController.navigate("payment_detection") },
+                                onNavigateToBankAccounts = { navController.navigate("bank_accounts") },
+                                onNavigateToRolesPermissions = { navController.navigate("roles_permissions") },
                                 onLogout = {
                                     scope.launch {
                                         sessionManager.clearSession()
@@ -346,6 +374,20 @@ class MainActivity : FragmentActivity() {
                                 onNavigateBack = { navController.popBackStack() }
                             )
                         }
+
+                        composable("bank_accounts") {
+                            com.aerotech.upieasy.feature.bank.BankAccountsScreen(
+                                sessionManager = sessionManager,
+                                onBack = { navController.popBackStack() }
+                            )
+                        }
+
+                        composable("roles_permissions") {
+                            com.aerotech.upieasy.feature.settings.RolesPermissionsScreen(
+                                sessionManager = sessionManager,
+                                onBack = { navController.popBackStack() }
+                            )
+                        }
                     }
 
                     activePaymentAlert?.let { alert ->
@@ -391,6 +433,8 @@ fun MainAppContent(
     onNavigateToQr: (vpa: String?, name: String?) -> Unit,
     onNavigateToLegal: () -> Unit,
     onNavigateToPaymentDetection: () -> Unit = {},
+    onNavigateToBankAccounts: () -> Unit = {},
+    onNavigateToRolesPermissions: () -> Unit = {},
     onLogout: () -> Unit
 ) {
     val bottomNavController = rememberNavController()
@@ -471,6 +515,8 @@ fun MainAppContent(
                     database = database,
                     onNavigateToLegal = onNavigateToLegal,
                     onNavigateToPaymentDetection = onNavigateToPaymentDetection,
+                    onNavigateToBankAccounts = onNavigateToBankAccounts,
+                    onNavigateToRolesPermissions = onNavigateToRolesPermissions,
                     onLogout = onLogout
                 )
             }

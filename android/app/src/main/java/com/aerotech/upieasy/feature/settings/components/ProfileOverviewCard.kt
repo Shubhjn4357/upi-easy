@@ -74,7 +74,7 @@ fun ProfileOverviewCard(
                 color = SuccessGreenBg
             ) {
                 Text(
-                    text = userRole ?: "OWNER",
+                    text = userRole ?: "MEMBER",
                     color = SuccessGreen,
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
@@ -83,7 +83,7 @@ fun ProfileOverviewCard(
             }
         }
 
-        val canEdit = userRole?.uppercase() != "CASHIER"
+        val canEdit = userRole?.equals("OWNER", ignoreCase = true) == true
         if (canEdit) {
             Spacer(modifier = Modifier.height(14.dp))
 
