@@ -1,0 +1,134 @@
+// Lightweight Declarative React Router with Security Guards
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { hasRole } from './auth';
+
+interface RouterContextType {
+  path: string;
+  navigate: (path: string) => void;
+}
+
+const RouterContext = createContext<RouterContextType>({
+  path: '/overview',
+  navigate: () => {},
+});
+
+export function Router({ children }: { children: ReactNode }) {
+  const getInitialPath = () => {
+    const hash = window.location.hash.replace(/^#\/?/, '/');
+    return hash && hash !== '/' ? hash : '/overview';
+  };
+
+  const [path, setPath] = useState(getInitialPath);
+
+  useEffect(() => {
+    const handleHashChange = () => {
+      const newPath = window.location.hash.replace(/^#\/?/, '/');
+      setPath(newPath && newPath !== '/' ? newPath : '/overview');
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
+  const navigate = (newPath: string) => {
+    const normalized = newPath.startsWith('/') ? newPath : `/${newPath}`;
+    window.location.hash = `#${normalized}`;
+    setPath(normalized);
+  };
+
+  return (
+    <RouterContext.Provider value={{ path, navigate }}>
+      {children}
+    </RouterContext.Provider>
+  );
+}
+
+export function useNavigate() {
+  const context = useContext(RouterContext);
+  return context.navigate;
+}
+
+export function useLocation() {
+  const context = useContext(RouterContext);
+  return { pathname: context.path };
+}
+
+export function Routes({ children }: { children: ReactNode }) {
+  const { path } = useContext(RouterContext);
+  let matchedElement: ReactNode = null;
+
+  React.Children.forEach(children, (child) => {
+    if (!React.isValidElement(child)) return;
+    const props = child.props as { path: string; element: ReactNode };
+    if (props.path === path || (props.path === '*' && !matchedElement)) {
+      matchedElement = props.element;
+    }
+  });
+
+  return <>{matchedElement}</>;
+}
+
+export function Route({ path: _path, element }: { path: string; element: ReactNode }) {
+  return <>{element}</>;
+}
+
+export function ProtectedRoute({
+  isAuthenticated,
+  userRole,
+  requiredRole,
+  children,
+}: {
+  isAuthenticated: boolean;
+  userRole?: string;
+  requiredRole?: string;
+  fallback?: ReactNode;
+  children: ReactNode;
+}) {
+  if (!isAuthenticated) {
+    return (
+      <div className="p-8 text-center text-muted-foreground">
+        <p className="font-semibold text-sm text-foreground">Authentication Required</p>
+        <p className="text-xs mt-1">Please sign in to access this section.</p>
+      </div>
+    );
+  }
+
+  if (requiredRole && !hasRole(userRole, requiredRole)) {
+    return (
+      <div className="p-8 text-center text-muted-foreground">
+        <p className="font-semibold text-sm text-destructive">Access Restricted</p>
+        <p className="text-xs mt-1">
+          Your role ({userRole || 'MEMBER'}) lacks permission for this view. Requires {requiredRole}.
+        </p>
+      </div>
+    );
+  }
+
+  return <>{children}</>;
+}
+
+export function Link({
+  to,
+  className = '',
+  children,
+  ...props
+}: {
+  to: string;
+  className?: string;
+  children: ReactNode;
+  [key: string]: unknown;
+}) {
+  const navigate = useNavigate();
+  return (
+    <a
+      href={`#${to.startsWith('/') ? to : `/${to}`}`}
+      onClick={(e) => {
+        e.preventDefault();
+        navigate(to);
+      }}
+      className={className}
+      {...(props as React.AnchorHTMLAttributes<HTMLAnchorElement>)}
+    >
+      {children}
+    </a>
+  );
+}

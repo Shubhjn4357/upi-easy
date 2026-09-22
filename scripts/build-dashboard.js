@@ -1,281 +1,93 @@
+#!/usr/bin/env node
+/**
+ * UPI-Easy Dashboard Build Script
+ *
+ * 1. Compiles the modern React + TypeScript dashboard via Vite
+ * 2. Inlines all CSS and JS bundles directly into a self-contained HTML document
+ * 3. Injects the complete HTML into the Hono API's html.ts for zero-dependency SSR/serving
+ *
+ * Usage: node scripts/build-dashboard.js
+ */
+
+const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
-const esbuild = require(path.resolve(__dirname, '..', 'api', 'node_modules', 'esbuild'));
 
-const dashboardDir = path.resolve(__dirname, '..', 'api', 'src', 'dashboard');
-const htmlPath = path.resolve(dashboardDir, 'index.html');
-const tsPath = path.resolve(dashboardDir, 'html.ts');
-const cssPath = path.resolve(dashboardDir, 'styles', 'theme.css');
+const DASHBOARD_DIR = path.resolve(__dirname, '..', 'dashboard');
+const DIST_DIR = path.resolve(DASHBOARD_DIR, 'dist');
+const DIST_HTML = path.resolve(DIST_DIR, 'index.html');
+const OUTPUT_TS = path.resolve(__dirname, '..', 'api', 'src', 'dashboard', 'html.ts');
 
-// Static distribution output directories
-const distDir = path.resolve(dashboardDir, 'dist');
-const publicDir = path.resolve(__dirname, '..', 'api', 'public');
-const publicDistDir = path.resolve(publicDir, 'dist');
+console.log('==============================================');
+console.log('  UPI-Easy: Building React Dashboard & App    ');
+console.log('==============================================\n');
 
-if (!fs.existsSync(distDir)) fs.mkdirSync(distDir, { recursive: true });
-if (!fs.existsSync(publicDistDir)) fs.mkdirSync(publicDistDir, { recursive: true });
-
-// Read theme CSS
-let cssContent = '';
-if (fs.existsSync(cssPath)) {
-  cssContent = fs.readFileSync(cssPath, 'utf8');
+// 1. Run Vite build in dashboard directory
+console.log('[1/3] Compiling React app with Vite...');
+try {
+  execSync('npm run build', { cwd: DASHBOARD_DIR, stdio: 'inherit' });
+} catch (err) {
+  console.error('[UPI-Easy] Build failed in dashboard directory!');
+  process.exit(1);
 }
 
-// Ordered list of modules to assemble into the cohesive dashboard
-const moduleFiles = [
-  // 1. Security, Auth & React Router Libraries
-  path.resolve(dashboardDir, 'src', 'lib', 'auth.js'),
-  path.resolve(dashboardDir, 'src', 'lib', 'api.js'),
-  path.resolve(dashboardDir, 'src', 'lib', 'router.jsx'),
-
-  // 2. shadcn/ui Core Primitives & Lucide Icons
-  path.resolve(dashboardDir, 'src', 'components', 'ui', 'icons.jsx'),
-  path.resolve(dashboardDir, 'src', 'components', 'ui', 'button.jsx'),
-  path.resolve(dashboardDir, 'src', 'components', 'ui', 'card.jsx'),
-  path.resolve(dashboardDir, 'src', 'components', 'ui', 'badge.jsx'),
-  path.resolve(dashboardDir, 'src', 'components', 'ui', 'input.jsx'),
-  path.resolve(dashboardDir, 'src', 'components', 'ui', 'table.jsx'),
-  path.resolve(dashboardDir, 'src', 'components', 'ui', 'dialog.jsx'),
-  path.resolve(dashboardDir, 'src', 'components', 'ui', 'sheet.jsx'),
-  path.resolve(dashboardDir, 'src', 'components', 'ui', 'components.jsx'),
-
-  // 3. Layout Shells & Containers
-  path.resolve(dashboardDir, 'src', 'components', 'Modal.jsx'),
-  path.resolve(dashboardDir, 'src', 'components', 'BottomSheet.jsx'),
-  path.resolve(dashboardDir, 'src', 'components', 'Navbar.jsx'),
-  path.resolve(dashboardDir, 'src', 'components', 'Sidebar.jsx'),
-  path.resolve(dashboardDir, 'src', 'components', 'BottomNav.jsx'),
-
-  // 4. Extracted Focused Modals
-  path.resolve(dashboardDir, 'src', 'components', 'modals', 'RecordPaymentModal.jsx'),
-  path.resolve(dashboardDir, 'src', 'components', 'modals', 'UpiAccountModal.jsx'),
-  path.resolve(dashboardDir, 'src', 'components', 'modals', 'QrCodeModal.jsx'),
-  path.resolve(dashboardDir, 'src', 'components', 'modals', 'StaffModal.jsx'),
-  path.resolve(dashboardDir, 'src', 'components', 'modals', 'BankAccountModal.jsx'),
-  path.resolve(dashboardDir, 'src', 'components', 'modals', 'TableRowModal.jsx'),
-  path.resolve(dashboardDir, 'src', 'components', 'modals', 'TransactionDetailModal.jsx'),
-
-  // 5. SaaS Pages
-  path.resolve(dashboardDir, 'src', 'pages', 'LoginPage.jsx'),
-  path.resolve(dashboardDir, 'src', 'pages', 'OverviewPage.jsx'),
-  path.resolve(dashboardDir, 'src', 'pages', 'TransactionsPage.jsx'),
-  path.resolve(dashboardDir, 'src', 'pages', 'UpiPage.jsx'),
-  path.resolve(dashboardDir, 'src', 'pages', 'StaffPage.jsx'),
-  path.resolve(dashboardDir, 'src', 'pages', 'AccountsPage.jsx'),
-  path.resolve(dashboardDir, 'src', 'pages', 'ProfilePage.jsx'),
-  path.resolve(dashboardDir, 'src', 'pages', 'TablesPage.jsx'),
-  path.resolve(dashboardDir, 'src', 'pages', 'HealthPage.jsx'),
-
-  // 6. Main App Entry
-  path.resolve(dashboardDir, 'src', 'App.jsx'),
-];
-
-// Clean ES module import/export statements for concatenated browser execution
-function cleanModule(code) {
-  return code
-    .replace(/import\s*[\s\S]*?from\s*['"][^'"]+['"];?/g, '')
-    .replace(/import\s*['"][^'"]+['"];?/g, '')
-    .replace(/export\s+default\s+function\s+/g, 'function ')
-    .replace(/export\s+default\s+const\s+/g, 'const ')
-    .replace(/export\s+default\s+[A-Za-z0-9_]+;?/g, '')
-    .replace(/export\s+(const|let|var|function|class)\s+/g, '$1 ')
-    .replace(/export\s*\{[\s\S]*?\};?/g, '');
+if (!fs.existsSync(DIST_HTML)) {
+  console.error(`[UPI-Easy] Output not found: ${DIST_HTML}`);
+  process.exit(1);
 }
 
-async function build() {
-  console.log(`[UPI-Easy] Assembling ${moduleFiles.length} modular files...`);
+// 2. Read Vite-generated HTML and inline all CSS and JS bundles
+console.log('[2/3] Inlining CSS and JS bundles for self-contained deployment...');
+let html = fs.readFileSync(DIST_HTML, 'utf8');
 
-  let combinedSource = `(function() {
-const {
-  useState,
-  useEffect,
-  useMemo,
-  useRef,
-  useCallback,
-  useContext,
-  createContext,
-  Suspense,
-  Fragment,
-  startTransition,
-  Children,
-  isValidElement,
-  cloneElement
-} = React;
-`;
-
-  for (const file of moduleFiles) {
-    if (fs.existsSync(file)) {
-      const rawContent = fs.readFileSync(file, 'utf8');
-      combinedSource += `\n/* --- ${path.basename(file)} --- */\n` + cleanModule(rawContent) + '\n';
-    } else {
-      console.warn(`[Build Warning] File not found: ${file}`);
-    }
+// Inline CSS stylesheets from dist/assets
+html = html.replace(/<link[^>]+href=["'](?:\.?\/)?assets\/([^"']+\.css)["'][^>]*\/?>|<link[^>]+rel=["']stylesheet["'][^>]*href=["'](?:\.?\/)?assets\/([^"']+\.css)["'][^>]*\/?>/gi, (match, p1, p2) => {
+  const file = p1 || p2;
+  const cssPath = path.join(DIST_DIR, 'assets', file);
+  if (fs.existsSync(cssPath)) {
+    const css = fs.readFileSync(cssPath, 'utf8');
+    console.log(`  -> Inlined CSS: assets/${file} (${(css.length / 1024).toFixed(1)} KB)`);
+    return `<style>\n${css}\n</style>`;
   }
+  return match;
+});
 
-  combinedSource += `\n})();\n`;
+// Inline JS scripts from dist/assets
+html = html.replace(/<script[^>]+src=["'](?:\.?\/)?assets\/([^"']+\.js)["'][^>]*><\/script>/gi, (match, file) => {
+  const jsPath = path.join(DIST_DIR, 'assets', file);
+  if (fs.existsSync(jsPath)) {
+    let js = fs.readFileSync(jsPath, 'utf8');
+    // Escape closing script tags to avoid HTML parser breaks
+    js = js.replace(/<\/script>/gi, '<\\/script>');
+    console.log(`  -> Inlined JS: assets/${file} (${(js.length / 1024).toFixed(1)} KB)`);
+    return `<script type="module">\n${js}\n</script>`;
+  }
+  return match;
+});
 
-  console.log('[UPI-Easy] Compiling JSX via esbuild ahead-of-time (Zero Babel runtime)...');
-  const result = esbuild.transformSync(combinedSource, {
-    loader: 'jsx',
-    target: 'es2020',
-    jsxFactory: 'React.createElement',
-    jsxFragment: 'React.Fragment',
-  });
+// Save the self-contained inlined HTML back to dist/index.html
+fs.writeFileSync(DIST_HTML, html, 'utf8');
+console.log(`  -> Self-contained dist/index.html updated (${(html.length / 1024).toFixed(1)} KB)`);
 
-  const productionJs = result.code;
-
-  // Save standalone static JS bundle & CSS
-  const staticBundleJsPath = path.resolve(distDir, 'dashboard.bundle.js');
-  const publicBundleJsPath = path.resolve(publicDistDir, 'dashboard.bundle.js');
-  const staticCssPath = path.resolve(distDir, 'theme.css');
-  const publicCssPath = path.resolve(publicDistDir, 'theme.css');
-
-  fs.writeFileSync(staticBundleJsPath, productionJs, 'utf8');
-  fs.writeFileSync(publicBundleJsPath, productionJs, 'utf8');
-  fs.writeFileSync(staticCssPath, cssContent, 'utf8');
-  fs.writeFileSync(publicCssPath, cssContent, 'utf8');
-
-  // Complete standalone static HTML document with shadcn tokens and Tailwind configuration
-  const fullHtml = `<!DOCTYPE html>
-<html lang="en" class="dark">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>UPI-Easy — Multi-Tenant SaaS Platform & Admin Console</title>
-
-  <!-- Google Fonts: Plus Jakarta Sans & JetBrains Mono -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-
-  <!-- Clean Console: Suppress Tailwind CDN production advisory -->
-  <script>
-    (function() {
-      var _origWarn = console.warn;
-      console.warn = function() {
-        if (arguments[0] && typeof arguments[0] === 'string' && arguments[0].indexOf('cdn.tailwindcss.com') !== -1) return;
-        _origWarn.apply(console, arguments);
-      };
-    })();
-  </script>
-
-  <!-- Tailwind CSS Core Engine -->
-  <script src="https://cdn.tailwindcss.com"></script>
-
-  <!-- React 18 & ReactDOM (Precompiled Production UMD) -->
-  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-
-  <!-- Google Identity Services (GSI) One Tap Library -->
-  <script src="https://accounts.google.com/gsi/client" async defer></script>
-
-  <script>
-    tailwind.config = {
-      darkMode: 'class',
-      theme: {
-        extend: {
-          fontFamily: {
-            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
-            mono: ['"JetBrains Mono"', 'monospace'],
-          },
-          colors: {
-            border: "hsl(var(--border))",
-            input: "hsl(var(--input))",
-            ring: "hsl(var(--ring))",
-            background: "hsl(var(--background))",
-            foreground: "hsl(var(--foreground))",
-            primary: {
-              DEFAULT: "hsl(var(--primary))",
-              foreground: "hsl(var(--primary-foreground))",
-            },
-            secondary: {
-              DEFAULT: "hsl(var(--secondary))",
-              foreground: "hsl(var(--secondary-foreground))",
-            },
-            destructive: {
-              DEFAULT: "hsl(var(--destructive))",
-              foreground: "hsl(var(--destructive-foreground))",
-            },
-            muted: {
-              DEFAULT: "hsl(var(--muted))",
-              foreground: "hsl(var(--muted-foreground))",
-            },
-            accent: {
-              DEFAULT: "hsl(var(--accent))",
-              foreground: "hsl(var(--accent-foreground))",
-              cyan: '#06B6D4',
-              emerald: '#10B981',
-              amber: '#F59E0B',
-              rose: '#F43F5E',
-              violet: '#8B5CF6'
-            },
-            popover: {
-              DEFAULT: "hsl(var(--popover))",
-              foreground: "hsl(var(--popover-foreground))",
-            },
-            card: {
-              DEFAULT: "hsl(var(--card))",
-              foreground: "hsl(var(--card-foreground))",
-            },
-            brand: {
-              50: '#EEF2FF',
-              100: '#E0E7FF',
-              200: '#C7D2FE',
-              300: '#A5B4FC',
-              400: '#818CF8',
-              500: '#6366F1',
-              600: '#4F46E5',
-              700: '#4338CA',
-              800: '#3730A3',
-              900: '#312E81',
-            }
-          }
-        }
-      }
-    }
-  </script>
-
-  <style>
-${cssContent}
-  </style>
-</head>
-<body>
-  <div id="root"></div>
-
-  <!-- Pre-compiled Native Production Bundle (Zero Babel, Zero Runtime Transpilation) -->
-  <script>
-${productionJs}
-  </script>
-</body>
-</html>
-`;
-
-  // Write assembled HTML to index.html and public/index.html
-  fs.writeFileSync(htmlPath, fullHtml, 'utf8');
-  fs.writeFileSync(path.resolve(publicDir, 'index.html'), fullHtml, 'utf8');
-
-  // Base64 encode for html.ts
-  const b64 = Buffer.from(fullHtml, 'utf8').toString('base64');
-  const tsCode = `// Auto-generated from api/src/dashboard modular sources via esbuild - Do not edit manually
+// 3. Encode into api/src/dashboard/html.ts
+console.log('[3/3] Injecting into Hono API html.ts...');
+const b64 = Buffer.from(html, 'utf8').toString('base64');
+const tsCode = `// Auto-generated by scripts/build-dashboard.js — Do not edit manually
 const HTML_BASE64 = "${b64}";
 
 export function renderDashboardHtml(): string {
-  if (typeof atob === "function") {
-    return atob(HTML_BASE64);
+  if (typeof Buffer !== "undefined") {
+    return Buffer.from(HTML_BASE64, "base64").toString("utf-8");
   }
-  return Buffer.from(HTML_BASE64, "base64").toString("utf-8");
+  const binary = atob(HTML_BASE64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return new TextDecoder().decode(bytes);
 }
 `;
 
-  fs.writeFileSync(tsPath, tsCode, 'utf8');
-  console.log(`[UPI-Easy] Successfully bundled dashboard into:`);
-  console.log(`  - HTML: ${htmlPath}`);
-  console.log(`  - Static Public: ${path.resolve(publicDir, 'index.html')}`);
-  console.log(`  - Static JS Bundle: ${staticBundleJsPath} (${(productionJs.length / 1024).toFixed(1)} KB)`);
-  console.log(`  - Compiled TypeScript: ${tsPath} (${(b64.length / 1024).toFixed(1)} KB base64)`);
-}
-
-build().catch((err) => {
-  console.error('[UPI-Easy] Build failed:', err);
-  process.exit(1);
-});
+fs.writeFileSync(OUTPUT_TS, tsCode, 'utf8');
+console.log(`[UPI-Easy] Successfully injected dashboard into ${OUTPUT_TS} (${(b64.length / 1024).toFixed(1)} KB base64)`);
+console.log('\n[UPI-Easy] Dashboard build complete!\n');
