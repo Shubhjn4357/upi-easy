@@ -36,8 +36,9 @@ authRouter.post("/google", async (c) => {
   // 1. Cryptographically verify Google ID Token with Google JWKS (aud, iss, exp, nonce)
   let verified;
   try {
+    const googleClientId = (c.env as any)?.GOOGLE_WEB_CLIENT_ID || config.GOOGLE_WEB_CLIENT_ID;
     verified = await verifyGoogleIdToken(data.idToken, {
-      clientId: config.GOOGLE_WEB_CLIENT_ID,
+      clientId: googleClientId,
       nonce: data.nonce,
       expectedEmail: data.email,
     });

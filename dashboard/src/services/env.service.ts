@@ -12,10 +12,23 @@ function getEnvironment(): AppEnvironment {
   const metaEnv = typeof import.meta !== 'undefined' ? (import.meta as any).env || {} : {};
   const win = typeof window !== 'undefined' ? (window as any) : {};
 
-  const apiBaseUrl =
-    metaEnv.VITE_API_BASE_URL ||
-    win.API_BASE_URL ||
-    (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:8080');
+  const isBrowser = typeof window !== 'undefined';
+
+  let apiBaseUrl = '';
+  if (win.API_BASE_URL) {
+    apiBaseUrl = win.API_BASE_URL;
+  } else if (isBrowser && window.location?.origin && !window.location.origin.includes('localhost:5173')) {
+    // Production Cloudflare Workers or remote deployment: use active browser origin
+    apiBaseUrl = window.location.origin;
+  } else if (metaEnv.VITE_API_BASE_URL) {
+    apiBaseUrl = metaEnv.VITE_API_BASE_URL;
+  } else if (isBrowser && window.location?.origin) {
+    apiBaseUrl = window.location.origin;
+  } else {
+    apiBaseUrl = 'http://localhost:8080';
+  }
+
+  apiBaseUrl = apiBaseUrl.replace(/\/+$/, '');
 
   const googleClientId =
     metaEnv.VITE_GOOGLE_CLIENT_ID ||

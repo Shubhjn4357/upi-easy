@@ -61,7 +61,7 @@ export function LoginPage({ onLoginSuccess, theme, onToggleTheme, pingMs }: Logi
         </CardHeader>
 
         <CardContent className="p-0 space-y-4">
-          {/* Server Status Indicator */}
+          {/* Server Status Indicator 
           <div className="p-2.5 rounded-xl bg-muted/50 border border-border flex items-center justify-between text-[11px] text-muted-foreground">
             <span className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
@@ -70,7 +70,8 @@ export function LoginPage({ onLoginSuccess, theme, onToggleTheme, pingMs }: Logi
             <span className="font-mono text-emerald-600 dark:text-emerald-400 font-semibold">
               {pingMs ? `${pingMs}ms` : 'Active'}
             </span>
-          </div>
+          </div> 
+          */}
 
           {error && (
             <Alert variant="destructive">
