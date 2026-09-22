@@ -74,18 +74,29 @@ export class AuthService {
   }
 
   static async authenticateWithGoogleToken(idToken: string): Promise<AuthResponse> {
-    const response = await fetch(`${ENV.API_BASE_URL}/api/v1/auth/google`, {
+    const url = `${ENV.API_BASE_URL}/api/v1/auth/google`;
+    const response = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
       body: JSON.stringify({
         idToken,
         deviceId: ENV.DEVICE_ID,
       }),
     });
 
+    const contentType = response.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      const text = await response.text();
+      console.error(`[AuthService] Expected JSON but received HTML/Text from ${url} (Status ${response.status}):`, text.substring(0, 300));
+      throw new Error(`API returned unexpected response (status ${response.status}). Expected JSON.`);
+    }
+
     const data = await response.json();
     if (!response.ok) {
-      throw new Error(data.error || data.message || 'Google authentication failed');
+      throw new Error(data.error?.message || data.error || data.message || `Google authentication failed (${response.status})`);
     }
 
     return data as AuthResponse;

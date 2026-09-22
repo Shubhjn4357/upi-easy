@@ -35,12 +35,10 @@ export function LoginPage({ onLoginSuccess, theme, onToggleTheme, pingMs }: Logi
           {theme === 'dark' ? (
             <>
               <IconSun className="w-3.5 h-3.5 text-amber-400" />
-              <span>Light</span>
             </>
           ) : (
             <>
               <IconMoon className="w-3.5 h-3.5 text-indigo-500" />
-              <span>Dark</span>
             </>
           )}
         </Button>
@@ -80,7 +78,7 @@ export function LoginPage({ onLoginSuccess, theme, onToggleTheme, pingMs }: Logi
           )}
 
           {/* Custom Google Sign-In Button with seamless GSI tap handling */}
-          <div className="relative w-full overflow-hidden rounded-2xl group">
+          <div className="relative w-full overflow-hidden rounded-lg group">
             <Button
               type="button"
               variant="outline"

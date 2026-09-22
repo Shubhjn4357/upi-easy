@@ -161,9 +161,14 @@ function AppContent() {
   // Load Organizations
   const loadOrganizations = async (authToken = token) => {
     try {
-      const res = await fetch(`${window.location.origin}/api/v1/organizations`, {
-        headers: { Authorization: `Bearer ${authToken}` },
+      const res = await fetch(`${ENV.API_BASE_URL}/api/v1/organizations`, {
+        headers: { 
+          Authorization: `Bearer ${authToken}`,
+          Accept: 'application/json',
+        },
       });
+      const contentType = res.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) return;
       const data = await res.json();
       if (data.success && data.organizations?.length > 0) {
         setOrganizations(data.organizations);
