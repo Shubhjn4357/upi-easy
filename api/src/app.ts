@@ -25,6 +25,7 @@ import { renderDashboardHtml } from "./dashboard/html.js";
 import { adminRouter } from "./modules/admin/index.js";
 import { requireAuth } from "./middleware/auth.js";
 import { setD1Database } from "./db/index.js";
+import { config } from "./config/index.js";
 import type { AppEnv } from "./types/hono.js";
 
 export const app = new Hono<AppEnv>();
@@ -65,11 +66,25 @@ app.get("/", (c) => {
       }
     });
   }
-  return c.html(renderDashboardHtml());
+  const getDashboard = () => {
+    const clientId = c.env?.GOOGLE_WEB_CLIENT_ID || config.GOOGLE_WEB_CLIENT_ID;
+    const apiBaseUrl = c.env?.API_BASE_URL || "";
+    return renderDashboardHtml({ clientId, apiBaseUrl });
+  };
+  return c.html(getDashboard());
 });
 
-app.get("/dashboard", (c) => c.html(renderDashboardHtml()));
-app.get("/admin", (c) => c.html(renderDashboardHtml()));
+app.get("/dashboard", (c) => {
+  const clientId = c.env?.GOOGLE_WEB_CLIENT_ID || config.GOOGLE_WEB_CLIENT_ID;
+  const apiBaseUrl = c.env?.API_BASE_URL || "";
+  return c.html(renderDashboardHtml({ clientId, apiBaseUrl }));
+});
+
+app.get("/admin", (c) => {
+  const clientId = c.env?.GOOGLE_WEB_CLIENT_ID || config.GOOGLE_WEB_CLIENT_ID;
+  const apiBaseUrl = c.env?.API_BASE_URL || "";
+  return c.html(renderDashboardHtml({ clientId, apiBaseUrl }));
+});
 
 // Health check
 app.get("/health", (c) => {

@@ -20,7 +20,7 @@ function getEnvironment(): AppEnvironment {
   const googleClientId =
     metaEnv.VITE_GOOGLE_CLIENT_ID ||
     win.GOOGLE_WEB_CLIENT_ID ||
-    '1029384756-mock.apps.googleusercontent.com';
+    '332345540842-ks8bq4csr4lklkvv3tesgkig2b221m23.apps.googleusercontent.com';
 
   const deviceId =
     metaEnv.VITE_DEVICE_ID ||

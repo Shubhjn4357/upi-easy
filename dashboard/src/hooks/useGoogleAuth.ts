@@ -29,36 +29,55 @@ export function useGoogleAuth({ theme, onSuccess }: UseGoogleAuthOptions) {
   };
 
   useEffect(() => {
-    const initGsi = () => {
-      if (typeof window !== 'undefined' && window.google?.accounts?.id) {
-        window.google.accounts.id.initialize({
-          client_id: ENV.GOOGLE_CLIENT_ID,
-          callback: async (response: { credential?: string }) => {
-            if (response.credential) {
-              await submitIdToken(response.credential);
-            }
-          },
-          auto_select: false,
-          cancel_on_tap_outside: true,
-        });
+    let attempts = 0;
+    const maxAttempts = 50; // Try for up to 5 seconds
+    let intervalId: ReturnType<typeof setInterval> | null = null;
 
-        if (buttonRef.current) {
-          buttonRef.current.innerHTML = '';
-          window.google.accounts.id.renderButton(buttonRef.current, {
-            type: 'standard',
-            theme: theme === 'dark' ? 'filled_black' : 'outline',
-            size: 'large',
-            shape: 'pill',
-            width: 320,
-            text: 'signin_with',
-            logo_alignment: 'center',
+    const tryInit = () => {
+      attempts++;
+      if (typeof window !== 'undefined' && window.google?.accounts?.id) {
+        if (intervalId) clearInterval(intervalId);
+        try {
+          window.google.accounts.id.initialize({
+            client_id: ENV.GOOGLE_CLIENT_ID,
+            callback: async (response: { credential?: string }) => {
+              if (response.credential) {
+                await submitIdToken(response.credential);
+              }
+            },
+            auto_select: false,
+            cancel_on_tap_outside: true,
           });
+
+          if (buttonRef.current) {
+            buttonRef.current.innerHTML = '';
+            window.google.accounts.id.renderButton(buttonRef.current, {
+              type: 'standard',
+              theme: theme === 'dark' ? 'filled_black' : 'outline',
+              size: 'large',
+              shape: 'pill',
+              width: 320,
+              text: 'signin_with',
+              logo_alignment: 'center',
+            });
+          }
+        } catch (err: unknown) {
+          console.error('[GoogleAuth] Failed to initialize GSI:', err);
         }
+      } else if (attempts >= maxAttempts) {
+        if (intervalId) clearInterval(intervalId);
+        console.warn('[GoogleAuth] Google Identity Services script timed out after 5 seconds');
       }
     };
 
-    const timer = setTimeout(initGsi, 200);
-    return () => clearTimeout(timer);
+    tryInit();
+    if (typeof window !== 'undefined' && !window.google?.accounts?.id) {
+      intervalId = setInterval(tryInit, 100);
+    }
+
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
   }, [theme]);
 
   const promptOneTap = (onNotDisplayed?: () => void) => {
