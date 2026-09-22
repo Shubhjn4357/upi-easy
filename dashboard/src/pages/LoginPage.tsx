@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/components';
-import { IconLock, IconMoon, IconSun } from '@/components/ui/icons';
+import { IconLock, IconMoon, IconSun, IconGoogle } from '@/components/ui/icons';
 import { useGoogleAuth } from '@/hooks/useGoogleAuth';
 import type { LoginPageProps } from '@/types';
 
@@ -78,19 +78,25 @@ export function LoginPage({ onLoginSuccess, theme, onToggleTheme, pingMs }: Logi
             </Alert>
           )}
 
-          {/* Official Google GSI Container */}
-          <div className="flex justify-center min-h-[44px]">
-            <div ref={buttonRef} className="flex justify-center w-full"></div>
-          </div>
+          {/* Custom Google Sign-In Button with seamless GSI tap handling */}
+          <div className="relative w-full overflow-hidden rounded-2xl group">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={loading}
+              onClick={() => promptOneTap(() => setShowManualToken(true))}
+              className="w-full flex items-center justify-center gap-3 py-5 rounded-2xl border-border bg-card hover:bg-accent/40 font-semibold text-xs sm:text-sm shadow-sm transition-all duration-200 group-hover:border-brand-500/50">
+              <IconGoogle className="w-5 h-5 flex-shrink-0" />
+              <span>{loading ? 'Connecting to Google...' : 'Sign in with Google'}</span>
+            </Button>
 
-          {/* Fallback Direct Google One-Tap Trigger */}
-          <Button
-            variant="outline"
-            onClick={() => promptOneTap(() => setShowManualToken(true))}
-            disabled={loading}
-            className="w-full justify-center rounded-xl text-xs font-semibold">
-            Prompt Google One-Tap
-          </Button>
+            {/* Transparent Google GSI overlay to trigger genuine iframe click on tap */}
+            <div
+              ref={buttonRef}
+              title="Sign in with Google"
+              className="absolute inset-0 opacity-[0.0001] cursor-pointer overflow-hidden z-10 flex items-center justify-center [&>div]:!w-full [&>div]:!h-full [&_iframe]:!w-full [&_iframe]:!h-full [&_iframe]:!cursor-pointer"
+            />
+          </div>
 
           <div className="pt-2 text-center">
             <button

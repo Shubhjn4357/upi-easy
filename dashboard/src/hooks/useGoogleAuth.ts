@@ -56,7 +56,7 @@ export function useGoogleAuth({ theme, onSuccess }: UseGoogleAuthOptions) {
               theme: theme === 'dark' ? 'filled_black' : 'outline',
               size: 'large',
               shape: 'pill',
-              width: 320,
+              width: 380,
               text: 'signin_with',
               logo_alignment: 'center',
             });
