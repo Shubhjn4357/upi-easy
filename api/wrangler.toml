@@ -24,4 +24,5 @@ persist = true
 [[d1_databases]]
 binding = "upi_easy_db"
 database_name = "upi-easy-db"
-database_id = "6daf6ea6-2c17-4f6d-8d6f-a129f1c69716"
+database_id = "fa5f4600-8c4b-4513-b828-d95b21b3f54b"
+migrations_dir = "drizzle"
