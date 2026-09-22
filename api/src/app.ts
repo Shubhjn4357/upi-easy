@@ -40,7 +40,12 @@ app.use("*", async (c, next) => {
 });
 
 // Global Middlewares
-app.use("*", secureHeaders());
+app.use(
+  "*",
+  secureHeaders({
+    crossOriginOpenerPolicy: "same-origin-allow-popups",
+  })
+);
 app.use(
   "*",
   cors({
