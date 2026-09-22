@@ -15,17 +15,25 @@ interface BottomTabItem {
 }
 
 // Mobile Bottom Floating Navigation Tab Bar using shadcn tokens and strict TypeScript types
-export function BottomNav({ activeTab, onSelectTab, onOpenMoreSheet }: BottomNavProps) {
-  const primaryTabs: BottomTabItem[] = [
-    { id: 'overview', label: 'Overview', icon: <IconActivity className="w-5 h-5" /> },
-    { id: 'transactions', label: 'Ledger', icon: <IconCreditCard className="w-5 h-5" /> },
-    { id: 'upi', label: 'UPI/QR', icon: <IconQrCode className="w-5 h-5" /> },
-    { id: 'staff', label: 'Staff', icon: <IconUsers className="w-5 h-5" /> },
+export function BottomNav({ activeTab, onSelectTab, onOpenMoreSheet, activeOrg }: BottomNavProps) {
+  const role = activeOrg?.role || 'OWNER';
+  const permissions = activeOrg?.permissions || (role === 'OWNER' ? ['*'] : []);
+  const isOwner = role === 'OWNER' || permissions.includes('*');
+  const canReadStaff = isOwner || permissions.includes('staff.read') || role === 'MANAGER';
+  const canReadAccounts = isOwner || permissions.includes('accounts.read') || role === 'MANAGER' || role === 'ACCOUNTANT';
+
+  const primaryTabs: (BottomTabItem & { visible: boolean })[] = [
+    { id: 'overview', label: 'Overview', icon: <IconActivity className="w-5 h-5" />, visible: true },
+    { id: 'transactions', label: 'Ledger', icon: <IconCreditCard className="w-5 h-5" />, visible: true },
+    { id: 'upi', label: 'UPI/QR', icon: <IconQrCode className="w-5 h-5" />, visible: true },
+    { id: 'staff', label: 'Staff', icon: <IconUsers className="w-5 h-5" />, visible: canReadStaff },
   ];
+
+  const visibleTabs = primaryTabs.filter((t) => t.visible);
 
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 h-16 bg-card/90 backdrop-blur border-t border-border px-3 flex items-center justify-around shadow-lg transition-colors">
-      {primaryTabs.map((tab) => (
+      {visibleTabs.map((tab) => (
         <button
           key={tab.id}
           onClick={() => onSelectTab(tab.id)}

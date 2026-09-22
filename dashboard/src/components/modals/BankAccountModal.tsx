@@ -8,6 +8,7 @@ export interface BankAccountModalProps {
   isOpen: boolean;
   onClose: () => void;
   activeOrg: Organization | null;
+  isSaving?: boolean;
   onSubmitBank: (e: React.FormEvent<HTMLFormElement>) => void | Promise<void>;
 }
 
@@ -16,12 +17,13 @@ export function BankAccountModal({
   isOpen,
   onClose,
   activeOrg,
+  isSaving = false,
   onSubmitBank,
 }: BankAccountModalProps) {
   return (
     <Modal
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={isSaving ? () => {} : onClose}
       title="Link Bank Account"
       subtitle="Connect settlement bank destination">
       <form onSubmit={onSubmitBank} className="space-y-4 text-xs">
@@ -32,6 +34,7 @@ export function BankAccountModal({
             name="bankName"
             placeholder="e.g. HDFC Bank"
             required
+            disabled={isSaving}
           />
         </div>
         <div className="space-y-1.5">
@@ -41,6 +44,7 @@ export function BankAccountModal({
             name="holderName"
             defaultValue={activeOrg?.name || ''}
             required
+            disabled={isSaving}
           />
         </div>
         <div className="grid grid-cols-2 gap-3">
@@ -51,6 +55,7 @@ export function BankAccountModal({
               name="accountNumber"
               placeholder="1234567890"
               required
+              disabled={isSaving}
               className="font-mono"
             />
           </div>
@@ -61,6 +66,7 @@ export function BankAccountModal({
               name="ifsc"
               placeholder="HDFC0001234"
               required
+              disabled={isSaving}
               className="font-mono uppercase"
             />
           </div>
@@ -70,6 +76,7 @@ export function BankAccountModal({
           <select
             name="type"
             defaultValue="CURRENT"
+            disabled={isSaving}
             className="w-full h-9 bg-background border border-input rounded-xl px-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring">
             <option value="CURRENT" className="bg-card text-card-foreground">CURRENT</option>
             <option value="SAVINGS" className="bg-card text-card-foreground">SAVINGS</option>
@@ -80,13 +87,23 @@ export function BankAccountModal({
           <Button
             variant="outline"
             type="button"
+            disabled={isSaving}
             onClick={onClose}>
             Cancel
           </Button>
           <Button
             variant="brand"
-            type="submit">
-            Link Account
+            type="submit"
+            disabled={isSaving}
+            className="gap-2 min-w-[120px]">
+            {isSaving ? (
+              <>
+                <div className="w-3.5 h-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                <span>Linking...</span>
+              </>
+            ) : (
+              'Link Account'
+            )}
           </Button>
         </div>
       </form>

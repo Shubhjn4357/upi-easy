@@ -63,6 +63,7 @@ usersRouter.get("/organizations", async (c: any) => {
       organizationName: schema.organizations.name,
       legalBusinessName: schema.organizations.legalBusinessName,
       category: schema.organizations.category,
+      roleId: schema.organizationMembers.roleId,
       role: schema.roles.name,
       roleName: schema.roles.name,
       status: schema.organizationMembers.status,
@@ -70,13 +71,37 @@ usersRouter.get("/organizations", async (c: any) => {
     })
     .from(schema.organizationMembers)
     .innerJoin(schema.organizations, eq(schema.organizationMembers.organizationId, schema.organizations.id))
-    .innerJoin(schema.roles, eq(schema.organizationMembers.roleId, schema.roles.id))
+    .leftJoin(schema.roles, eq(schema.organizationMembers.roleId, schema.roles.id))
     .where(eq(schema.organizationMembers.userId, userId))
     .all();
 
+  const orgsWithPermissions = await Promise.all(
+    memberships.map(async (m: any) => {
+      const role = m.role || "MEMBER";
+      let permissions: string[] = [];
+      if (role === "OWNER") {
+        permissions = ["*"];
+      } else if (m.roleId) {
+        const permRows = await db
+          .select({ name: schema.permissions.name })
+          .from(schema.rolePermissions)
+          .innerJoin(schema.permissions, eq(schema.rolePermissions.permissionId, schema.permissions.id))
+          .where(eq(schema.rolePermissions.roleId, m.roleId))
+          .all();
+        permissions = permRows.map((p: { name: string }) => p.name);
+      }
+      return {
+        ...m,
+        role,
+        roleName: role,
+        permissions,
+      };
+    })
+  );
+
   return c.json({
     success: true,
-    organizations: memberships,
+    organizations: orgsWithPermissions,
   });
 });
 usersRouter.get("/", getMeHandler);

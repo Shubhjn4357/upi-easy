@@ -9,6 +9,7 @@ export interface RecordPaymentModalProps {
   onClose: () => void;
   activeOrg: Organization | null;
   defaultVpa?: string;
+  isSaving?: boolean;
   onSubmitPayment: (e: React.FormEvent<HTMLFormElement>) => void | Promise<void>;
 }
 
@@ -18,12 +19,13 @@ export function RecordPaymentModal({
   onClose,
   activeOrg,
   defaultVpa,
+  isSaving = false,
   onSubmitPayment,
 }: RecordPaymentModalProps) {
   return (
     <Modal
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={isSaving ? () => {} : onClose}
       title="Record Counter Payment"
       subtitle="Simulate verified incoming UPI collection">
       <form onSubmit={onSubmitPayment} className="space-y-4 text-xs">
@@ -37,6 +39,7 @@ export function RecordPaymentModal({
               name="amount"
               defaultValue="250.00"
               required
+              disabled={isSaving}
               className="pl-8 text-base font-bold"
             />
           </div>
@@ -48,6 +51,7 @@ export function RecordPaymentModal({
               type="text"
               name="payerName"
               defaultValue="Karan Patel"
+              disabled={isSaving}
             />
           </div>
           <div className="space-y-1.5">
@@ -56,6 +60,7 @@ export function RecordPaymentModal({
               type="text"
               name="payerVpa"
               defaultValue="karan@okhdfcbank"
+              disabled={isSaving}
               className="font-mono"
             />
           </div>
@@ -66,19 +71,30 @@ export function RecordPaymentModal({
             type="text"
             name="note"
             defaultValue="Counter Bill #409"
+            disabled={isSaving}
           />
         </div>
         <div className="pt-2 flex justify-end gap-2">
           <Button
             variant="outline"
             type="button"
+            disabled={isSaving}
             onClick={onClose}>
             Cancel
           </Button>
           <Button
             variant="brand"
-            type="submit">
-            Record Payment
+            type="submit"
+            disabled={isSaving}
+            className="gap-2 min-w-[140px]">
+            {isSaving ? (
+              <>
+                <div className="w-3.5 h-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                <span>Recording...</span>
+              </>
+            ) : (
+              'Record Payment'
+            )}
           </Button>
         </div>
       </form>

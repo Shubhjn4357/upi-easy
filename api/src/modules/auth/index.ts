@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { db } from "../../db/index.js";
 import * as schema from "../../db/schema/index.js";
-import { eq, and } from "drizzle-orm";
+import { eq, and, or } from "drizzle-orm";
 import { generateId } from "../../lib/crypto.js";
 import { createAccessToken, createRefreshToken, verifyToken } from "../../lib/jwt.js";
 import { AppError, UnauthorizedError, NotFoundError } from "../../lib/errors.js";
@@ -112,6 +112,78 @@ authRouter.post("/google", async (c) => {
     user = (await db.select().from(schema.users).where(eq(schema.users.id, userId)).get())!;
   }
 
+  // 3. Auto-accept any pending organization invitations for this user (by email or mobile)
+  try {
+    const inviteConditions = [];
+    if (verifiedEmail) {
+      inviteConditions.push(eq(schema.organizationInvites.invitedEmail, verifiedEmail));
+    }
+    if (user.mobileNumber) {
+      inviteConditions.push(eq(schema.organizationInvites.invitedMobile, user.mobileNumber));
+    }
+
+    if (inviteConditions.length > 0) {
+      const pendingInvites = await db
+        .select()
+        .from(schema.organizationInvites)
+        .where(
+          and(
+            eq(schema.organizationInvites.status, "PENDING"),
+            inviteConditions.length === 1 ? inviteConditions[0] : or(...inviteConditions)
+          )
+        )
+        .all();
+
+      for (const inv of pendingInvites) {
+        // Ensure not already a member
+        const existingMember = await db
+          .select()
+          .from(schema.organizationMembers)
+          .where(
+            and(
+              eq(schema.organizationMembers.organizationId, inv.organizationId),
+              eq(schema.organizationMembers.userId, user.id)
+            )
+          )
+          .get();
+
+        if (!existingMember) {
+          let roleRecord = await db.select().from(schema.roles).where(eq(schema.roles.name, inv.role)).get();
+          if (!roleRecord) {
+            roleRecord = await db.select().from(schema.roles).where(eq(schema.roles.id, `role_${inv.role.toLowerCase()}`)).get();
+          }
+          const roleId = roleRecord?.id || "role_cashier";
+
+          await db.insert(schema.organizationMembers)
+            .values({
+              id: generateId("mem"),
+              organizationId: inv.organizationId,
+              userId: user.id,
+              roleId,
+              status: "ACTIVE",
+              invitedBy: inv.invitedBy,
+              joinedAt: now,
+              createdAt: now,
+              updatedAt: now,
+            })
+            .run();
+        }
+
+        await db.update(schema.organizationInvites)
+          .set({
+            status: "ACCEPTED",
+            acceptedAt: now,
+            invitedUserId: user.id,
+            updatedAt: now,
+          })
+          .where(eq(schema.organizationInvites.id, inv.id))
+          .run();
+      }
+    }
+  } catch (inviteErr) {
+    console.warn("[Auth] Error linking pending invites:", inviteErr);
+  }
+
   // Register device
   let device = await db
     .select()
@@ -163,29 +235,59 @@ authRouter.post("/google", async (c) => {
   });
   const refreshToken = await createRefreshToken(user.id, sessionId);
 
-  // Check if setup (organization + mobile + upi) is completed
+  // Check active organization memberships
   const memberships = await db
-    .select()
+    .select({
+      id: schema.organizationMembers.id,
+      organizationId: schema.organizationMembers.organizationId,
+      roleId: schema.organizationMembers.roleId,
+      status: schema.organizationMembers.status,
+      roleName: schema.roles.name,
+      orgName: schema.organizations.name,
+      legalBusinessName: schema.organizations.legalBusinessName,
+      category: schema.organizations.category,
+      panNumber: schema.organizations.panNumber,
+      gstin: schema.organizations.gstin,
+    })
     .from(schema.organizationMembers)
+    .innerJoin(schema.organizations, eq(schema.organizationMembers.organizationId, schema.organizations.id))
+    .leftJoin(schema.roles, eq(schema.organizationMembers.roleId, schema.roles.id))
     .where(and(eq(schema.organizationMembers.userId, user.id), eq(schema.organizationMembers.status, "ACTIVE")))
     .all();
 
-  const isSetupComplete = memberships.length > 0 && !!user.mobileNumber;
+  // If user already belongs to an active organization, onboarding is COMPLETE! Skip company creation
+  const isSetupComplete = memberships.length > 0;
 
   let defaultOrg = null;
   if (memberships.length > 0) {
-    const org = await db
-      .select()
-      .from(schema.organizations)
-      .where(eq(schema.organizations.id, memberships[0].organizationId))
-      .get();
-    if (org) {
-      defaultOrg = {
-        id: org.id,
-        name: org.name,
-        role: "OWNER",
-      };
+    const primary = memberships[0];
+    const role = primary.roleName || "MEMBER";
+
+    // Fetch granular permissions for this role
+    let permissions: string[] = [];
+    if (role === "OWNER") {
+      permissions = ["*"];
+    } else {
+      const permRows = await db
+        .select({ name: schema.permissions.name })
+        .from(schema.rolePermissions)
+        .innerJoin(schema.permissions, eq(schema.rolePermissions.permissionId, schema.permissions.id))
+        .where(eq(schema.rolePermissions.roleId, primary.roleId))
+        .all();
+      permissions = permRows.map((p: { name: string }) => p.name);
     }
+
+    defaultOrg = {
+      id: primary.organizationId,
+      name: primary.orgName,
+      legalBusinessName: primary.legalBusinessName,
+      category: primary.category,
+      panNumber: primary.panNumber,
+      gstin: primary.gstin,
+      role,
+      status: primary.status,
+      permissions,
+    };
   }
 
   return c.json({

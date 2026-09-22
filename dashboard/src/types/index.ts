@@ -22,6 +22,7 @@ export interface Organization {
   gstin?: string | null;
   panNumber?: string | null;
   role?: UserRole | string;
+  permissions?: string[];
   createdAt?: string;
 }
 
@@ -76,6 +77,7 @@ export interface StaffMember {
   mobileNumber?: string;
   email?: string;
   role: UserRole | string;
+  permissions?: string[];
   status: 'ACTIVE' | 'INVITED' | 'INACTIVE' | string;
   invitedAt?: string;
   joinedAt?: string;
@@ -162,6 +164,8 @@ export interface AuthTokens {
 export interface AuthResponse {
   tokens: AuthTokens;
   user: User;
+  isSetupComplete?: boolean;
+  defaultOrg?: Organization | null;
 }
 
 export interface AuthState {
@@ -173,7 +177,7 @@ export type Theme = 'light' | 'dark';
 
 // Page Props Interfaces
 export interface LoginPageProps {
-  onLoginSuccess: (token: string, user: User) => void;
+  onLoginSuccess: (token: string, user: User, defaultOrg?: Organization | null) => void;
   theme: Theme;
   onToggleTheme: () => void;
   pingMs: number | null;
@@ -208,6 +212,7 @@ export interface UpiPageProps {
 export interface StaffPageProps {
   staffList: StaffMember[];
   invitesList: StaffInvite[];
+  canManageStaff?: boolean;
   onOpenInviteStaff: () => void;
   onSelectStaffAction: (action: string, staff: StaffMember | StaffInvite) => void;
 }
@@ -264,6 +269,7 @@ export interface BottomNavProps {
   activeTab: string;
   onSelectTab: (tabId: string) => void;
   onOpenMoreSheet: () => void;
+  activeOrg?: Organization | null;
 }
 
 export interface BottomSheetAction {

@@ -25,6 +25,7 @@ import kotlinx.coroutines.withContext
 fun AccountActionButtons(
     onSignOutClick: () -> Unit,
     onDeleteAccountClick: () -> Unit,
+    canDeleteAccount: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -45,22 +46,24 @@ fun AccountActionButtons(
             Text("Sign Out", fontWeight = FontWeight.Bold)
         }
 
-        // Delete Account Button
-        Button(
-            onClick = onDeleteAccountClick,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(52.dp),
-            shape = RoundedCornerShape(14.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = FailedRed.copy(alpha = 0.12f),
-                contentColor = FailedRed
-            ),
-            elevation = ButtonDefaults.buttonElevation(0.dp)
-        ) {
-            Icon(Icons.Default.DeleteForever, contentDescription = null, tint = FailedRed)
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("Delete Account & Data", fontWeight = FontWeight.Bold, color = FailedRed)
+        // Delete Account Button (Role-Gated: Strictly only available for OWNER)
+        if (canDeleteAccount) {
+            Button(
+                onClick = onDeleteAccountClick,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = FailedRed.copy(alpha = 0.12f),
+                    contentColor = FailedRed
+                ),
+                elevation = ButtonDefaults.buttonElevation(0.dp)
+            ) {
+                Icon(Icons.Default.DeleteForever, contentDescription = null, tint = FailedRed)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Delete Account & Data", fontWeight = FontWeight.Bold, color = FailedRed)
+            }
         }
     }
 }

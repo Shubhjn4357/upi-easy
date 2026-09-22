@@ -6,7 +6,8 @@ import { eq, and, sql, desc, gte } from "drizzle-orm";
 import { generateId } from "../../lib/crypto.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { requireTenant } from "../../middleware/tenant.js";
-import { NotFoundError } from "../../lib/errors.js";
+import { requirePermission } from "../../middleware/rbac.js";
+import { ForbiddenError, NotFoundError } from "../../lib/errors.js";
 import type { AppEnv } from "../../types/hono.js";
 
 export const organizationsRouter = new Hono<AppEnv>();
@@ -16,7 +17,7 @@ organizationsRouter.use("*", requireAuth);
 organizationsRouter.get("/", async (c) => {
   const userId = c.get("userId");
 
-  const orgs = await db
+  const orgRows = await db
     .select({
       id: schema.organizations.id,
       name: schema.organizations.name,
@@ -25,6 +26,7 @@ organizationsRouter.get("/", async (c) => {
       panNumber: schema.organizations.panNumber,
       gstin: schema.organizations.gstin,
       status: schema.organizations.status,
+      roleId: schema.organizationMembers.roleId,
       role: schema.roles.name,
       createdAt: schema.organizations.createdAt,
     })
@@ -33,7 +35,7 @@ organizationsRouter.get("/", async (c) => {
       schema.organizationMembers,
       eq(schema.organizations.id, schema.organizationMembers.organizationId)
     )
-    .innerJoin(schema.roles, eq(schema.organizationMembers.roleId, schema.roles.id))
+    .leftJoin(schema.roles, eq(schema.organizationMembers.roleId, schema.roles.id))
     .where(
       and(
         eq(schema.organizationMembers.userId, userId),
@@ -42,7 +44,38 @@ organizationsRouter.get("/", async (c) => {
     )
     .all();
 
-  return c.json({ success: true, organizations: orgs });
+  // Attach permissions for each organization
+  const orgsWithPermissions = await Promise.all(
+    orgRows.map(async (org: any) => {
+      const roleName = org.role || "MEMBER";
+      let permissions: string[] = [];
+      if (roleName === "OWNER") {
+        permissions = ["*"];
+      } else if (org.roleId) {
+        const permRows = await db
+          .select({ name: schema.permissions.name })
+          .from(schema.rolePermissions)
+          .innerJoin(schema.permissions, eq(schema.rolePermissions.permissionId, schema.permissions.id))
+          .where(eq(schema.rolePermissions.roleId, org.roleId))
+          .all();
+        permissions = permRows.map((p: { name: string }) => p.name);
+      }
+      return {
+        id: org.id,
+        name: org.name,
+        legalBusinessName: org.legalBusinessName,
+        category: org.category,
+        panNumber: org.panNumber,
+        gstin: org.gstin,
+        status: org.status,
+        role: roleName,
+        permissions,
+        createdAt: org.createdAt,
+      };
+    })
+  );
+
+  return c.json({ success: true, organizations: orgsWithPermissions });
 });
 
 organizationsRouter.post("/", async (c) => {
@@ -144,7 +177,7 @@ organizationsRouter.post("/", async (c) => {
   );
 });
 
-organizationsRouter.patch("/:orgId", requireTenant, async (c) => {
+organizationsRouter.patch("/:orgId", requireTenant, requirePermission("organization.manage"), async (c) => {
   const orgId = c.get("organizationId");
   const actorId = c.get("userId");
   const body = await c.req.json();
@@ -184,6 +217,41 @@ organizationsRouter.patch("/:orgId", requireTenant, async (c) => {
     .run();
 
   return c.json({ success: true, message: "Organization updated successfully" });
+});
+
+// Delete Organization (Strictly Restricted to OWNER)
+organizationsRouter.delete("/:orgId", requireTenant, async (c) => {
+  const role = c.get("role");
+  if (role !== "OWNER") {
+    throw new ForbiddenError("Only the business OWNER is permitted to delete this organization");
+  }
+
+  const orgId = c.get("organizationId");
+  const actorId = c.get("userId");
+
+  // Cascade delete dependent entities
+  await db.delete(schema.organizationMembers).where(eq(schema.organizationMembers.organizationId, orgId)).run();
+  await db.delete(schema.organizationInvites).where(eq(schema.organizationInvites.organizationId, orgId)).run();
+  await db.delete(schema.upiAccounts).where(eq(schema.upiAccounts.organizationId, orgId)).run();
+  await db.delete(schema.bankAccounts).where(eq(schema.bankAccounts.organizationId, orgId)).run();
+  await db.delete(schema.qrCodes).where(eq(schema.qrCodes.organizationId, orgId)).run();
+  await db.delete(schema.notificationPreferences).where(eq(schema.notificationPreferences.organizationId, orgId)).run();
+  await db.delete(schema.organizations).where(eq(schema.organizations.id, orgId)).run();
+
+  await db.insert(schema.auditLogs)
+    .values({
+      id: generateId("aud"),
+      organizationId: orgId,
+      actorId,
+      action: "organization.deleted",
+      resourceType: "organization",
+      resourceId: orgId,
+      metadataJson: JSON.stringify({ actorId, deletedAt: new Date().toISOString() }),
+      createdAt: new Date(),
+    })
+    .run();
+
+  return c.json({ success: true, message: "Organization and all associated data deleted successfully" });
 });
 
 // Full App Setup Form (Business Name, Mobile, Primary UPI, Bank Account)

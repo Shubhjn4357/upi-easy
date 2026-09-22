@@ -21,21 +21,31 @@ interface NavItem {
 
 // Desktop Left Vertical Navigation Sidebar using shadcn tokens and strict TypeScript types
 export function Sidebar({ activeTab, onSelectTab, activeOrg }: SidebarProps) {
-  const navItems: NavItem[] = [
-    { id: 'overview', label: 'Overview', icon: <IconActivity className="w-4 h-4" /> },
-    { id: 'transactions', label: 'Transactions', icon: <IconCreditCard className="w-4 h-4" /> },
-    { id: 'upi', label: 'UPI & QR Codes', icon: <IconQrCode className="w-4 h-4" /> },
-    { id: 'staff', label: 'Staff & Roles', icon: <IconUsers className="w-4 h-4" /> },
-    { id: 'accounts', label: 'Bank Accounts', icon: <IconWallet className="w-4 h-4" /> },
-    { id: 'orgs', label: 'Business Profile', icon: <IconSettings className="w-4 h-4" /> },
-    { id: 'tables', label: 'Table Explorer', icon: <IconDatabase className="w-4 h-4" />, badge: 'Admin' },
-    { id: 'health', label: 'System Health', icon: <IconHeartPulse className="w-4 h-4" />, badge: 'Live' },
+  const role = activeOrg?.role || 'OWNER';
+  const permissions = activeOrg?.permissions || (role === 'OWNER' ? ['*'] : []);
+  const isOwner = role === 'OWNER' || permissions.includes('*');
+  const canReadStaff = isOwner || permissions.includes('staff.read') || role === 'MANAGER';
+  const canReadAccounts = isOwner || permissions.includes('accounts.read') || role === 'MANAGER' || role === 'ACCOUNTANT';
+  const canReadUpi = isOwner || permissions.includes('upi.read') || role === 'MANAGER' || role === 'CASHIER';
+  const canReadTransactions = isOwner || permissions.includes('transactions.read') || role === 'MANAGER' || role === 'CASHIER' || role === 'ACCOUNTANT';
+
+  const allNavItems: (NavItem & { visible: boolean })[] = [
+    { id: 'overview', label: 'Overview', icon: <IconActivity className="w-4 h-4" />, visible: true },
+    { id: 'transactions', label: 'Transactions', icon: <IconCreditCard className="w-4 h-4" />, visible: canReadTransactions },
+    { id: 'upi', label: 'UPI & QR Codes', icon: <IconQrCode className="w-4 h-4" />, visible: canReadUpi },
+    { id: 'staff', label: 'Staff & Roles', icon: <IconUsers className="w-4 h-4" />, visible: canReadStaff },
+    { id: 'accounts', label: 'Bank Accounts', icon: <IconWallet className="w-4 h-4" />, visible: canReadAccounts },
+    { id: 'orgs', label: 'Business Profile', icon: <IconSettings className="w-4 h-4" />, visible: true },
+    { id: 'tables', label: 'Table Explorer', icon: <IconDatabase className="w-4 h-4" />, badge: 'Admin', visible: isOwner },
+    { id: 'health', label: 'System Health', icon: <IconHeartPulse className="w-4 h-4" />, badge: 'Live', visible: isOwner },
   ];
+
+  const visibleNavItems = allNavItems.filter((i) => i.visible);
 
   return (
     <aside className="hidden md:flex flex-col w-56 border-r border-border bg-card/50 p-3 justify-between shrink-0 transition-colors">
       <nav className="space-y-1">
-        {navItems.map((item) => (
+        {visibleNavItems.map((item) => (
           <button
             key={item.id}
             onClick={() => onSelectTab(item.id)}

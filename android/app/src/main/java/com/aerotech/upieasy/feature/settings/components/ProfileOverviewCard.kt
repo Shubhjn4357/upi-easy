@@ -83,16 +83,19 @@ fun ProfileOverviewCard(
             }
         }
 
-        Spacer(modifier = Modifier.height(14.dp))
+        val canEdit = userRole?.uppercase() != "CASHIER"
+        if (canEdit) {
+            Spacer(modifier = Modifier.height(14.dp))
 
-        OutlinedButton(
-            onClick = onEditClick,
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp)
-        ) {
-            Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("Edit Profile Information", fontWeight = FontWeight.SemiBold)
+            OutlinedButton(
+                onClick = onEditClick,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Edit Profile Information", fontWeight = FontWeight.SemiBold)
+            }
         }
 
         HorizontalDivider(

@@ -288,10 +288,12 @@ fun SettingsScreen(
 
                 Spacer(modifier = Modifier.height(4.dp))
 
-                // Account Actions (Sign Out & Delete Account)
+                // Account Actions (Sign Out & Delete Account - Strictly OWNER only)
+                val isOwner = userRole?.uppercase() == "OWNER"
                 AccountActionButtons(
                     onSignOutClick = { showSignOutConfirm = true },
-                    onDeleteAccountClick = { showDeleteDialog = true }
+                    onDeleteAccountClick = { showDeleteDialog = true },
+                    canDeleteAccount = isOwner
                 )
 
                 Spacer(modifier = Modifier.height(96.dp))

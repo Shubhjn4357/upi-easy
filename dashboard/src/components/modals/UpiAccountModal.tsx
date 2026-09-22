@@ -9,6 +9,7 @@ export interface UpiAccountModalProps {
   onClose: () => void;
   initialData?: UpiAccount | null;
   activeOrg: Organization | null;
+  isSaving?: boolean;
   onSubmitUpi: (e: React.FormEvent<HTMLFormElement>) => void | Promise<void>;
 }
 
@@ -18,6 +19,7 @@ export function UpiAccountModal({
   onClose,
   initialData = null,
   activeOrg,
+  isSaving = false,
   onSubmitUpi,
 }: UpiAccountModalProps) {
   const isEditing = Boolean(initialData);
@@ -25,7 +27,7 @@ export function UpiAccountModal({
   return (
     <Modal
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={isSaving ? () => {} : onClose}
       title={isEditing ? 'Edit UPI Account' : 'Add UPI Account'}
       subtitle={isEditing ? `Updating ${initialData?.vpa || initialData?.upiId}` : 'Connect a new VPA to this merchant organization'}>
       <form onSubmit={onSubmitUpi} className="space-y-4 text-xs">
@@ -37,6 +39,7 @@ export function UpiAccountModal({
             defaultValue={initialData?.vpa || initialData?.upiId || ''}
             placeholder="e.g. storename@okhdfcbank"
             required
+            disabled={isSaving}
             className="font-mono"
           />
         </div>
@@ -47,6 +50,7 @@ export function UpiAccountModal({
             name="payeeName"
             defaultValue={initialData?.payeeName || initialData?.accountHolderName || activeOrg?.name || ''}
             required
+            disabled={isSaving}
           />
         </div>
         <div className="grid grid-cols-2 gap-3">
@@ -56,6 +60,7 @@ export function UpiAccountModal({
               type="text"
               name="mcc"
               defaultValue={initialData?.merchantCategoryCode || '5411'}
+              disabled={isSaving}
               className="font-mono"
             />
           </div>
@@ -65,6 +70,7 @@ export function UpiAccountModal({
                 type="checkbox"
                 name="isDefault"
                 defaultChecked={isEditing ? initialData?.isDefault || initialData?.isPrimary : true}
+                disabled={isSaving}
                 className="rounded text-primary"
               />
               <span>{isEditing ? 'Set as Default' : 'Primary Default'}</span>
@@ -75,13 +81,25 @@ export function UpiAccountModal({
           <Button
             variant="outline"
             type="button"
+            disabled={isSaving}
             onClick={onClose}>
             Cancel
           </Button>
           <Button
             variant="brand"
-            type="submit">
-            {isEditing ? 'Update Account' : 'Save Account'}
+            type="submit"
+            disabled={isSaving}
+            className="gap-2 min-w-[120px]">
+            {isSaving ? (
+              <>
+                <div className="w-3.5 h-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                <span>Saving...</span>
+              </>
+            ) : isEditing ? (
+              'Update Account'
+            ) : (
+              'Save Account'
+            )}
           </Button>
         </div>
       </form>

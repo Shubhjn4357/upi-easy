@@ -147,7 +147,16 @@ function AppContent() {
     setTimeout(() => setToast(null), 3500);
   };
 
-  // Secure API Client with auto 401 logout & latency tracking
+  // Track activeOrg with Ref to avoid stale closure inside createApiClient
+  const activeOrgRef = React.useRef<Organization | null>(activeOrg);
+  useEffect(() => {
+    activeOrgRef.current = activeOrg;
+  }, [activeOrg]);
+
+  // Modal active save loader state
+  const [isSavingModal, setIsSavingModal] = useState<boolean>(false);
+
+  // Secure API Client with auto 401 logout & latency tracking and X-Organization-Id injection
   const apiFetch = useMemo(() => {
     return createApiClient(
       () => token,
@@ -155,7 +164,8 @@ function AppContent() {
         setAuth({ token: '', user: null });
         showToast('Session expired. Please sign in again.', 'error');
       },
-      setPingMs
+      setPingMs,
+      () => activeOrgRef.current?.id || null
     );
   }, [token]);
 
@@ -174,10 +184,15 @@ function AppContent() {
       if (data.success && data.organizations?.length > 0) {
         setOrganizations(data.organizations);
         const savedOrgId = localStorage.getItem('upieasy_active_org_id');
-        const def =
-          (savedOrgId && data.organizations.find((o: Organization) => o.id === savedOrgId)) ||
-          data.organizations[0];
-        setActiveOrg(def);
+        setActiveOrg((prev) => {
+          if (prev && data.organizations.some((o: Organization) => o.id === prev.id)) {
+            return data.organizations.find((o: Organization) => o.id === prev.id) || prev;
+          }
+          const def =
+            (savedOrgId && data.organizations.find((o: Organization) => o.id === savedOrgId)) ||
+            data.organizations[0];
+          return def;
+        });
       }
     } catch (err) {
       console.error(err);
@@ -185,10 +200,14 @@ function AppContent() {
   };
 
   // Auth Actions
-  const handleLoginSuccess = async (newAccessToken: string, newUser: User) => {
+  const handleLoginSuccess = async (newAccessToken: string, newUser: User, defaultOrg?: Organization | null) => {
     saveAuth(newAccessToken, newUser);
     setAuth({ token: newAccessToken, user: newUser });
     showToast(`Welcome, ${newUser.fullName || newUser.name || 'Merchant'}!`);
+    if (defaultOrg) {
+      setActiveOrg(defaultOrg);
+      localStorage.setItem('upieasy_active_org_id', defaultOrg.id);
+    }
     await loadOrganizations(newAccessToken);
     navigate('/overview');
   };
@@ -544,6 +563,35 @@ function AppContent() {
     });
   };
 
+  // Role & Granular Module Permissions
+  const role = activeOrg?.role || 'OWNER';
+  const permissions = activeOrg?.permissions || (role === 'OWNER' ? ['*'] : []);
+  const isOwner = role === 'OWNER' || permissions.includes('*');
+  const canManageOrg = isOwner || permissions.includes('organization.manage') || role === 'MANAGER';
+  const canManageStaff = isOwner || permissions.includes('staff.manage') || role === 'MANAGER';
+  const canManageUpi = isOwner || permissions.includes('upi.manage') || role === 'MANAGER';
+  const canManageAccounts = isOwner || permissions.includes('accounts.manage') || role === 'MANAGER';
+
+  const handleDeleteOrg = async () => {
+    if (!activeOrg) return;
+    if (!confirm(`Are you absolutely sure you want to permanently delete "${activeOrg.name}"? This action cannot be undone.`)) {
+      return;
+    }
+    setIsSavingModal(true);
+    try {
+      await apiFetch(`/api/v1/organizations/${activeOrg.id}`, { method: 'DELETE' });
+      showToast('Organization deleted successfully');
+      localStorage.removeItem('upieasy_active_org_id');
+      await loadOrganizations();
+      navigate('/overview');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error deleting organization';
+      showToast(msg, 'error');
+    } finally {
+      setIsSavingModal(false);
+    }
+  };
+
   // If unauthenticated, show Google Login Page
   if (!token) {
     return (
@@ -615,6 +663,7 @@ function AppContent() {
                 element={
                   <UpiPage
                     upiAccounts={upiAccounts}
+                    canManageUpi={canManageUpi}
                     onOpenNewUpi={() => setShowUpiModal({})}
                     onSelectUpiAction={handleSelectUpiAction}
                   />
@@ -627,6 +676,7 @@ function AppContent() {
                   <StaffPage
                     staffList={staffList}
                     invitesList={invitesList}
+                    canManageStaff={canManageStaff}
                     onOpenInviteStaff={() => setShowStaffModal({})}
                     onSelectStaffAction={handleSelectStaffAction}
                   />
@@ -638,6 +688,7 @@ function AppContent() {
                 element={
                   <AccountsPage
                     bankAccounts={bankAccounts}
+                    canManageAccounts={canManageAccounts}
                     onOpenNewBank={() => setShowNewBankModal(true)}
                   />
                 }
@@ -648,6 +699,10 @@ function AppContent() {
                 element={
                   <ProfilePage
                     activeOrg={activeOrg}
+                    isOwner={isOwner}
+                    canManageOrg={canManageOrg}
+                    isSaving={isSavingModal}
+                    onDeleteOrg={handleDeleteOrg}
                     onSaveProfile={async (e) => {
                       e.preventDefault();
                       if (!activeOrg) return;
@@ -658,6 +713,7 @@ function AppContent() {
                         gstin: HTMLInputElement;
                         panNumber: HTMLInputElement;
                       };
+                      setIsSavingModal(true);
                       try {
                         await apiFetch(`/api/v1/organizations/${activeOrg.id}`, {
                           method: 'PATCH',
@@ -674,6 +730,8 @@ function AppContent() {
                       } catch (err: unknown) {
                         const msg = err instanceof Error ? err.message : 'Error saving profile';
                         showToast(msg, 'error');
+                      } finally {
+                        setIsSavingModal(false);
                       }
                     }}
                   />
@@ -748,6 +806,7 @@ function AppContent() {
         activeTab={activeTab}
         onSelectTab={(tabId) => navigate(`/${tabId}`)}
         onOpenMoreSheet={handleOpenMoreSheet}
+        activeOrg={activeOrg}
       />
 
       <BottomSheet
@@ -764,6 +823,7 @@ function AppContent() {
         onClose={() => setShowNewTxnModal(false)}
         activeOrg={activeOrg}
         defaultVpa={upiAccounts[0]?.vpa || `${activeOrg?.id}@upieasy`}
+        isSaving={isSavingModal}
         onSubmitPayment={async (e) => {
           e.preventDefault();
           if (!activeOrg) return;
@@ -773,6 +833,7 @@ function AppContent() {
             payerVpa: HTMLInputElement;
             note: HTMLInputElement;
           };
+          setIsSavingModal(true);
           try {
             await apiFetch(`/api/v1/organizations/${activeOrg.id}/transactions`, {
               method: 'POST',
@@ -781,7 +842,7 @@ function AppContent() {
                 payerName: form.payerName.value || 'Customer',
                 payerVpa: form.payerVpa.value || 'customer@upi',
                 payeeName: activeOrg.name,
-                payeeVpa: upiAccounts[0]?.vpa || `${activeOrg.id}@upieasy`,
+                payeeVpa: upiAccounts[0]?.vpa || `${activeOrg?.id}@upieasy`,
                 note: form.note.value || 'Counter Sale',
                 direction: 'RECEIVED',
                 source: 'UPI_INTENT',
@@ -794,6 +855,8 @@ function AppContent() {
           } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : 'Error recording payment';
             showToast(msg, 'error');
+          } finally {
+            setIsSavingModal(false);
           }
         }}
       />
@@ -803,6 +866,7 @@ function AppContent() {
         onClose={() => setShowUpiModal(null)}
         initialData={(showUpiModal as UpiAccount)?.id ? (showUpiModal as UpiAccount) : null}
         activeOrg={activeOrg}
+        isSaving={isSavingModal}
         onSubmitUpi={async (e) => {
           e.preventDefault();
           if (!activeOrg) return;
@@ -820,6 +884,7 @@ function AppContent() {
             merchantCategoryCode: form.mcc.value || '5411',
             isDefault: form.isDefault.checked,
           };
+          setIsSavingModal(true);
           try {
             if (isEditing && upiAccountItem) {
               await apiFetch(`/api/v1/organizations/${activeOrg.id}/upi/${upiAccountItem.id}`, {
@@ -839,6 +904,8 @@ function AppContent() {
           } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : 'Error saving UPI';
             showToast(msg, 'error');
+          } finally {
+            setIsSavingModal(false);
           }
         }}
       />
@@ -856,6 +923,7 @@ function AppContent() {
         isOpen={Boolean(showStaffModal)}
         onClose={() => setShowStaffModal(null)}
         initialData={(showStaffModal as StaffMember)?.id ? (showStaffModal as StaffMember) : null}
+        isSaving={isSavingModal}
         onSubmitStaff={async (e) => {
           e.preventDefault();
           if (!activeOrg) return;
@@ -868,6 +936,7 @@ function AppContent() {
           };
           const staffMemberItem = showStaffModal as StaffMember | null;
           const isEditing = Boolean(staffMemberItem?.id);
+          setIsSavingModal(true);
           try {
             if (isEditing && staffMemberItem) {
               await apiFetch(`/api/v1/organizations/${activeOrg.id}/staff/${staffMemberItem.id}`, {
@@ -892,6 +961,8 @@ function AppContent() {
           } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : 'Error saving staff';
             showToast(msg, 'error');
+          } finally {
+            setIsSavingModal(false);
           }
         }}
       />
@@ -900,6 +971,7 @@ function AppContent() {
         isOpen={showNewBankModal}
         onClose={() => setShowNewBankModal(false)}
         activeOrg={activeOrg}
+        isSaving={isSavingModal}
         onSubmitBank={async (e) => {
           e.preventDefault();
           if (!activeOrg) return;
@@ -910,6 +982,7 @@ function AppContent() {
             ifsc: HTMLInputElement;
             type: HTMLSelectElement;
           };
+          setIsSavingModal(true);
           try {
             await apiFetch(`/api/v1/organizations/${activeOrg.id}/accounts`, {
               method: 'POST',
@@ -927,6 +1000,8 @@ function AppContent() {
           } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : 'Error linking bank account';
             showToast(msg, 'error');
+          } finally {
+            setIsSavingModal(false);
           }
         }}
       />

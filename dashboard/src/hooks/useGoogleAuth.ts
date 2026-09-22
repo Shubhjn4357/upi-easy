@@ -6,7 +6,7 @@ import type { User, Theme } from '../types';
 
 export interface UseGoogleAuthOptions {
   theme: Theme;
-  onSuccess: (token: string, user: User) => void;
+  onSuccess: (token: string, user: User, defaultOrg?: Organization | null) => void;
 }
 
 export function useGoogleAuth({ theme, onSuccess }: UseGoogleAuthOptions) {
@@ -19,7 +19,7 @@ export function useGoogleAuth({ theme, onSuccess }: UseGoogleAuthOptions) {
     setError(null);
     try {
       const response = await AuthService.authenticateWithGoogleToken(idToken);
-      onSuccess(response.tokens.accessToken, response.user);
+      onSuccess(response.tokens.accessToken, response.user, response.defaultOrg);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Google authentication failed';
       setError(message);

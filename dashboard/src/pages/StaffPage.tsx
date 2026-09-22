@@ -19,6 +19,7 @@ import type { StaffMember, StaffInvite, StaffPageProps } from '@/types';
 export function StaffPage({
   staffList,
   invitesList,
+  canManageStaff = true,
   onOpenInviteStaff,
   onSelectStaffAction,
 }: StaffPageProps) {
@@ -34,14 +35,16 @@ export function StaffPage({
             Manage store cashiers, managers, role permissions and account statuses
           </p>
         </div>
-        <Button
-          variant="brand"
-          size="sm"
-          onClick={onOpenInviteStaff}
-          className="rounded-xl gap-1.5 font-bold self-start sm:self-auto">
-          <IconPlus className="w-3.5 h-3.5" />
-          <span>Add Team Member</span>
-        </Button>
+        {canManageStaff && (
+          <Button
+            variant="brand"
+            size="sm"
+            onClick={onOpenInviteStaff}
+            className="rounded-xl gap-1.5 font-bold self-start sm:self-auto">
+            <IconPlus className="w-3.5 h-3.5" />
+            <span>Add Team Member</span>
+          </Button>
+        )}
       </div>
 
       {/* Staff Table */}
@@ -103,14 +106,18 @@ export function StaffPage({
                   {member.joinedAt ? new Date(member.joinedAt).toLocaleDateString() : 'Active'}
                 </TableCell>
                 <TableCell className="text-right">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => onSelectStaffAction('manage', member)}
-                    className="rounded-lg h-7 px-2.5 text-xs gap-1">
-                    <span>Manage</span>
-                    <IconMoreVertical className="w-3 h-3" />
-                  </Button>
+                  {canManageStaff ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => onSelectStaffAction('manage', member)}
+                      className="rounded-lg h-7 px-2.5 text-xs gap-1">
+                      <span>Manage</span>
+                      <IconMoreVertical className="w-3 h-3" />
+                    </Button>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">—</span>
+                  )}
                 </TableCell>
               </TableRow>
             ))}

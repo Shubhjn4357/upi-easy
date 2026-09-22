@@ -60,6 +60,8 @@ fun StaffScreen(
     val apiService = remember { NetworkClient.getApiService(sessionManager) }
     val orgRepository = remember { OrganizationRepository(context, apiService, database, sessionManager) }
     val currentOrgId by sessionManager.currentOrgIdFlow.collectAsState(initial = null)
+    val userRole by sessionManager.userRoleFlow.collectAsState(initial = null)
+    val canManageStaff = userRole?.uppercase() != "CASHIER"
 
     var staffList by remember { mutableStateOf<List<StaffMemberDto>>(emptyList()) }
     var pendingDeletedIds by remember { mutableStateOf(setOf<String>()) }
@@ -201,7 +203,7 @@ fun StaffScreen(
             }
         },
         floatingActionButton = {
-            if (!isSelectionMode) {
+            if (!isSelectionMode && canManageStaff) {
                 FloatingActionButton(
                     onClick = { showInviteBottomSheet = true },
                     containerColor = MaterialTheme.colorScheme.primary,
@@ -283,15 +285,17 @@ fun StaffScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
                             )
-                            Spacer(modifier = Modifier.height(20.dp))
-                            Button(
-                                onClick = { showInviteBottomSheet = true },
-                                shape = RoundedCornerShape(16.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                            ) {
-                                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Invite Staff Member", fontWeight = FontWeight.Bold)
+                            if (canManageStaff) {
+                                Spacer(modifier = Modifier.height(20.dp))
+                                Button(
+                                    onClick = { showInviteBottomSheet = true },
+                                    shape = RoundedCornerShape(16.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                                ) {
+                                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Invite Staff Member", fontWeight = FontWeight.Bold)
+                                }
                             }
                         }
                     }

@@ -100,6 +100,7 @@ class MainActivity : FragmentActivity() {
                         val token = sessionManager.getAccessToken()
                         initialToken = token
                         val isComplete = sessionManager.isSetupCompleteFlow.first()
+                        val currentOrg = sessionManager.currentOrgIdFlow.first()
                         val bioEnabled = sessionManager.biometricLockFlow.first()
 
                         if (!token.isNullOrBlank() && bioEnabled) {
@@ -108,7 +109,7 @@ class MainActivity : FragmentActivity() {
 
                         resolvedStartDestination = when {
                             token.isNullOrBlank() -> "auth"
-                            !isComplete -> "setup"
+                            !isComplete && currentOrg.isNullOrBlank() -> "setup"
                             else -> "main"
                         }
                     } catch (e: Exception) {
@@ -395,6 +396,7 @@ fun MainAppContent(
     val bottomNavController = rememberNavController()
     val navBackStackEntry by bottomNavController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route ?: Screen.Dashboard.route
+    val userRole by sessionManager.userRoleFlow.collectAsState(initial = null)
     var showHubSheet by remember { mutableStateOf(false) }
     var isBottomBarShrunk by remember { mutableStateOf(false) }
 
@@ -436,6 +438,7 @@ fun MainAppContent(
             composable(Screen.Dashboard.route) {
                 DashboardScreen(
                     sessionManager = sessionManager,
+                    database = database,
                     onNavigateToScan = onNavigateToScan,
                     onNavigateToQr = { onNavigateToQr(null, null) },
                     onNavigateToTransactions = { bottomNavController.navigate(Screen.Transactions.route) },
@@ -497,6 +500,7 @@ fun MainAppContent(
 
         BentoGridRoutesBottomDrawer(
             visible = showHubSheet,
+            userRole = userRole,
             onDismiss = { showHubSheet = false },
             onNavigateToScan = {
                 showHubSheet = false
@@ -743,6 +747,7 @@ fun FloatingGlassBottomBar(
 @Composable
 fun BentoGridRoutesBottomDrawer(
     visible: Boolean,
+    userRole: String? = null,
     onDismiss: () -> Unit,
     onNavigateToScan: () -> Unit,
     onNavigateToQr: () -> Unit,
@@ -864,23 +869,26 @@ fun BentoGridRoutesBottomDrawer(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Row 3: Staff & Settings
+                // Row 3: Staff & Settings (Role-Gated: Cashiers cannot access Staff)
+                val isCashier = userRole?.uppercase() == "CASHIER"
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    BentoCard(
-                        modifier = Modifier.weight(1f),
-                        title = "Team & Staff",
-                        subtitle = "Cashiers & roles",
-                        icon = Icons.Default.Group,
-                        iconBg = PastelPurpleBg,
-                        iconTint = PastelPurpleIcon,
-                        onClick = {
-                            HapticHelper.performHaptic(context, HapticHelper.FeedbackType.LIGHT)
-                            onNavigateToStaff()
-                        }
-                    )
+                    if (!isCashier) {
+                        BentoCard(
+                            modifier = Modifier.weight(1f),
+                            title = "Team & Staff",
+                            subtitle = "Cashiers & roles",
+                            icon = Icons.Default.Group,
+                            iconBg = PastelPurpleBg,
+                            iconTint = PastelPurpleIcon,
+                            onClick = {
+                                HapticHelper.performHaptic(context, HapticHelper.FeedbackType.LIGHT)
+                                onNavigateToStaff()
+                            }
+                        )
+                    }
 
                     BentoCard(
                         modifier = Modifier.weight(1f),
