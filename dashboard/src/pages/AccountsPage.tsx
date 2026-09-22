@@ -8,11 +8,12 @@ import type { BankAccount } from '@/types';
 export interface AccountsPageProps {
   bankAccounts: BankAccount[];
   canManageAccounts?: boolean;
+  loading?: boolean;
   onOpenNewBank: () => void;
 }
 
 // Settlement Bank Accounts Page using shadcn/ui with strict TypeScript types
-export function AccountsPage({ bankAccounts, canManageAccounts = true, onOpenNewBank }: AccountsPageProps) {
+export function AccountsPage({ bankAccounts, canManageAccounts = true, loading = false, onOpenNewBank }: AccountsPageProps) {
   return (
     <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
       {/* Header */}
@@ -37,7 +38,12 @@ export function AccountsPage({ bankAccounts, canManageAccounts = true, onOpenNew
         )}
       </div>
 
-      {bankAccounts.length === 0 ? (
+      {loading ? (
+        <Card className="p-12 flex flex-col items-center justify-center text-center">
+          <div className="w-8 h-8 rounded-full border-2 border-brand-500 border-t-transparent animate-spin mb-3" />
+          <p className="text-xs text-muted-foreground font-medium">Loading settlement bank accounts...</p>
+        </Card>
+      ) : bankAccounts.length === 0 ? (
         <Card className="p-12 text-center flex flex-col items-center justify-center space-y-3">
           <div className="w-12 h-12 rounded-2xl bg-brand-500/10 text-brand-600 dark:text-cyan-400 flex items-center justify-center">
             <IconLandmark className="w-6 h-6" />

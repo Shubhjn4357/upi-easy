@@ -20,6 +20,7 @@ export function StaffPage({
   staffList,
   invitesList,
   canManageStaff = true,
+  loading = false,
   onOpenInviteStaff,
   onSelectStaffAction,
 }: StaffPageProps) {
@@ -47,11 +48,18 @@ export function StaffPage({
         )}
       </div>
 
-      {/* Staff Table */}
-      <Card className="overflow-hidden">
-        <div className="px-6 py-4 border-b border-border flex items-center justify-between">
-          <CardTitle className="text-sm font-bold">Active Members ({staffList.length})</CardTitle>
-        </div>
+      {loading ? (
+        <Card className="p-12 flex flex-col items-center justify-center text-center">
+          <div className="w-8 h-8 rounded-full border-2 border-brand-500 border-t-transparent animate-spin mb-3" />
+          <p className="text-xs text-muted-foreground font-medium">Loading store staff & permissions...</p>
+        </Card>
+      ) : (
+        <>
+          {/* Staff Table */}
+          <Card className="overflow-hidden">
+            <div className="px-6 py-4 border-b border-border flex items-center justify-between">
+              <CardTitle className="text-sm font-bold">Active Members ({staffList.length})</CardTitle>
+            </div>
         <Table>
           <TableHeader>
             <TableRow>
@@ -156,6 +164,8 @@ export function StaffPage({
           </div>
         </div>
       </Card>
+        </>
+      )}
     </div>
   );
 }

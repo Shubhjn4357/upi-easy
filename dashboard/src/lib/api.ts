@@ -1,5 +1,4 @@
-// Authenticated Secure API Client with strict TypeScript types
-import { isTokenExpired, clearAuth } from './auth';
+import { isTokenExpired, clearAuth, refreshAuthSession } from './auth';
 import { ENV } from '../services/env.service';
 
 export type TokenProvider = string | null | (() => string | null);
@@ -18,14 +17,19 @@ export function createApiClient(
   getOrgId?: OrgIdProvider
 ): ApiClient {
   return async function apiFetch<T = any>(endpoint: string, options: ApiFetchOptions = {}): Promise<T> {
-    const token = typeof getToken === 'function' ? getToken() : getToken;
+    let token = typeof getToken === 'function' ? getToken() : getToken;
     const orgId = typeof getOrgId === 'function' ? getOrgId() : getOrgId;
 
-    // Check client-side expiration before dispatching
+    // Check client-side expiration before dispatching - attempt silent refresh
     if (token && isTokenExpired(token)) {
-      clearAuth();
-      onUnauthorized?.();
-      throw new Error('Session expired. Please sign in again.');
+      const freshToken = await refreshAuthSession();
+      if (freshToken) {
+        token = freshToken;
+      } else {
+        clearAuth();
+        onUnauthorized?.();
+        throw new Error('Session expired. Please sign in again.');
+      }
     }
 
     const headers: Record<string, string> = {
@@ -41,7 +45,7 @@ export function createApiClient(
 
     const startTime = performance.now();
     try {
-      const res = await fetch(url, {
+      let res = await fetch(url, {
         ...options,
         headers,
       });
@@ -49,11 +53,23 @@ export function createApiClient(
       const latency = Math.round(performance.now() - startTime);
       onLatency?.(latency);
 
-      // Automatic 401 Unauthorized handling
+      // Automatic 401 Unauthorized handling with silent refresh attempt
       if (res.status === 401) {
-        clearAuth();
-        onUnauthorized?.();
-        throw new Error('Unauthorized session. Please sign in again.');
+        const freshToken = await refreshAuthSession();
+        if (freshToken) {
+          // Retry the request with the refreshed token
+          headers.Authorization = `Bearer ${freshToken}`;
+          res = await fetch(url, {
+            ...options,
+            headers,
+          });
+        }
+        
+        if (res.status === 401) {
+          clearAuth();
+          onUnauthorized?.();
+          throw new Error('Unauthorized session. Please sign in again.');
+        }
       }
 
       const contentType = res.headers.get('content-type') || '';

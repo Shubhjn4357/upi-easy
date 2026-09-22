@@ -1,7 +1,6 @@
-// Main Application: Clean, Secure, Declarative React Router Architecture (Strictly Typed)
-import React, { useState, useEffect, useMemo, Suspense } from 'react';
+// Main Application: Clean, Secure, Modular React Router Architecture
+import React, { useState, useMemo, Suspense } from 'react';
 import { Router, Routes, Route, ProtectedRoute, useNavigate, useLocation } from './lib/router';
-import { getStoredAuth, saveAuth, clearAuth } from './lib/auth';
 import { createApiClient } from './lib/api';
 
 import { SuspenseFallback } from './components/ui/components';
@@ -9,6 +8,8 @@ import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
 import BottomNav from './components/BottomNav';
 import BottomSheet from './components/BottomSheet';
+import Toast from './components/Toast';
+import AppModals from './components/modals/AppModals';
 
 import LoginPage from './pages/LoginPage';
 import OverviewPage from './pages/OverviewPage';
@@ -20,114 +21,36 @@ import ProfilePage from './pages/ProfilePage';
 import TablesPage from './pages/TablesPage';
 import HealthPage from './pages/HealthPage';
 
-import RecordPaymentModal from './components/modals/RecordPaymentModal';
-import UpiAccountModal from './components/modals/UpiAccountModal';
-import QrCodeModal from './components/modals/QrCodeModal';
-import StaffModal from './components/modals/StaffModal';
-import BankAccountModal from './components/modals/BankAccountModal';
-import TableRowModal from './components/modals/TableRowModal';
-import TransactionDetailModal from './components/modals/TransactionDetailModal';
-
-import {
-  IconQrCode,
-  IconEdit,
-  IconStar,
-  IconTrash2,
-  IconLock,
-  IconCopy,
-  IconEye,
-  IconArrowUpRight,
-  IconLandmark,
-  IconBuilding,
-  IconDatabase,
-  IconHeartPulse,
-} from './components/ui/icons';
+import { useTheme } from './hooks/useTheme';
+import { useToast } from './hooks/useToast';
+import { useAuthSession } from './hooks/useAuthSession';
+import { useOrganizations } from './hooks/useOrganizations';
+import { useDashboardData } from './hooks/useDashboardData';
 
 import type {
-  User,
-  Organization,
   Transaction,
   UpiAccount,
   StaffMember,
   StaffInvite,
-  BankAccount,
-  DashboardStats,
   TableColumnDef,
-  TableSchemaItem,
-  TableData,
-  HealthData,
-  Theme,
   BottomSheetConfig,
-  AuthState,
 } from './types';
-import ENV from './services/env.service';
-
-interface ToastState {
-  message: string;
-  type: 'success' | 'error' | 'info';
-}
 
 function AppContent() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Active tab derived cleanly from router pathname
+  // Active route tab derived cleanly from router pathname
   const activeTab = location.pathname.replace(/^\//, '') || 'overview';
 
-  // Theme State
-  const [theme, setTheme] = useState<Theme>(
-    () => (localStorage.getItem('upieasy_theme') as Theme) || 'dark'
-  );
+  // Global Theme & Toast Hooks
+  const { theme, toggleTheme } = useTheme();
+  const { toast, showToast, hideToast } = useToast();
 
-  useEffect(() => {
-    const root = document.documentElement;
-    if (theme === 'dark') {
-      root.classList.add('dark');
-      root.classList.remove('light');
-    } else {
-      root.classList.remove('dark');
-      root.classList.add('light');
-    }
-    localStorage.setItem('upieasy_theme', theme);
-  }, [theme]);
-
-  // Auth State & Token Expiration Guard
-  const [auth, setAuth] = useState<AuthState>(() => getStoredAuth());
-  const token = auth.token;
-  const user = auth.user;
-
-  // Multi-Tenant Org State
-  const [organizations, setOrganizations] = useState<Organization[]>([]);
-  const [activeOrg, setActiveOrg] = useState<Organization | null>(null);
-
-  // Real-Time Telemetry State
+  // Real-Time Telemetry Latency State
   const [pingMs, setPingMs] = useState<number | null>(null);
-  const [isSyncing, setIsSyncing] = useState<boolean>(false);
 
-  // Entities
-  const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [txnLoading, setTxnLoading] = useState<boolean>(false);
-  const [txnSearch, setTxnSearch] = useState<string>('');
-  const [txnStatus, setTxnStatus] = useState<string>('');
-
-  const [upiAccounts, setUpiAccounts] = useState<UpiAccount[]>([]);
-  const [staffList, setStaffList] = useState<StaffMember[]>([]);
-  const [invitesList, setInvitesList] = useState<StaffInvite[]>([]);
-  const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
-
-  // Database Tables State (Admin)
-  const [adminTables, setAdminTables] = useState<TableSchemaItem[]>([]);
-  const [selectedTable, setSelectedTable] = useState<string>('transactions');
-  const [tableData, setTableData] = useState<TableData>({ rows: [], columns: [], total: 0 });
-  const [tableLoading, setTableLoading] = useState<boolean>(false);
-  const [tableSearch, setTableSearch] = useState<string>('');
-  const [tableOffset, setTableOffset] = useState<number>(0);
-
-  // Health
-  const [healthData, setHealthData] = useState<HealthData | null>(null);
-
-  // Modals & Sheets
+  // Modal Open States
   const [bottomSheetConfig, setBottomSheetConfig] = useState<BottomSheetConfig | null>(null);
   const [showNewTxnModal, setShowNewTxnModal] = useState<boolean>(false);
   const [showUpiModal, setShowUpiModal] = useState<UpiAccount | Record<string, never> | null>(null);
@@ -139,251 +62,130 @@ function AppContent() {
     row?: Record<string, unknown>;
   } | null>(null);
   const [inspectTxn, setInspectTxn] = useState<Transaction | null>(null);
+  const [isSavingProfile, setIsSavingProfile] = useState<boolean>(false);
 
-  // Toast
-  const [toast, setToast] = useState<ToastState | null>(null);
-  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3500);
-  };
+  // Organizations Hook (Forward ref for apiFetch)
+  const orgRef = React.useRef<{ activeOrgId: string | null }>({ activeOrgId: null });
 
-  // Track activeOrg with Ref to avoid stale closure inside createApiClient
-  const activeOrgRef = React.useRef<Organization | null>(activeOrg);
-  useEffect(() => {
-    activeOrgRef.current = activeOrg;
-  }, [activeOrg]);
-
-  // Modal active save loader state
-  const [isSavingModal, setIsSavingModal] = useState<boolean>(false);
-
-  // Secure API Client with auto 401 logout & latency tracking and X-Organization-Id injection
+  // Secure API Client with auto 401 retry, latency tracking & tenant header injection
   const apiFetch = useMemo(() => {
     return createApiClient(
-      () => token,
+      () => authSessionRef.current?.token || null,
       () => {
-        setAuth({ token: '', user: null });
+        authSessionRef.current?.handleUnauthorized();
         showToast('Session expired. Please sign in again.', 'error');
       },
       setPingMs,
-      () => activeOrgRef.current?.id || null
+      () => orgRef.current.activeOrgId
     );
-  }, [token]);
+  }, [showToast]);
 
-  // Load Organizations
-  const loadOrganizations = async (authToken = token) => {
-    try {
-      const res = await fetch(`${ENV.API_BASE_URL}/api/v1/organizations`, {
-        headers: { 
-          Authorization: `Bearer ${authToken}`,
-          Accept: 'application/json',
-        },
-      });
-      const contentType = res.headers.get('content-type') || '';
-      if (!contentType.includes('application/json')) return;
-      const data = await res.json();
-      if (data.success && data.organizations?.length > 0) {
-        setOrganizations(data.organizations);
-        const savedOrgId = localStorage.getItem('upieasy_active_org_id');
-        setActiveOrg((prev) => {
-          if (prev && data.organizations.some((o: Organization) => o.id === prev.id)) {
-            return data.organizations.find((o: Organization) => o.id === prev.id) || prev;
-          }
-          const def =
-            (savedOrgId && data.organizations.find((o: Organization) => o.id === savedOrgId)) ||
-            data.organizations[0];
-          return def;
-        });
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  };
+  // Multi-Tenant Organizations
+  const {
+    organizations,
+    setOrganizations,
+    activeOrg,
+    setActiveOrg,
+    activeOrgRef,
+    isDeletingOrg,
+    loadOrganizations,
+    handleSelectOrg,
+    handleDeleteOrg,
+    isOwner,
+    canManageOrg,
+    canManageStaff,
+    canManageUpi,
+    canManageAccounts,
+  } = useOrganizations({
+    token: '',
+    onDeleted: () => navigate('/overview'),
+    showToast,
+    apiFetch,
+  });
 
-  // Auth Actions
-  const handleLoginSuccess = async (newAccessToken: string, newUser: User, defaultOrg?: Organization | null) => {
-    saveAuth(newAccessToken, newUser);
-    setAuth({ token: newAccessToken, user: newUser });
-    showToast(`Welcome, ${newUser.fullName || newUser.name || 'Merchant'}!`);
-    if (defaultOrg) {
-      setActiveOrg(defaultOrg);
-      localStorage.setItem('upieasy_active_org_id', defaultOrg.id);
-    }
-    await loadOrganizations(newAccessToken);
-    navigate('/overview');
-  };
+  // Keep orgRef in sync
+  React.useEffect(() => {
+    orgRef.current.activeOrgId = activeOrg?.id || null;
+  }, [activeOrg]);
 
-  const handleLogout = () => {
-    clearAuth();
-    setAuth({ token: '', user: null });
-    setActiveOrg(null);
-    setOrganizations([]);
+  // Auth Session Hook
+  const {
+    token,
+    user,
+    isCheckingAuth,
+    handleLoginSuccess,
+    handleLogout: logoutSession,
+    handleUnauthorized,
+  } = useAuthSession({
+    onSessionRestored: async (freshToken) => {
+      await loadOrganizations(freshToken);
+    },
+    onSessionExpired: () => {
+      setActiveOrg(null);
+      setOrganizations([]);
+    },
+  });
+
+  // Keep auth ref updated for apiFetch closure
+  const authSessionRef = React.useRef({ token, handleUnauthorized });
+  React.useEffect(() => {
+    authSessionRef.current = { token, handleUnauthorized };
+  }, [token, handleUnauthorized]);
+
+  // Re-load organizations when token activates
+  React.useEffect(() => {
+    if (token) loadOrganizations(token);
+  }, [token, loadOrganizations]);
+
+  // Unified Dashboard Data Hook
+  const {
+    isSyncing,
+    dashboardStats,
+    overviewLoading,
+    loadOverview,
+    transactions,
+    txnLoading,
+    txnSearch,
+    setTxnSearch,
+    txnStatus,
+    setTxnStatus,
+    loadTransactions,
+    upiAccounts,
+    upiLoading,
+    loadUpi,
+    staffList,
+    invitesList,
+    staffLoading,
+    loadStaff,
+    bankAccounts,
+    accountsLoading,
+    loadAccounts,
+    adminTables,
+    selectedTable,
+    setSelectedTable,
+    tableData,
+    tableLoading,
+    tableSearch,
+    setTableSearch,
+    tableOffset,
+    setTableOffset,
+    loadTables,
+    healthData,
+    loadHealth,
+  } = useDashboardData({
+    token,
+    activeOrg,
+    activeTab,
+    apiFetch,
+    showToast,
+    pingMs,
+    setPingMs,
+  });
+
+  const onLogout = () => {
+    logoutSession();
     showToast('Signed out successfully', 'info');
   };
-
-  const handleSelectOrg = (org: Organization) => {
-    setActiveOrg(org);
-    localStorage.setItem('upieasy_active_org_id', org.id);
-  };
-
-  useEffect(() => {
-    if (token) loadOrganizations();
-  }, [token]);
-
-  // Tab Loaders
-  const loadOverview = async () => {
-    if (!activeOrg) return;
-    try {
-      const data = await apiFetch<any>(`/api/v1/organizations/${activeOrg.id}/dashboard`);
-      if (data.success) setDashboardStats(data.dashboard);
-    } catch {}
-  };
-
-  const loadTransactions = async (silent = false) => {
-    if (!activeOrg) return;
-    if (!silent) setTxnLoading(true);
-    try {
-      let url = `/api/v1/organizations/${activeOrg.id}/transactions?limit=50`;
-      if (txnStatus) url += `&status=${txnStatus}`;
-      if (txnSearch) url += `&search=${encodeURIComponent(txnSearch)}`;
-      const data = await apiFetch<any>(url);
-      if (data.success) setTransactions(data.transactions || []);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error loading ledger';
-      if (!silent) showToast(msg, 'error');
-    } finally {
-      if (!silent) setTxnLoading(false);
-    }
-  };
-
-  const loadUpi = async () => {
-    if (!activeOrg) return;
-    try {
-      const data = await apiFetch<any>(`/api/v1/organizations/${activeOrg.id}/upi`);
-      if (data.success) setUpiAccounts(data.upiAccounts || []);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error loading UPI';
-      showToast(msg, 'error');
-    }
-  };
-
-  const loadStaff = async () => {
-    if (!activeOrg) return;
-    try {
-      const [staffRes, invitesRes] = await Promise.all([
-        apiFetch<any>(`/api/v1/organizations/${activeOrg.id}/staff`),
-        apiFetch<any>(`/api/v1/organizations/${activeOrg.id}/invites`),
-      ]);
-      if (staffRes.success) setStaffList(staffRes.staff || []);
-      if (invitesRes.success) setInvitesList(invitesRes.invites || []);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error loading staff';
-      showToast(msg, 'error');
-    }
-  };
-
-  const loadAccounts = async () => {
-    if (!activeOrg) return;
-    try {
-      const data = await apiFetch<any>(`/api/v1/organizations/${activeOrg.id}/accounts`);
-      if (data.success) setBankAccounts(data.accounts || []);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error loading accounts';
-      showToast(msg, 'error');
-    }
-  };
-
-  const loadTables = async () => {
-    try {
-      const data = await apiFetch<any>('/api/v1/admin/tables');
-      if (data.success) {
-        setAdminTables(data.tables || []);
-        if (data.tables?.length > 0 && !selectedTable) {
-          setSelectedTable(data.tables[0].name);
-        }
-      }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error loading tables';
-      showToast(msg, 'error');
-    }
-  };
-
-  const loadTableData = async () => {
-    setTableLoading(true);
-    try {
-      let url = `/api/v1/admin/tables/${selectedTable}?limit=25&offset=${tableOffset}`;
-      if (tableSearch) url += `&search=${encodeURIComponent(tableSearch)}`;
-      const data = await apiFetch<any>(url);
-      if (data.success) setTableData(data);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error loading table data';
-      showToast(msg, 'error');
-    } finally {
-      setTableLoading(false);
-    }
-  };
-
-  const loadHealth = async () => {
-    try {
-      const data = await apiFetch<any>('/api/v1/admin/health');
-      if (data.success) setHealthData(data);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error loading health';
-      showToast(msg, 'error');
-    }
-  };
-
-  // Route & Tenant Change Listener
-  useEffect(() => {
-    if (!token || !activeOrg) return;
-    if (activeTab === 'overview') loadOverview();
-    else if (activeTab === 'transactions') loadTransactions();
-    else if (activeTab === 'upi') loadUpi();
-    else if (activeTab === 'staff') loadStaff();
-    else if (activeTab === 'accounts') loadAccounts();
-    else if (activeTab === 'tables') loadTables();
-    else if (activeTab === 'health') loadHealth();
-  }, [token, activeOrg, activeTab]);
-
-  useEffect(() => {
-    if (activeTab === 'tables' && selectedTable) {
-      loadTableData();
-    }
-  }, [activeTab, selectedTable, tableSearch, tableOffset]);
-
-  // Real-Time Live Sync (every 5 seconds when visible)
-  useEffect(() => {
-    if (!token || !activeOrg) return;
-    let isMounted = true;
-    const interval = setInterval(async () => {
-      if (document.visibilityState !== 'visible') return;
-      try {
-        setIsSyncing(true);
-        if (activeTab === 'overview') await loadOverview();
-        else if (activeTab === 'transactions') await loadTransactions(true);
-        else if (activeTab === 'health') await loadHealth();
-      } catch {
-      } finally {
-        if (isMounted) setIsSyncing(false);
-      }
-    }, 5000);
-    return () => {
-      isMounted = false;
-      clearInterval(interval);
-    };
-  }, [token, activeOrg, activeTab]);
-
-  // Window Focus Auto-Sync
-  useEffect(() => {
-    const onFocus = () => {
-      if (token && activeOrg) {
-        if (activeTab === 'overview') loadOverview();
-        else if (activeTab === 'transactions') loadTransactions(true);
-        else if (activeTab === 'health') loadHealth();
-      }
-    };
-    window.addEventListener('focus', onFocus);
-    return () => window.removeEventListener('focus', onFocus);
-  }, [token, activeOrg, activeTab]);
 
   // Mobile Bottom Sheet Action Handlers
   const handleSelectTxnAction = (_action: string, txn: Transaction) => {
@@ -451,7 +253,9 @@ function AppContent() {
             if (!activeOrg) return;
             if (!confirm(`Delete UPI VPA ${upi.vpa || upi.upiId}?`)) return;
             try {
-              await apiFetch(`/api/v1/organizations/${activeOrg.id}/upi/${upi.id}`, { method: 'DELETE' });
+              await apiFetch(`/api/v1/organizations/${activeOrg.id}/upi/${upi.id}`, {
+                method: 'DELETE',
+              });
               showToast('UPI Account removed');
               loadUpi();
             } catch (err: unknown) {
@@ -498,9 +302,19 @@ function AppContent() {
           variant: 'destructive',
           onClick: async () => {
             if (!activeOrg) return;
-            if (!confirm(`Remove ${staffMember.fullName || staffMember.name || staffMember.mobileNumber} from organization?`)) return;
+            if (
+              !confirm(
+                `Remove ${
+                  staffMember.fullName || staffMember.name || staffMember.mobileNumber
+                } from organization?`
+              )
+            ) {
+              return;
+            }
             try {
-              await apiFetch(`/api/v1/organizations/${activeOrg.id}/staff/${staffMember.id}`, { method: 'DELETE' });
+              await apiFetch(`/api/v1/organizations/${activeOrg.id}/staff/${staffMember.id}`, {
+                method: 'DELETE',
+              });
               showToast('Staff member removed');
               loadStaff();
             } catch (err: unknown) {
@@ -513,7 +327,11 @@ function AppContent() {
     });
   };
 
-  const handleSelectTableRowAction = (row: Record<string, unknown>, table: string, columns: TableColumnDef[]) => {
+  const handleSelectTableRowAction = (
+    row: Record<string, unknown>,
+    table: string,
+    columns: TableColumnDef[]
+  ) => {
     const pkCol = columns.find((c) => c.isPrimary)?.name || 'id';
     const pkVal = row[pkCol];
     setBottomSheetConfig({
@@ -563,42 +381,36 @@ function AppContent() {
     });
   };
 
-  // Role & Granular Module Permissions
-  const role = activeOrg?.role || 'OWNER';
-  const permissions = activeOrg?.permissions || (role === 'OWNER' ? ['*'] : []);
-  const isOwner = role === 'OWNER' || permissions.includes('*');
-  const canManageOrg = isOwner || permissions.includes('organization.manage') || role === 'MANAGER';
-  const canManageStaff = isOwner || permissions.includes('staff.manage') || role === 'MANAGER';
-  const canManageUpi = isOwner || permissions.includes('upi.manage') || role === 'MANAGER';
-  const canManageAccounts = isOwner || permissions.includes('accounts.manage') || role === 'MANAGER';
-
-  const handleDeleteOrg = async () => {
-    if (!activeOrg) return;
-    if (!confirm(`Are you absolutely sure you want to permanently delete "${activeOrg.name}"? This action cannot be undone.`)) {
-      return;
-    }
-    setIsSavingModal(true);
-    try {
-      await apiFetch(`/api/v1/organizations/${activeOrg.id}`, { method: 'DELETE' });
-      showToast('Organization deleted successfully');
-      localStorage.removeItem('upieasy_active_org_id');
-      await loadOrganizations();
-      navigate('/overview');
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error deleting organization';
-      showToast(msg, 'error');
-    } finally {
-      setIsSavingModal(false);
-    }
-  };
+  // Auto-Authorization Loading Splash
+  if (isCheckingAuth) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-background text-foreground transition-colors">
+        <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-brand-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-brand-500/25 animate-pulse mb-4">
+          <span className="text-2xl font-black text-white">UPI</span>
+        </div>
+        <p className="text-sm font-semibold text-muted-foreground animate-pulse">
+          Restoring secure merchant session...
+        </p>
+      </div>
+    );
+  }
 
   // If unauthenticated, show Google Login Page
   if (!token) {
     return (
       <LoginPage
-        onLoginSuccess={handleLoginSuccess}
+        onLoginSuccess={async (newAccessToken, newUser, defaultOrg, refreshToken) => {
+          await handleLoginSuccess(newAccessToken, newUser, defaultOrg, refreshToken);
+          showToast(`Welcome, ${newUser.fullName || newUser.name || 'Merchant'}!`);
+          if (defaultOrg) {
+            setActiveOrg(defaultOrg);
+            localStorage.setItem('upieasy_active_org_id', defaultOrg.id);
+          }
+          await loadOrganizations(newAccessToken);
+          navigate('/overview');
+        }}
         theme={theme}
-        onToggleTheme={() => setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))}
+        onToggleTheme={toggleTheme}
         pingMs={pingMs}
       />
     );
@@ -611,9 +423,9 @@ function AppContent() {
         organizations={organizations}
         activeOrg={activeOrg}
         onSelectOrg={handleSelectOrg}
-        onLogout={handleLogout}
+        onLogout={onLogout}
         theme={theme}
-        onToggleTheme={() => setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))}
+        onToggleTheme={toggleTheme}
         pingMs={pingMs}
         isSyncing={isSyncing}
       />
@@ -633,6 +445,7 @@ function AppContent() {
                 element={
                   <OverviewPage
                     stats={dashboardStats}
+                    loading={overviewLoading}
                     onOpenNewTxn={() => setShowNewTxnModal(true)}
                     onOpenNewUpi={() => setShowUpiModal({})}
                     onNavigate={(tab) => navigate(`/${tab}`)}
@@ -664,6 +477,7 @@ function AppContent() {
                   <UpiPage
                     upiAccounts={upiAccounts}
                     canManageUpi={canManageUpi}
+                    loading={upiLoading}
                     onOpenNewUpi={() => setShowUpiModal({})}
                     onSelectUpiAction={handleSelectUpiAction}
                   />
@@ -677,6 +491,7 @@ function AppContent() {
                     staffList={staffList}
                     invitesList={invitesList}
                     canManageStaff={canManageStaff}
+                    loading={staffLoading}
                     onOpenInviteStaff={() => setShowStaffModal({})}
                     onSelectStaffAction={handleSelectStaffAction}
                   />
@@ -689,6 +504,7 @@ function AppContent() {
                   <AccountsPage
                     bankAccounts={bankAccounts}
                     canManageAccounts={canManageAccounts}
+                    loading={accountsLoading}
                     onOpenNewBank={() => setShowNewBankModal(true)}
                   />
                 }
@@ -701,7 +517,7 @@ function AppContent() {
                     activeOrg={activeOrg}
                     isOwner={isOwner}
                     canManageOrg={canManageOrg}
-                    isSaving={isSavingModal}
+                    isSaving={isSavingProfile || isDeletingOrg}
                     onDeleteOrg={handleDeleteOrg}
                     onSaveProfile={async (e) => {
                       e.preventDefault();
@@ -713,7 +529,7 @@ function AppContent() {
                         gstin: HTMLInputElement;
                         panNumber: HTMLInputElement;
                       };
-                      setIsSavingModal(true);
+                      setIsSavingProfile(true);
                       try {
                         await apiFetch(`/api/v1/organizations/${activeOrg.id}`, {
                           method: 'PATCH',
@@ -731,7 +547,7 @@ function AppContent() {
                         const msg = err instanceof Error ? err.message : 'Error saving profile';
                         showToast(msg, 'error');
                       } finally {
-                        setIsSavingModal(false);
+                        setIsSavingProfile(false);
                       }
                     }}
                   />
@@ -790,6 +606,7 @@ function AppContent() {
                 element={
                   <OverviewPage
                     stats={dashboardStats}
+                    loading={overviewLoading}
                     onOpenNewTxn={() => setShowNewTxnModal(true)}
                     onOpenNewUpi={() => setShowUpiModal({})}
                     onNavigate={(tab) => navigate(`/${tab}`)}
@@ -817,264 +634,40 @@ function AppContent() {
         actions={bottomSheetConfig?.actions || []}
       />
 
-      {/* Extracted Modular Modals */}
-      <RecordPaymentModal
-        isOpen={showNewTxnModal}
-        onClose={() => setShowNewTxnModal(false)}
+      {/* Modularized App Modals Container */}
+      <AppModals
         activeOrg={activeOrg}
-        defaultVpa={upiAccounts[0]?.vpa || `${activeOrg?.id}@upieasy`}
-        isSaving={isSavingModal}
-        onSubmitPayment={async (e) => {
-          e.preventDefault();
-          if (!activeOrg) return;
-          const form = e.target as HTMLFormElement & {
-            amount: HTMLInputElement;
-            payerName: HTMLInputElement;
-            payerVpa: HTMLInputElement;
-            note: HTMLInputElement;
-          };
-          setIsSavingModal(true);
-          try {
-            await apiFetch(`/api/v1/organizations/${activeOrg.id}/transactions`, {
-              method: 'POST',
-              body: JSON.stringify({
-                amount: parseFloat(form.amount.value),
-                payerName: form.payerName.value || 'Customer',
-                payerVpa: form.payerVpa.value || 'customer@upi',
-                payeeName: activeOrg.name,
-                payeeVpa: upiAccounts[0]?.vpa || `${activeOrg?.id}@upieasy`,
-                note: form.note.value || 'Counter Sale',
-                direction: 'RECEIVED',
-                source: 'UPI_INTENT',
-              }),
-            });
-            showToast('Payment recorded successfully!');
-            setShowNewTxnModal(false);
-            loadOverview();
-            if (activeTab === 'transactions') loadTransactions();
-          } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : 'Error recording payment';
-            showToast(msg, 'error');
-          } finally {
-            setIsSavingModal(false);
-          }
-        }}
-      />
-
-      <UpiAccountModal
-        isOpen={Boolean(showUpiModal)}
-        onClose={() => setShowUpiModal(null)}
-        initialData={(showUpiModal as UpiAccount)?.id ? (showUpiModal as UpiAccount) : null}
-        activeOrg={activeOrg}
-        isSaving={isSavingModal}
-        onSubmitUpi={async (e) => {
-          e.preventDefault();
-          if (!activeOrg) return;
-          const form = e.target as HTMLFormElement & {
-            vpa: HTMLInputElement;
-            payeeName: HTMLInputElement;
-            mcc: HTMLInputElement;
-            isDefault: HTMLInputElement;
-          };
-          const upiAccountItem = showUpiModal as UpiAccount | null;
-          const isEditing = Boolean(upiAccountItem?.id);
-          const payload = {
-            vpa: form.vpa.value.trim().toLowerCase(),
-            payeeName: form.payeeName.value.trim(),
-            merchantCategoryCode: form.mcc.value || '5411',
-            isDefault: form.isDefault.checked,
-          };
-          setIsSavingModal(true);
-          try {
-            if (isEditing && upiAccountItem) {
-              await apiFetch(`/api/v1/organizations/${activeOrg.id}/upi/${upiAccountItem.id}`, {
-                method: 'PATCH',
-                body: JSON.stringify(payload),
-              });
-              showToast('UPI details updated!');
-            } else {
-              await apiFetch(`/api/v1/organizations/${activeOrg.id}/upi`, {
-                method: 'POST',
-                body: JSON.stringify(payload),
-              });
-              showToast('UPI Account added!');
-            }
-            setShowUpiModal(null);
-            loadUpi();
-          } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : 'Error saving UPI';
-            showToast(msg, 'error');
-          } finally {
-            setIsSavingModal(false);
-          }
-        }}
-      />
-
-      <QrCodeModal
-        upiAccount={showQrModal}
-        onClose={() => setShowQrModal(null)}
-        onCopyLink={(link) => {
-          navigator.clipboard.writeText(link);
-          showToast('Copied payment link to clipboard');
-        }}
-      />
-
-      <StaffModal
-        isOpen={Boolean(showStaffModal)}
-        onClose={() => setShowStaffModal(null)}
-        initialData={(showStaffModal as StaffMember)?.id ? (showStaffModal as StaffMember) : null}
-        isSaving={isSavingModal}
-        onSubmitStaff={async (e) => {
-          e.preventDefault();
-          if (!activeOrg) return;
-          const form = e.target as HTMLFormElement & {
-            mobile: HTMLInputElement;
-            name: HTMLInputElement;
-            email: HTMLInputElement;
-            role: HTMLSelectElement;
-            status?: HTMLSelectElement;
-          };
-          const staffMemberItem = showStaffModal as StaffMember | null;
-          const isEditing = Boolean(staffMemberItem?.id);
-          setIsSavingModal(true);
-          try {
-            if (isEditing && staffMemberItem) {
-              await apiFetch(`/api/v1/organizations/${activeOrg.id}/staff/${staffMemberItem.id}`, {
-                method: 'PATCH',
-                body: JSON.stringify({ role: form.role.value, status: form.status?.value || 'ACTIVE' }),
-              });
-              showToast('Staff updated successfully!');
-            } else {
-              await apiFetch(`/api/v1/organizations/${activeOrg.id}/staff/invite`, {
-                method: 'POST',
-                body: JSON.stringify({
-                  mobileNumber: form.mobile.value.trim(),
-                  name: form.name.value.trim(),
-                  email: form.email.value.trim() || undefined,
-                  role: form.role.value,
-                }),
-              });
-              showToast('Staff member added successfully!');
-            }
-            setShowStaffModal(null);
-            loadStaff();
-          } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : 'Error saving staff';
-            showToast(msg, 'error');
-          } finally {
-            setIsSavingModal(false);
-          }
-        }}
-      />
-
-      <BankAccountModal
-        isOpen={showNewBankModal}
-        onClose={() => setShowNewBankModal(false)}
-        activeOrg={activeOrg}
-        isSaving={isSavingModal}
-        onSubmitBank={async (e) => {
-          e.preventDefault();
-          if (!activeOrg) return;
-          const form = e.target as HTMLFormElement & {
-            bankName: HTMLInputElement;
-            holderName: HTMLInputElement;
-            accountNumber: HTMLInputElement;
-            ifsc: HTMLInputElement;
-            type: HTMLSelectElement;
-          };
-          setIsSavingModal(true);
-          try {
-            await apiFetch(`/api/v1/organizations/${activeOrg.id}/accounts`, {
-              method: 'POST',
-              body: JSON.stringify({
-                bankName: form.bankName.value.trim(),
-                accountHolderName: form.holderName.value.trim(),
-                accountNumber: form.accountNumber.value.trim(),
-                ifscCode: form.ifsc.value.trim().toUpperCase(),
-                accountType: form.type.value,
-              }),
-            });
-            showToast('Bank account linked!');
-            setShowNewBankModal(false);
-            loadAccounts();
-          } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : 'Error linking bank account';
-            showToast(msg, 'error');
-          } finally {
-            setIsSavingModal(false);
-          }
-        }}
-      />
-
-      <TableRowModal
-        isOpen={Boolean(showTableRowModal)}
-        onClose={() => setShowTableRowModal(null)}
+        upiAccounts={upiAccounts}
         selectedTable={selectedTable}
-        columns={tableData?.columns || []}
-        initialRow={showTableRowModal?.mode === 'edit' ? showTableRowModal.row : null}
-        onSubmitRow={async (e) => {
-          e.preventDefault();
-          const form = e.target as HTMLFormElement;
-          const isEditing = showTableRowModal?.mode === 'edit';
-          try {
-            if (isEditing && showTableRowModal?.row) {
-              const updates: Record<string, string> = {};
-              tableData.columns.forEach((col) => {
-                const element = form.elements.namedItem(col.name) as HTMLInputElement | null;
-                if (!col.isPrimary && element) updates[col.name] = element.value;
-              });
-              const pkCol = tableData.columns.find((c) => c.isPrimary)?.name || 'id';
-              const pkVal = showTableRowModal.row[pkCol];
-              await apiFetch(`/api/v1/admin/tables/${selectedTable}/${pkVal}`, {
-                method: 'PATCH',
-                body: JSON.stringify(updates),
-              });
-              showToast('Record updated successfully!');
-            } else {
-              const newRow: Record<string, string> = {};
-              tableData.columns.forEach((col) => {
-                const element = form.elements.namedItem(col.name) as HTMLInputElement | null;
-                if (element && element.value !== '') newRow[col.name] = element.value;
-              });
-              await apiFetch(`/api/v1/admin/tables/${selectedTable}`, {
-                method: 'POST',
-                body: JSON.stringify(newRow),
-              });
-              showToast('Record inserted successfully!');
-            }
-            setShowTableRowModal(null);
-            loadTables();
-          } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : 'Error saving record';
-            showToast(msg, 'error');
-          }
+        tableData={tableData}
+        apiFetch={apiFetch}
+        showToast={showToast}
+        showNewTxnModal={showNewTxnModal}
+        setShowNewTxnModal={setShowNewTxnModal}
+        showUpiModal={showUpiModal}
+        setShowUpiModal={setShowUpiModal}
+        showQrModal={showQrModal}
+        setShowQrModal={setShowQrModal}
+        showStaffModal={showStaffModal}
+        setShowStaffModal={setShowStaffModal}
+        showNewBankModal={showNewBankModal}
+        setShowNewBankModal={setShowNewBankModal}
+        showTableRowModal={showTableRowModal}
+        setShowTableRowModal={setShowTableRowModal}
+        inspectTxn={inspectTxn}
+        setInspectTxn={setInspectTxn}
+        onPaymentRecorded={() => {
+          loadOverview();
+          if (activeTab === 'transactions') loadTransactions();
         }}
-      />
-
-      <TransactionDetailModal
-        transaction={inspectTxn}
-        onClose={() => setInspectTxn(null)}
+        onUpiSaved={loadUpi}
+        onStaffSaved={loadStaff}
+        onBankSaved={loadAccounts}
+        onTableSaved={loadTables}
       />
 
       {/* Global Notification Toast */}
-      {toast && (
-        <div className="fixed bottom-20 md:bottom-6 right-6 z-50 flex items-center gap-3 px-4 py-3 rounded-xl border border-border bg-card shadow-2xl animate-fade-in text-xs font-semibold text-card-foreground">
-          <div
-            className={`w-2 h-2 rounded-full ${
-              toast.type === 'error'
-                ? 'bg-destructive'
-                : toast.type === 'info'
-                ? 'bg-blue-500'
-                : 'bg-emerald-500'
-            }`}></div>
-          <span>{toast.message}</span>
-          <button
-            onClick={() => setToast(null)}
-            className="ml-2 text-muted-foreground hover:text-foreground">
-            ✕
-          </button>
-        </div>
-      )}
+      <Toast toast={toast} onClose={hideToast} />
     </div>
   );
 }

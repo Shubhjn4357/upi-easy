@@ -8,12 +8,13 @@ import type { UpiAccount } from '@/types';
 export interface UpiPageProps {
   upiAccounts: any[];
   canManageUpi?: boolean;
+  loading?: boolean;
   onOpenNewUpi: () => void;
   onSelectUpiAction: (upi: any, action: string) => void;
 }
 
 // UPI IDs & QR Codes Management Page using shadcn/ui with strict TypeScript types
-export function UpiPage({ upiAccounts, canManageUpi = true, onOpenNewUpi, onSelectUpiAction }: UpiPageProps) {
+export function UpiPage({ upiAccounts, canManageUpi = true, loading = false, onOpenNewUpi, onSelectUpiAction }: UpiPageProps) {
   return (
     <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
       {/* Header */}
@@ -38,8 +39,12 @@ export function UpiPage({ upiAccounts, canManageUpi = true, onOpenNewUpi, onSele
         )}
       </div>
 
-      {/* Empty State */}
-      {upiAccounts.length === 0 ? (
+      {loading ? (
+        <Card className="p-12 flex flex-col items-center justify-center text-center">
+          <div className="w-8 h-8 rounded-full border-2 border-brand-500 border-t-transparent animate-spin mb-3" />
+          <p className="text-xs text-muted-foreground font-medium">Loading UPI handles & QR counters...</p>
+        </Card>
+      ) : upiAccounts.length === 0 ? (
         <Card className="p-12 text-center flex flex-col items-center justify-center space-y-3">
           <div className="w-12 h-12 rounded-2xl bg-brand-500/10 text-brand-600 dark:text-cyan-400 flex items-center justify-center">
             <IconQrCode className="w-6 h-6" />
@@ -109,7 +114,6 @@ export function UpiPage({ upiAccounts, canManageUpi = true, onOpenNewUpi, onSele
                     size="sm"
                     onClick={() => onSelectUpiAction(upi, 'menu')}
                     className="rounded-xl gap-1 font-semibold">
-                    <span>Actions</span>
                     <IconMoreVertical className="w-3.5 h-3.5" />
                   </Button>
                 )}

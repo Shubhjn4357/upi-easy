@@ -29,23 +29,57 @@ export function parseJwtPayload(token: string | null | undefined): JwtPayload | 
   }
 }
 
+const TOKEN_KEY = 'upieasy_token';
+const REFRESH_TOKEN_KEY = 'upieasy_refresh_token';
+const USER_KEY = 'upieasy_user';
+const ACTIVE_ORG_KEY = 'upieasy_active_org_id';
+
+import { ENV } from '../services/env.service';
+
 export function isTokenExpired(token: string | null | undefined): boolean {
   const payload = parseJwtPayload(token);
   if (!payload || !payload.exp) return false;
-  // Buffer of 10 seconds to prevent edge-case race conditions
-  return Date.now() >= (payload.exp - 10) * 1000;
+  // Buffer of 15 seconds to prevent edge-case race conditions
+  return Date.now() >= (payload.exp - 15) * 1000;
+}
+
+export function getRefreshToken(): string {
+  return localStorage.getItem(REFRESH_TOKEN_KEY) || '';
+}
+
+export async function refreshAuthSession(): Promise<string | null> {
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) return null;
+  try {
+    const apiBase = ENV.API_BASE_URL || (typeof window !== 'undefined' ? window.location.origin : '');
+    const res = await fetch(`${apiBase}/api/v1/auth/refresh`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify({ refreshToken }),
+    });
+    if (!res.ok) {
+      clearAuth();
+      return null;
+    }
+    const data = await res.json();
+    if (data.success && data.tokens?.accessToken) {
+      saveAuth(data.tokens.accessToken, undefined, data.tokens.refreshToken || refreshToken);
+      return data.tokens.accessToken;
+    }
+  } catch {
+    // Network hiccup, keep existing token
+  }
+  return null;
 }
 
 export function getStoredAuth(): AuthState {
-  const token = localStorage.getItem('upieasy_token') || '';
+  const token = localStorage.getItem(TOKEN_KEY) || '';
   if (!token) return { token: '', user: null };
 
-  if (isTokenExpired(token)) {
-    clearAuth();
-    return { token: '', user: null };
-  }
-
-  const savedUser = localStorage.getItem('upieasy_user');
+  const savedUser = localStorage.getItem(USER_KEY);
   let user: User | null = null;
   try {
     user = savedUser ? JSON.parse(savedUser) : null;
@@ -56,15 +90,17 @@ export function getStoredAuth(): AuthState {
   return { token, user };
 }
 
-export function saveAuth(token?: string | null, user?: User | null): void {
-  if (token) localStorage.setItem('upieasy_token', token);
-  if (user) localStorage.setItem('upieasy_user', JSON.stringify(user));
+export function saveAuth(token?: string | null, user?: User | null, refreshToken?: string | null): void {
+  if (token) localStorage.setItem(TOKEN_KEY, token);
+  if (user) localStorage.setItem(USER_KEY, JSON.stringify(user));
+  if (refreshToken) localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
 }
 
 export function clearAuth(): void {
-  localStorage.removeItem('upieasy_token');
-  localStorage.removeItem('upieasy_user');
-  localStorage.removeItem('upieasy_active_org_id');
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(REFRESH_TOKEN_KEY);
+  localStorage.removeItem(USER_KEY);
+  localStorage.removeItem(ACTIVE_ORG_KEY);
 }
 
 export function sanitizeUrl(url?: string): string {

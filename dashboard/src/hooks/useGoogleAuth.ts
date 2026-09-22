@@ -2,11 +2,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { ENV } from '../services/env.service';
 import { AuthService } from '../services/auth.service';
-import type { User, Theme } from '../types';
+import type { User, Organization, Theme } from '../types';
 
 export interface UseGoogleAuthOptions {
   theme: Theme;
-  onSuccess: (token: string, user: User, defaultOrg?: Organization | null) => void;
+  onSuccess: (token: string, user: User, defaultOrg?: Organization | null, refreshToken?: string) => void;
 }
 
 export function useGoogleAuth({ theme, onSuccess }: UseGoogleAuthOptions) {
@@ -19,7 +19,7 @@ export function useGoogleAuth({ theme, onSuccess }: UseGoogleAuthOptions) {
     setError(null);
     try {
       const response = await AuthService.authenticateWithGoogleToken(idToken);
-      onSuccess(response.tokens.accessToken, response.user, response.defaultOrg);
+      onSuccess(response.tokens.accessToken, response.user, response.defaultOrg, response.tokens.refreshToken);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Google authentication failed';
       setError(message);
@@ -45,9 +45,12 @@ export function useGoogleAuth({ theme, onSuccess }: UseGoogleAuthOptions) {
                 await submitIdToken(response.credential);
               }
             },
-            auto_select: false,
-            cancel_on_tap_outside: true,
+            auto_select: true,
+            cancel_on_tap_outside: false,
           });
+
+          // Trigger One-tap auto sign-in prompt
+          window.google.accounts.id.prompt();
 
           if (buttonRef.current) {
             buttonRef.current.innerHTML = '';

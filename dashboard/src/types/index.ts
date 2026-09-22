@@ -177,7 +177,7 @@ export type Theme = 'light' | 'dark';
 
 // Page Props Interfaces
 export interface LoginPageProps {
-  onLoginSuccess: (token: string, user: User, defaultOrg?: Organization | null) => void;
+  onLoginSuccess: (token: string, user: User, defaultOrg?: Organization | null, refreshToken?: string) => void;
   theme: Theme;
   onToggleTheme: () => void;
   pingMs: number | null;
@@ -185,6 +185,7 @@ export interface LoginPageProps {
 
 export interface OverviewPageProps {
   stats: DashboardStats | null;
+  loading?: boolean;
   onOpenNewTxn: () => void;
   onOpenNewUpi: () => void;
   onNavigate: (tab: string) => void;
@@ -205,6 +206,8 @@ export interface TransactionsPageProps {
 
 export interface UpiPageProps {
   upiAccounts: UpiAccount[];
+  canManageUpi?: boolean;
+  loading?: boolean;
   onOpenNewUpi: () => void;
   onSelectUpiAction: (upi: UpiAccount, action: string) => void;
 }
@@ -213,12 +216,15 @@ export interface StaffPageProps {
   staffList: StaffMember[];
   invitesList: StaffInvite[];
   canManageStaff?: boolean;
+  loading?: boolean;
   onOpenInviteStaff: () => void;
   onSelectStaffAction: (action: string, staff: StaffMember | StaffInvite) => void;
 }
 
 export interface AccountsPageProps {
   bankAccounts: BankAccount[];
+  canManageAccounts?: boolean;
+  loading?: boolean;
   onOpenNewBank: () => void;
 }
 

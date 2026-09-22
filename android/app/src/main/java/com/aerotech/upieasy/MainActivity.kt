@@ -438,7 +438,6 @@ fun MainAppContent(
             composable(Screen.Dashboard.route) {
                 DashboardScreen(
                     sessionManager = sessionManager,
-                    database = database,
                     onNavigateToScan = onNavigateToScan,
                     onNavigateToQr = { onNavigateToQr(null, null) },
                     onNavigateToTransactions = { bottomNavController.navigate(Screen.Transactions.route) },

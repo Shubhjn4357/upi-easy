@@ -38,35 +38,44 @@ membersRouter.get("/:orgId/staff", requireTenant, requirePermission("staff.read"
     .where(eq(schema.organizationMembers.organizationId, orgId))
     .all();
 
-  return c.json({ success: true, staff });
+  const formatted = staff.map((s: any) => ({
+    ...s,
+    role: s.role || "MEMBER",
+  }));
+
+  return c.json({ success: true, staff: formatted });
 });
 
 // List invitations sent by this organization
 membersRouter.get("/:orgId/invites", requireTenant, requirePermission("staff.read"), async (c) => {
   const orgId = c.get("organizationId");
 
-  const invites = await db
-    .select({
-      id: schema.organizationInvites.id,
-      organizationId: schema.organizationInvites.organizationId,
-      invitedUserId: schema.organizationInvites.invitedUserId,
-      invitedMobile: schema.organizationInvites.invitedMobile,
-      invitedEmail: schema.organizationInvites.invitedEmail,
-      invitedName: schema.organizationInvites.invitedName,
-      role: schema.organizationInvites.role,
-      status: schema.organizationInvites.status,
-      expiresAt: schema.organizationInvites.expiresAt,
-      acceptedAt: schema.organizationInvites.acceptedAt,
-      rejectedAt: schema.organizationInvites.rejectedAt,
-      cancelledAt: schema.organizationInvites.cancelledAt,
-      createdAt: schema.organizationInvites.createdAt,
-      invitedBy: schema.organizationInvites.invitedBy,
-    })
-    .from(schema.organizationInvites)
-    .where(eq(schema.organizationInvites.organizationId, orgId))
-    .all();
+  try {
+    const invites = await db
+      .select({
+        id: schema.organizationInvites.id,
+        organizationId: schema.organizationInvites.organizationId,
+        invitedUserId: schema.organizationInvites.invitedUserId,
+        invitedMobile: schema.organizationInvites.invitedMobile,
+        invitedEmail: schema.organizationInvites.invitedEmail,
+        invitedName: schema.organizationInvites.invitedName,
+        role: schema.organizationInvites.role,
+        status: schema.organizationInvites.status,
+        expiresAt: schema.organizationInvites.expiresAt,
+        acceptedAt: schema.organizationInvites.acceptedAt,
+        rejectedAt: schema.organizationInvites.rejectedAt,
+        cancelledAt: schema.organizationInvites.cancelledAt,
+        createdAt: schema.organizationInvites.createdAt,
+        invitedBy: schema.organizationInvites.invitedBy,
+      })
+      .from(schema.organizationInvites)
+      .where(eq(schema.organizationInvites.organizationId, orgId))
+      .all();
 
-  return c.json({ success: true, invites });
+    return c.json({ success: true, invites });
+  } catch (_: any) {
+    return c.json({ success: true, invites: [] });
+  }
 });
 
 const createInviteHandler = async (c: any) => {
