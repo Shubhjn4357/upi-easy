@@ -62,7 +62,7 @@ export function SheetContent({
 export function SheetHeader({ className = '', children, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={`flex flex-col space-y-1.5 text-left mb-4 ${className}`}
+      className={`flex space-y-1.5 text-left mb-4 ${className}`}
       {...props}>
       {children}
     </div>
