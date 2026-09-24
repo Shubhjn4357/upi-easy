@@ -233,29 +233,33 @@ organizationsRouter.delete("/:orgId", requireTenant, async (c) => {
   const orgId = c.get("organizationId");
   const actorId = c.get("userId");
 
-  // Cascade delete dependent entities
-  await db.delete(schema.organizationMembers).where(eq(schema.organizationMembers.organizationId, orgId)).run();
-  await db.delete(schema.organizationInvites).where(eq(schema.organizationInvites.organizationId, orgId)).run();
-  await db.delete(schema.upiAccounts).where(eq(schema.upiAccounts.organizationId, orgId)).run();
-  await db.delete(schema.bankAccounts).where(eq(schema.bankAccounts.organizationId, orgId)).run();
-  await db.delete(schema.qrCodes).where(eq(schema.qrCodes.organizationId, orgId)).run();
-  await db.delete(schema.notificationPreferences).where(eq(schema.notificationPreferences.organizationId, orgId)).run();
-  await db.delete(schema.organizations).where(eq(schema.organizations.id, orgId)).run();
+  // Cascade delete dependent entities in correct foreign key order
+  try {
+    const orgTxs = await db.select({ id: schema.transactions.id }).from(schema.transactions).where(eq(schema.transactions.organizationId, orgId)).all();
+    for (const tx of orgTxs) {
+      await db.delete(schema.transactionEvents).where(eq(schema.transactionEvents.transactionId, tx.id)).run();
+      await db.delete(schema.transactionReferences).where(eq(schema.transactionReferences.transactionId, tx.id)).run();
+    }
+    await db.delete(schema.transactions).where(eq(schema.transactions.organizationId, orgId)).run();
+    await db.delete(schema.observedPaymentEvents).where(eq(schema.observedPaymentEvents.organizationId, orgId)).run();
+    await db.delete(schema.paymentAccounts).where(eq(schema.paymentAccounts.organizationId, orgId)).run();
+    await db.delete(schema.upiAccounts).where(eq(schema.upiAccounts.organizationId, orgId)).run();
+    await db.delete(schema.bankAccounts).where(eq(schema.bankAccounts.organizationId, orgId)).run();
+    await db.delete(schema.qrCodes).where(eq(schema.qrCodes.organizationId, orgId)).run();
+    await db.delete(schema.organizationInvites).where(eq(schema.organizationInvites.organizationId, orgId)).run();
+    await db.delete(schema.organizationMembers).where(eq(schema.organizationMembers.organizationId, orgId)).run();
+    await db.delete(schema.notifications).where(eq(schema.notifications.organizationId, orgId)).run();
+    await db.delete(schema.notificationPreferences).where(eq(schema.notificationPreferences.organizationId, orgId)).run();
+    await db.delete(schema.auditLogs).where(eq(schema.auditLogs.organizationId, orgId)).run();
+    await db.delete(schema.idempotencyKeys).where(eq(schema.idempotencyKeys.organizationId, orgId)).run();
+    await db.delete(schema.outboxEvents).where(eq(schema.outboxEvents.organizationId, orgId)).run();
+    await db.delete(schema.syncCursors).where(eq(schema.syncCursors.organizationId, orgId)).run();
+    await db.delete(schema.organizations).where(eq(schema.organizations.id, orgId)).run();
 
-  await db.insert(schema.auditLogs)
-    .values({
-      id: generateId("aud"),
-      organizationId: orgId,
-      actorId,
-      action: "organization.deleted",
-      resourceType: "organization",
-      resourceId: orgId,
-      metadataJson: JSON.stringify({ actorId, deletedAt: new Date().toISOString() }),
-      createdAt: new Date(),
-    })
-    .run();
-
-  return c.json({ success: true, message: "Organization and all associated data deleted successfully" });
+    return c.json({ success: true, message: "Organization and all associated data deleted successfully" });
+  } catch (err: any) {
+    return c.json({ success: false, error: { code: "DELETION_FAILED", message: err.message || "Failed to delete organization" } }, 500);
+  }
 });
 
 // Full App Setup Form (Business Name, Mobile, Primary UPI, Bank Account)

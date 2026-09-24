@@ -302,6 +302,20 @@ class MainActivity : FragmentActivity() {
                                     navController.navigate("main") {
                                         popUpTo("setup") { inclusive = true }
                                     }
+                                },
+                                onSignOut = {
+                                    scope.launch {
+                                        sessionManager.clearSession()
+                                        com.aerotech.upieasy.core.util.PaymentAlertManager.clearAlertHistory()
+                                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                            try {
+                                                database.clearAllTables()
+                                            } catch (_: Exception) {}
+                                        }
+                                        navController.navigate("auth") {
+                                            popUpTo(0) { inclusive = true }
+                                        }
+                                    }
                                 }
                             )
                         }

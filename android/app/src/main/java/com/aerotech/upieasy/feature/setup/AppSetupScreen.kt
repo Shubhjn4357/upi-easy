@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -52,7 +53,8 @@ data class DiscoveredUpi(
 @Composable
 fun AppSetupScreen(
     sessionManager: SessionManager,
-    onSetupComplete: () -> Unit
+    onSetupComplete: () -> Unit,
+    onSignOut: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -84,6 +86,10 @@ fun AppSetupScreen(
     var accountNumber by remember { mutableStateOf("") }
     var ifscCode by remember { mutableStateOf("") }
 
+    var isLoading by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var isSessionExpired by remember { mutableStateOf(false) }
+
     LaunchedEffect(savedMobileNumber) {
         val mobile = savedMobileNumber
         if (mobileNumber.isBlank() && !mobile.isNullOrBlank()) {
@@ -113,6 +119,9 @@ fun AppSetupScreen(
                     onSetupComplete()
                     return@LaunchedEffect
                 }
+            } else if (orgRes.code() == 401) {
+                errorMessage = "Your login session has expired or is invalid. Please sign in again."
+                isSessionExpired = true
             }
 
             // 2. Check if user has any pending invitations to auto-accept
@@ -147,9 +156,6 @@ fun AppSetupScreen(
             }
         } catch (_: Exception) {}
     }
-
-    var isLoading by remember { mutableStateOf(false) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
 
     // UPI Discovery Bottom Sheet
     var showUpiDrawer by remember { mutableStateOf(false) }
@@ -197,6 +203,15 @@ fun AppSetupScreen(
         topBar = {
             TopAppBar(
                 title = { Text("Business Setup & Onboarding", fontWeight = FontWeight.Bold) },
+                actions = {
+                    IconButton(onClick = onSignOut) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.Logout,
+                            contentDescription = "Sign Out / Switch Account",
+                            tint = MaterialTheme.colorScheme.onBackground
+                        )
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
             )
         },
@@ -618,8 +633,31 @@ fun AppSetupScreen(
                 }
             }
 
-            errorMessage?.let {
-                Text(text = it, color = FailedRed, style = MaterialTheme.typography.bodyMedium)
+            errorMessage?.let { msg ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = FailedRed.copy(alpha = 0.12f)),
+                    border = BorderStroke(1.dp, FailedRed.copy(alpha = 0.35f))
+                ) {
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(text = msg, color = FailedRed, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                        if (isSessionExpired) {
+                            Button(
+                                onClick = onSignOut,
+                                colors = ButtonDefaults.buttonColors(containerColor = FailedRed),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Sign In Again", fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
             }
 
             // Submit Button
@@ -678,9 +716,23 @@ fun AppSetupScreen(
                             } else {
                                 val errBody = res.errorBody()?.string()
                                 val parsedMsg = try {
-                                    org.json.JSONObject(errBody ?: "").optString("message", "")
+                                    val jsonObj = org.json.JSONObject(errBody ?: "")
+                                    val errObj = jsonObj.optJSONObject("error")
+                                    if (errObj != null) {
+                                        val msg = errObj.optString("message", "")
+                                        val details = errObj.optJSONObject("details")?.toString() ?: ""
+                                        if (msg.isNotBlank() && details.isNotBlank() && details != "{}") "$msg: $details" else msg
+                                    } else {
+                                        jsonObj.optString("message", "")
+                                    }
                                 } catch (_: Exception) { "" }
-                                errorMessage = if (parsedMsg.isNotBlank()) parsedMsg else (res.body()?.message ?: "Setup failed (${res.code()}). Please check your UPI address and details.")
+
+                                if (res.code() == 401) {
+                                    errorMessage = if (parsedMsg.isNotBlank()) "Authentication error: $parsedMsg. Please sign in again." else "Session expired or invalid (401). Please sign in again."
+                                    isSessionExpired = true
+                                } else {
+                                    errorMessage = if (parsedMsg.isNotBlank()) parsedMsg else (res.body()?.message ?: "Setup failed (${res.code()}). Please check your UPI address and details.")
+                                }
                             }
                         } catch (e: Exception) {
                             errorMessage = e.localizedMessage ?: "Failed to connect to backend server"

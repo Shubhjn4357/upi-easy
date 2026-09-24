@@ -134,51 +134,67 @@ usersRouter.patch("/", patchMeHandler);
 const deleteMeHandler = async (c: any) => {
   const userId = c.get("userId");
 
-  // 1. Revoke all active sessions
-  await db.update(schema.sessions)
-    .set({ isRevoked: true, updatedAt: new Date() })
-    .where(eq(schema.sessions.userId, userId))
-    .run();
-
-  // 2. Handle organizations owned by this user
-  const ownedOrgs = await db.select().from(schema.organizations).where(eq(schema.organizations.ownerId, userId)).all();
-  for (const org of ownedOrgs) {
-    try {
-      await db.delete(schema.transactions).where(eq(schema.transactions.organizationId, org.id)).run();
-      await db.delete(schema.upiAccounts).where(eq(schema.upiAccounts.organizationId, org.id)).run();
-      await db.delete(schema.bankAccounts).where(eq(schema.bankAccounts.organizationId, org.id)).run();
-      await db.delete(schema.qrCodes).where(eq(schema.qrCodes.organizationId, org.id)).run();
-      await db.delete(schema.organizationMembers).where(eq(schema.organizationMembers.organizationId, org.id)).run();
-      await db.delete(schema.auditLogs).where(eq(schema.auditLogs.organizationId, org.id)).run();
-      await db.delete(schema.idempotencyKeys).where(eq(schema.idempotencyKeys.organizationId, org.id)).run();
-      await db.delete(schema.organizations).where(eq(schema.organizations.id, org.id)).run();
-    } catch (_: any) {}
-  }
-
-  // 3. Clear audit logs and member invites where this user is referenced
   try {
-    await db.update(schema.auditLogs).set({ actorId: null }).where(eq(schema.auditLogs.actorId, userId)).run();
+    // 1. Find organizations owned by this user
+    const ownedOrgs = await db.select({ id: schema.organizations.id }).from(schema.organizations).where(eq(schema.organizations.ownerId, userId)).all();
+    for (const org of ownedOrgs) {
+      const orgId = org.id;
+      // Delete transaction events & references first
+      const orgTxs = await db.select({ id: schema.transactions.id }).from(schema.transactions).where(eq(schema.transactions.organizationId, orgId)).all();
+      for (const tx of orgTxs) {
+        await db.delete(schema.transactionEvents).where(eq(schema.transactionEvents.transactionId, tx.id)).run();
+        await db.delete(schema.transactionReferences).where(eq(schema.transactionReferences.transactionId, tx.id)).run();
+      }
+      await db.delete(schema.transactions).where(eq(schema.transactions.organizationId, orgId)).run();
+      await db.delete(schema.observedPaymentEvents).where(eq(schema.observedPaymentEvents.organizationId, orgId)).run();
+      await db.delete(schema.paymentAccounts).where(eq(schema.paymentAccounts.organizationId, orgId)).run();
+      await db.delete(schema.upiAccounts).where(eq(schema.upiAccounts.organizationId, orgId)).run();
+      await db.delete(schema.bankAccounts).where(eq(schema.bankAccounts.organizationId, orgId)).run();
+      await db.delete(schema.qrCodes).where(eq(schema.qrCodes.organizationId, orgId)).run();
+      await db.delete(schema.organizationInvites).where(eq(schema.organizationInvites.organizationId, orgId)).run();
+      await db.delete(schema.organizationMembers).where(eq(schema.organizationMembers.organizationId, orgId)).run();
+      await db.delete(schema.notifications).where(eq(schema.notifications.organizationId, orgId)).run();
+      await db.delete(schema.notificationPreferences).where(eq(schema.notificationPreferences.organizationId, orgId)).run();
+      await db.delete(schema.auditLogs).where(eq(schema.auditLogs.organizationId, orgId)).run();
+      await db.delete(schema.idempotencyKeys).where(eq(schema.idempotencyKeys.organizationId, orgId)).run();
+      await db.delete(schema.outboxEvents).where(eq(schema.outboxEvents.organizationId, orgId)).run();
+      await db.delete(schema.syncCursors).where(eq(schema.syncCursors.organizationId, orgId)).run();
+      await db.delete(schema.organizations).where(eq(schema.organizations.id, orgId)).run();
+    }
+
+    // 2. Remove references from any other organizations where this user was a member/invitee
+    await db.delete(schema.organizationMembers).where(eq(schema.organizationMembers.userId, userId)).run();
     await db.update(schema.organizationMembers).set({ invitedBy: null }).where(eq(schema.organizationMembers.invitedBy, userId)).run();
-  } catch (_: any) {}
-
-  // 4. Remove organization memberships
-  await db.delete(schema.organizationMembers)
-    .where(eq(schema.organizationMembers.userId, userId))
-    .run();
-
-  // 5. Delete devices & user record (cascading to devices & sessions)
-  try {
-    await db.delete(schema.devices).where(eq(schema.devices.userId, userId)).run();
+    await db.delete(schema.organizationInvites).where(eq(schema.organizationInvites.invitedUserId, userId)).run();
+    await db.delete(schema.organizationInvites).where(eq(schema.organizationInvites.invitedBy, userId)).run();
+    await db.update(schema.auditLogs).set({ actorId: null }).where(eq(schema.auditLogs.actorId, userId)).run();
+    await db.delete(schema.notifications).where(eq(schema.notifications.userId, userId)).run();
+    await db.delete(schema.notificationPreferences).where(eq(schema.notificationPreferences.userId, userId)).run();
+    await db.delete(schema.syncCursors).where(eq(schema.syncCursors.userId, userId)).run();
     await db.delete(schema.sessions).where(eq(schema.sessions.userId, userId)).run();
-  } catch (_: any) {}
+    await db.delete(schema.devices).where(eq(schema.devices.userId, userId)).run();
 
-  await db.delete(schema.users).where(eq(schema.users.id, userId)).run();
+    // 3. Delete user record
+    await db.delete(schema.users).where(eq(schema.users.id, userId)).run();
 
-  return c.json({
-    success: true,
-    message: "User account and all associated sessions deleted successfully",
-  });
+    return c.json({
+      success: true,
+      message: "User account and all associated sessions deleted successfully",
+    });
+  } catch (err: any) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "DELETION_FAILED",
+          message: err.message || "Failed to delete account completely",
+        },
+      },
+      500
+    );
+  }
 };
 
 usersRouter.delete("/me", deleteMeHandler);
 usersRouter.delete("/", deleteMeHandler);
+

@@ -5,7 +5,7 @@ compatibility_flags = ["nodejs_compat"]
 
 [vars]
 NODE_ENV = "production"
-JWT_EXPIRY = "15m"
+JWT_EXPIRY = "7d"
 REFRESH_TOKEN_EXPIRY = "30d"
 GOOGLE_WEB_CLIENT_ID = "332345540842-ks8bq4csr4lklkvv3tesgkig2b221m23.apps.googleusercontent.com"
 API_BASE_URL = "https://upi-easy-api.aerotech.workers.dev"

@@ -167,6 +167,10 @@ class OrganizationRepository(
         }
 
         if (org != null) {
+            val allOrgs = organizationDao.getOrganizations()
+            if (allOrgs.isNotEmpty()) {
+                organizationDao.insertOrganizations(allOrgs.map { it.copy(isCurrent = it.id == organizationId) })
+            }
             sessionManager.setOrganization(
                 orgId = org.id,
                 orgName = org.name,

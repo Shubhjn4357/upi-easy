@@ -302,7 +302,7 @@ authRouter.post("/google", async (c) => {
     tokens: {
       accessToken,
       refreshToken,
-      expiresIn: 900,
+      expiresIn: 604800,
     },
     isSetupComplete,
     defaultOrg,
@@ -353,7 +353,7 @@ authRouter.post("/refresh", async (c) => {
     success: true,
     tokens: {
       accessToken,
-      expiresIn: 900,
+      expiresIn: 604800,
     },
   });
 });
