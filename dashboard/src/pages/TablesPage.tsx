@@ -69,19 +69,27 @@ export function TablesPage({
 
       {/* Table Selector Pills */}
       <div className="flex items-center gap-2 overflow-x-auto pb-2">
-        {tables.map((t: any) => (
-          <Button
-            key={t.name}
-            variant={selectedTable === t.name ? 'default' : 'secondary'}
-            size="sm"
-            onClick={() => onSelectTable(t.name)}
-            className="rounded-xl whitespace-nowrap gap-2 font-mono text-xs">
-            <span>{t.name}</span>
-            <Badge variant="outline" className="px-1.5 py-0 text-[10px] font-mono">
-              {t.rowCount ?? 0}
-            </Badge>
-          </Button>
-        ))}
+        {tables.length === 0 ? (
+          <div className="flex items-center gap-2 py-1">
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <div key={i} className="h-8 w-28 bg-muted/50 rounded-xl animate-pulse" />
+            ))}
+          </div>
+        ) : (
+          tables.map((t: any) => (
+            <Button
+              key={t.name}
+              variant={selectedTable === t.name ? 'default' : 'secondary'}
+              size="sm"
+              onClick={() => onSelectTable(t.name)}
+              className="rounded-xl whitespace-nowrap gap-2 font-mono text-xs">
+              <span>{t.name}</span>
+              <Badge variant="outline" className="px-1.5 py-0 text-[10px] font-mono">
+                {t.rowCount ?? 0}
+              </Badge>
+            </Button>
+          ))
+        )}
       </div>
 
       {/* Table Card */}
@@ -128,15 +136,22 @@ export function TablesPage({
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow>
-                  <TableCell colSpan={20} className="py-8 text-center text-muted-foreground">
-                    Loading {selectedTable}...
-                  </TableCell>
-                </TableRow>
+                Array.from({ length: 5 }).map((_, i) => (
+                  <TableRow key={i}>
+                    {Array.from({ length: Math.max(tableData?.columns?.length || 5, 4) }).map((_, j) => (
+                      <TableCell key={j} className="py-4">
+                        <div className="h-4 bg-muted/60 rounded animate-pulse w-24" />
+                      </TableCell>
+                    ))}
+                    <TableCell className="text-right py-4">
+                      <div className="h-6 w-16 bg-muted/60 rounded animate-pulse ml-auto" />
+                    </TableCell>
+                  </TableRow>
+                ))
               ) : (tableData?.rows || []).length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={20} className="py-8 text-center text-muted-foreground">
-                    No records found.
+                  <TableCell colSpan={Math.max((tableData?.columns?.length || 0) + 1, 1)} className="py-8 text-center text-muted-foreground">
+                    No records found in {selectedTable}.
                   </TableCell>
                 </TableRow>
               ) : (
@@ -166,7 +181,6 @@ export function TablesPage({
                           size="sm"
                           onClick={() => onSelectRowAction(row, selectedTable, tableData.columns)}
                           className="rounded-lg h-7 px-2.5 text-[11px] font-semibold gap-1">
-                          <span>Actions</span>
                           <IconMoreVertical className="w-3 h-3" />
                         </Button>
                       </TableCell>

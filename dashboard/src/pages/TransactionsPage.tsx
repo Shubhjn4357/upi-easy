@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import { IconPlus, IconDownload, IconSearch, IconRefreshCw, IconMoreVertical } from '@/components/ui/icons';
+import { TransactionsPageSkeleton } from '@/components/ui/Skeleton';
 import type { Transaction, TransactionsPageProps } from '@/types';
 
 // Transactions & Ledger Explorer Page using shadcn/ui & Action Bottom Sheet with strict TypeScript types
@@ -19,6 +20,10 @@ export function TransactionsPage({
   onOpenNewTxn,
   onSelectTxnAction,
 }: TransactionsPageProps) {
+  if (loading && transactions.length === 0) {
+    return <TransactionsPageSkeleton />;
+  }
+
   return (
     <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
       {/* Header */}
@@ -174,7 +179,7 @@ export function TransactionsPage({
                       size="sm"
                       onClick={() => onSelectTxnAction('options', txn)}
                       className="rounded-lg h-7 px-2.5 text-xs gap-1">
-                      <span>Options</span>
+                      
                       <IconMoreVertical className="w-3 h-3" />
                     </Button>
                   </TableCell>

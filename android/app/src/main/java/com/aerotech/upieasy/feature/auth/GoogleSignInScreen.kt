@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.aerotech.upieasy.BuildConfig
 import com.aerotech.upieasy.core.network.GoogleLoginRequest
+import com.aerotech.upieasy.core.network.UpdateProfileRequest
 import com.aerotech.upieasy.core.network.NetworkClient
 import com.aerotech.upieasy.core.security.SessionManager
 import com.aerotech.upieasy.ui.theme.*
@@ -72,16 +73,26 @@ fun GoogleSignInScreen(
                             )
                         )
 
-                        if (res.isSuccessful && res.body()?.success == true) {
-                            val body = res.body()!!
+                        val resBody = res.body()
+                        if (res.isSuccessful && resBody?.success == true) {
+                            val body = resBody
+                            val resolvedAvatar = body.user.avatarUrl?.takeIf { it.isNotBlank() } ?: googleAuth.profilePictureUri
                             sessionManager.saveSession(
                                 accessToken = body.tokens.accessToken,
                                 refreshToken = body.tokens.refreshToken,
                                 userId = body.user.id,
                                 mobileNumber = body.user.mobileNumber ?: "",
                                 email = body.user.email,
-                                fullName = body.user.fullName
+                                fullName = body.user.fullName,
+                                avatarUrl = resolvedAvatar
                             )
+
+                            // Proactively sync avatar to backend if missing on profile
+                            if (body.user.avatarUrl.isNullOrBlank() && !googleAuth.profilePictureUri.isNullOrBlank()) {
+                                try {
+                                    apiService.updateProfile(UpdateProfileRequest(avatarUrl = googleAuth.profilePictureUri))
+                                } catch (_: Exception) {}
+                            }
 
                             body.defaultOrg?.let { org ->
                                 sessionManager.setOrganization(

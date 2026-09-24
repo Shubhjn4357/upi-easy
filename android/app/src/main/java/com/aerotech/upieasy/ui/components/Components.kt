@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.aerotech.upieasy.core.ui.UserAvatar
 import com.aerotech.upieasy.core.util.HapticHelper
 import com.aerotech.upieasy.core.util.PaymentAlert
 import com.aerotech.upieasy.domain.model.Transaction
@@ -190,7 +191,8 @@ fun UpieasyTopBar(
     onMenuLegalClick: () -> Unit = {},
     onMenuLogoutClick: () -> Unit = {},
     userName: String? = null,
-    organizationName: String? = null
+    organizationName: String? = null,
+    avatarUrl: String? = null
 ) {
     val context = LocalContext.current
     var showMenu by remember { mutableStateOf(false) }
@@ -289,15 +291,11 @@ fun UpieasyTopBar(
             }
 
             Box {
-                Box(
+                UserAvatar(
+                    avatarUrl = avatarUrl,
+                    name = userName ?: avatarInitial,
+                    size = 40.dp,
                     modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(
-                            Brush.linearGradient(
-                                colors = avatarGradientColors
-                            )
-                        )
                         .border(
                             1.dp,
                             if (isDark) Color(0xFF818CF8).copy(alpha = 0.4f) else Color.White.copy(alpha = 0.6f),
@@ -306,16 +304,8 @@ fun UpieasyTopBar(
                         .clickable {
                             HapticHelper.performHaptic(context, HapticHelper.FeedbackType.LIGHT)
                             showMenu = true
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = avatarInitial.uppercase(),
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp
-                    )
-                }
+                        }
+                )
 
                 DropdownMenu(
                     expanded = showMenu,

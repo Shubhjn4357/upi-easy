@@ -41,6 +41,7 @@ import com.aerotech.upieasy.feature.notifications.AndroidPaymentAppDetector
 import com.aerotech.upieasy.feature.notifications.PaymentAppDefinition
 import com.aerotech.upieasy.feature.notifications.supportedPaymentApps
 import com.aerotech.upieasy.feature.settings.isNotificationAccessGranted
+import com.aerotech.upieasy.core.ui.UpiScreenSkeleton
 import com.aerotech.upieasy.ui.components.PaymentAppSelector
 import com.aerotech.upieasy.ui.components.UpieasyPullToRefreshContainer
 import com.aerotech.upieasy.ui.components.SwipeToDeleteContainer
@@ -75,6 +76,13 @@ fun UpiScreen(
     }.collectAsState(initial = emptyList())
 
     val paymentAccountRepo = remember { PaymentAccountRepository(context, apiService, database, sessionManager) }
+    val paymentAccounts by remember(currentOrgId) {
+        if (!currentOrgId.isNullOrBlank()) {
+            paymentAccountRepo.observePaymentAccounts(currentOrgId!!)
+        } else {
+            kotlinx.coroutines.flow.flowOf(emptyList())
+        }
+    }.collectAsState(initial = emptyList())
     val detector = remember { AndroidPaymentAppDetector(context) }
     var isNotificationActive by remember { mutableStateOf(isNotificationAccessGranted(context)) }
     var showNotificationGuidanceDialog by remember { mutableStateOf(false) }
@@ -251,9 +259,7 @@ fun UpiScreen(
             )
 
             if (isLoading && effectiveList.isEmpty()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = BrandAccent)
-                }
+                UpiScreenSkeleton()
             } else if (effectiveList.isEmpty()) {
                 Box(
                     modifier = Modifier
@@ -329,59 +335,58 @@ fun UpiScreen(
                         contentPadding = PaddingValues(top = 8.dp, bottom = 100.dp)
                     ) {
                     if (!isSelectionMode) {
-                        // Payment Detection Status Card (Section 36 & 59)
-                        item {
-                            Surface(
-                                shape = RoundedCornerShape(18.dp),
-                                color = if (isNotificationActive) Color(0xFFEDE7F6) else Color(0xFFFFF3E0),
-                                border = BorderStroke(
-                                    1.dp,
-                                    if (isNotificationActive) Color(0xFFD1C4E9) else Color(0xFFFFCC80)
-                                ),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { onNavigateToPaymentDetection() }
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(14.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+                        if (!isNotificationActive) {
+                            // Payment Detection Inactive Warning Card
+                            item {
+                                Surface(
+                                    shape = RoundedCornerShape(18.dp),
+                                    color = MaterialTheme.colorScheme.errorContainer,
+                                    border = BorderStroke(
+                                        1.dp,
+                                        MaterialTheme.colorScheme.error.copy(alpha = 0.25f)
+                                    ),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { onNavigateToPaymentDetection() }
                                 ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(36.dp)
-                                            .clip(CircleShape)
-                                            .background(if (isNotificationActive) Color(0xFF673AB7) else Color(0xFFE65100)),
-                                        contentAlignment = Alignment.Center
+                                    Row(
+                                        modifier = Modifier.padding(14.dp),
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(38.dp)
+                                                .clip(CircleShape)
+                                                .background(MaterialTheme.colorScheme.error),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.NotificationsOff,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.onError,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.width(12.dp))
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = "Payment Detection Disabled",
+                                                style = MaterialTheme.typography.titleSmall,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onErrorContainer
+                                            )
+                                            Text(
+                                                text = "Tap to configure payment apps and grant notification access",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.85f)
+                                            )
+                                        }
                                         Icon(
-                                            imageVector = if (isNotificationActive) Icons.Default.NotificationsActive else Icons.Default.NotificationsOff,
+                                            imageVector = Icons.Default.ChevronRight,
                                             contentDescription = null,
-                                            tint = Color.White,
-                                            modifier = Modifier.size(18.dp)
+                                            tint = MaterialTheme.colorScheme.onErrorContainer
                                         )
                                     }
-                                    Spacer(modifier = Modifier.width(12.dp))
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = if (isNotificationActive) "Payment Detection Active" else "Payment Detection Disabled",
-                                            style = MaterialTheme.typography.titleSmall,
-                                            fontWeight = FontWeight.Bold,
-                                            color = if (isNotificationActive) Color(0xFF4527A0) else Color(0xFFBF360C)
-                                        )
-                                        Text(
-                                            text = if (isNotificationActive)
-                                                "Observing PhonePe & Google Pay payment notifications"
-                                            else
-                                                "Tap to configure payment apps and grant notification access",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                    Icon(
-                                        imageVector = Icons.Default.ChevronRight,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
                                 }
                             }
                         }
@@ -885,6 +890,18 @@ fun UpiScreen(
         var isEditSubmitting by remember { mutableStateOf(false) }
         var editErrorMessage by remember { mutableStateOf<String?>(null) }
 
+        val installedApps = remember { detector.getInstalledSupportedApps() }
+        val existingPaymentAccount = remember(editingAccount.vpa, paymentAccounts) {
+            paymentAccounts.firstOrNull { it.upiId.equals(editingAccount.vpa, ignoreCase = true) }
+        }
+        var editSelectedPaymentApp by remember(accountToEdit) {
+            val matchingApp = existingPaymentAccount?.let { acc ->
+                installedApps.firstOrNull { it.packageName == acc.paymentAppPackage || it.id == acc.paymentAppId }
+                    ?: supportedPaymentApps.firstOrNull { it.packageName == acc.paymentAppPackage || it.id == acc.paymentAppId }
+            }
+            mutableStateOf(matchingApp ?: installedApps.firstOrNull())
+        }
+
         ModalBottomSheet(
             onDismissRequest = {
                 showEditBottomSheet = false
@@ -922,9 +939,17 @@ fun UpiScreen(
                 }
 
                 Text(
-                    text = "Update the UPI VPA address or merchant payee name. Linked QR codes will automatically be updated.",
+                    text = "Update the UPI VPA address or merchant payee name and select the installed payment app to observe incoming notifications.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                // App Selector for payment detection
+                PaymentAppSelector(
+                    installedApps = installedApps,
+                    allSupportedApps = supportedPaymentApps,
+                    selectedApp = editSelectedPaymentApp,
+                    onAppSelected = { editSelectedPaymentApp = it }
                 )
 
                 OutlinedTextField(
@@ -1009,6 +1034,16 @@ fun UpiScreen(
                                     )
 
                                     if (res.isSuccessful && res.body()?.success == true) {
+                                        // Update or link payment account with selected app
+                                        editSelectedPaymentApp?.let { app ->
+                                            paymentAccountRepo.createPaymentAccount(
+                                                orgId = orgId,
+                                                label = trimmedPayee.ifBlank { "${app.displayName} Account" },
+                                                upiId = trimmedVpa,
+                                                paymentApp = app
+                                            )
+                                        }
+
                                         withContext(Dispatchers.IO) {
                                             if (editSetAsDefault) {
                                                 database.upiDao().clearDefaultUpi(orgId)
@@ -1024,6 +1059,10 @@ fun UpiScreen(
                                         showEditBottomSheet = false
                                         accountToEdit = null
                                         refresh()
+
+                                        if (!isNotificationAccessGranted(context) && editSelectedPaymentApp != null) {
+                                            showNotificationGuidanceDialog = true
+                                        }
                                         Toast.makeText(context, "UPI ID updated successfully", Toast.LENGTH_SHORT).show()
                                     } else {
                                         editErrorMessage = res.body()?.message ?: "Failed to update UPI ID"

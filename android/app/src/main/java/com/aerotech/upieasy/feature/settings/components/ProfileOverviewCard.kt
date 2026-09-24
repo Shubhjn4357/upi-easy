@@ -19,6 +19,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.aerotech.upieasy.core.ui.UserAvatar
 import com.aerotech.upieasy.ui.theme.*
 
 @Composable
@@ -32,7 +33,8 @@ fun ProfileOverviewCard(
     currentOrgPan: String?,
     currentOrgGstin: String?,
     onEditClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    avatarUrl: String? = null
 ) {
     SettingsBentoCard(modifier = modifier) {
         // User Identity Row
@@ -40,20 +42,12 @@ fun ProfileOverviewCard(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
-                modifier = Modifier
-                    .size(52.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(PastelIndigoBg),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = (userName?.take(1) ?: userEmail?.take(1) ?: "M").uppercase(),
-                    color = BrandPrimary,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 22.sp
-                )
-            }
+            UserAvatar(
+                avatarUrl = avatarUrl,
+                name = userName ?: userEmail,
+                size = 52.dp,
+                shape = RoundedCornerShape(16.dp)
+            )
             Spacer(modifier = Modifier.width(14.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(

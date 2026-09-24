@@ -5,27 +5,34 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- Squircle Card Background Plate -->
+    <!-- Soft Ambient Halo Plate for Depth on White Background -->
     <path
-        android:fillColor="#111C38"
-        android:strokeColor="#203056"
-        android:strokeWidth="1.2"
-        android:pathData="M41,25 L67,25 A16,16 0 0,1 83,41 L83,67 A16,16 0 0,1 67,83 L41,83 A16,16 0 0,1 25,67 L25,41 A16,16 0 0,1 41,25 Z" />
+        android:fillColor="#F8FAFC"
+        android:pathData="M54,16 A38,38 0 1,1 53.9,16 Z" />
 
-    <!-- Dynamic UPI Forward Chevron 1: Saffron Orange -->
+    <!-- Left Wing of "U": Smooth Curvy Saffron Ribbon -->
     <path
         android:strokeColor="#FF7A00"
-        android:strokeWidth="3.8"
+        android:strokeWidth="11"
         android:strokeLineCap="round"
         android:strokeLineJoin="round"
-        android:pathData="M55,40 L65,54 L55,68" />
+        android:pathData="M37,33 L37,53 C37,66 45,74 54.5,74" />
 
-    <!-- Dynamic UPI Forward Chevron 2: Emerald Green -->
+    <!-- Right Wing of "U": Smooth Curvy Royal Blue Ribbon -->
     <path
-        android:strokeColor="#00C853"
-        android:strokeWidth="3.8"
+        android:strokeColor="#2563EB"
+        android:strokeWidth="11"
         android:strokeLineCap="round"
         android:strokeLineJoin="round"
-        android:pathData="M63,40 L73,54 L63,68" />
+        android:pathData="M53.5,74 C63,74 71,66 71,53 L71,33" />
+
+    <!-- Verified Payment Success Symbol: Smooth Curvy Emerald Green Checkmark -->
+    <path
+        android:strokeColor="#00A859"
+        android:strokeWidth="5.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M46,50 L52,56 L62,44" />
 
 </vector>
+

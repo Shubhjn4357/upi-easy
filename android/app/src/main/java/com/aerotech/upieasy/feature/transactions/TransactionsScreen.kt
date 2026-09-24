@@ -36,12 +36,17 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.PlatformTextStyle
 import com.aerotech.upieasy.core.database.AppDatabase
 import com.aerotech.upieasy.core.network.NetworkClient
 import com.aerotech.upieasy.core.security.SessionManager
+import com.aerotech.upieasy.core.ui.UserAvatar
 import com.aerotech.upieasy.core.util.HapticHelper
+import com.aerotech.upieasy.core.util.StatementExporter
 import com.aerotech.upieasy.data.repository.TransactionRepository
 import com.aerotech.upieasy.domain.model.Transaction
+import com.aerotech.upieasy.core.ui.TransactionsSkeleton
 import com.aerotech.upieasy.ui.components.UpieasyPullToRefreshContainer
 import com.aerotech.upieasy.ui.components.SwipeToDeleteContainer
 import com.aerotech.upieasy.ui.components.UpieasyConfirmBottomDrawer
@@ -102,10 +107,12 @@ fun TransactionsScreen(
     val userName by sessionManager.userNameFlow.collectAsState(initial = null)
     val userEmail by sessionManager.userEmailFlow.collectAsState(initial = null)
     val userRole by sessionManager.userRoleFlow.collectAsState(initial = null)
+    val userAvatarUrl by sessionManager.userAvatarUrlFlow.collectAsState(initial = null)
 
     var searchQuery by remember { mutableStateOf("") }
     var selectedStatus by remember { mutableStateOf<String?>(null) }
     var selectedCategory by remember { mutableStateOf<String?>(null) }
+    var amountRangeSlider by remember { mutableStateOf(0f..50000f) }
     var selectedAmountRange by remember { mutableStateOf<String?>(null) }
     var selectedDatePreset by remember { mutableStateOf<String?>(null) }
 
@@ -116,12 +123,14 @@ fun TransactionsScreen(
     var txnToDelete by remember { mutableStateOf<Transaction?>(null) }
     val scope = rememberCoroutineScope()
     var isRefreshing by remember { mutableStateOf(false) }
+    var isInitialLoading by remember { mutableStateOf(true) }
 
     val transactionsList by repository.getTransactionsFlow(currentOrgId ?: "").collectAsState(initial = emptyList())
 
     LaunchedEffect(currentOrgId) {
         currentOrgId?.let {
             repository.refreshTransactions(it)
+            isInitialLoading = false
         }
     }
 
@@ -132,6 +141,7 @@ fun TransactionsScreen(
         selectedStatus,
         selectedCategory,
         selectedAmountRange,
+        amountRangeSlider,
         selectedDatePreset
     ) {
         val now = System.currentTimeMillis()
@@ -151,13 +161,8 @@ fun TransactionsScreen(
             }
             val matchesCategory = selectedCategory == null || cat.equals(selectedCategory, ignoreCase = true)
 
-            val matchesAmount = when (selectedAmountRange) {
-                "UNDER_500" -> txn.amount < 500
-                "500_2000" -> txn.amount in 500.0..2000.0
-                "2000_10000" -> txn.amount in 2000.0..10000.0
-                "ABOVE_10000" -> txn.amount > 10000
-                else -> true
-            }
+            val matchesAmount = (txn.amount >= amountRangeSlider.start) &&
+                    (amountRangeSlider.endInclusive >= 50000f || txn.amount <= amountRangeSlider.endInclusive)
 
             val matchesDate = when (selectedDatePreset) {
                 "TODAY" -> (now - txn.occurredAt) < 24L * 3600 * 1000
@@ -195,29 +200,16 @@ fun TransactionsScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    // Real Profile Avatar with initials and vibrant gradient
-                    Box(
-                        modifier = Modifier
-                            .size(42.dp)
-                            .clip(CircleShape)
-                            .background(
-                                Brush.linearGradient(
-                                    colors = listOf(BrandGradientStart, BrandGradientEnd)
-                                )
-                            )
-                            .clickable {
-                                HapticHelper.performHaptic(context, HapticHelper.FeedbackType.LIGHT)
-                                showProfileSheet = true
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = (userName?.take(1) ?: "M").uppercase(),
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 17.sp
-                        )
-                    }
+                    // Real Profile Avatar with Google profile picture fallback to vibrant initials
+                    UserAvatar(
+                        avatarUrl = userAvatarUrl,
+                        name = userName,
+                        size = 42.dp,
+                        modifier = Modifier.clickable {
+                            HapticHelper.performHaptic(context, HapticHelper.FeedbackType.LIGHT)
+                            showProfileSheet = true
+                        }
+                    )
 
                     Spacer(modifier = Modifier.width(14.dp))
 
@@ -414,7 +406,9 @@ fun TransactionsScreen(
             Spacer(modifier = Modifier.height(4.dp))
 
             // Main Grouped Transactions LazyColumn (Matches Image 2)
-            if (monthlyGroups.isEmpty()) {
+            if (isInitialLoading && transactionsList.isEmpty()) {
+                TransactionsSkeleton()
+            } else if (monthlyGroups.isEmpty()) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -532,6 +526,7 @@ fun TransactionsScreen(
                         selectedStatus = null
                         selectedCategory = null
                         selectedAmountRange = null
+                        amountRangeSlider = 0f..50000f
                         selectedDatePreset = null
                     }) {
                         Text("Reset All", color = FailedRed, fontWeight = FontWeight.SemiBold)
@@ -597,9 +592,50 @@ fun TransactionsScreen(
                     }
                 }
 
-                // 3. Amount Range Section
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Amount Range", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                // 3. Amount Range Section with RangeSlider and Quick Presets
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Amount Range",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = "₹${amountRangeSlider.start.toInt()} – ${if (amountRangeSlider.endInclusive >= 50000f) "₹50,000+" else "₹${amountRangeSlider.endInclusive.toInt()}"}",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    RangeSlider(
+                        value = amountRangeSlider,
+                        onValueChange = { range ->
+                            amountRangeSlider = range
+                            selectedAmountRange = "CUSTOM"
+                        },
+                        valueRange = 0f..50000f,
+                        colors = SliderDefaults.colors(
+                            thumbColor = MaterialTheme.colorScheme.primary,
+                            activeTrackColor = MaterialTheme.colorScheme.primary,
+                            inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("₹0", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("₹50,000+", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+
                     val amountRanges = listOf(
                         null to "Any Amount",
                         "UNDER_500" to "Under ₹500",
@@ -612,12 +648,19 @@ fun TransactionsScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         items(amountRanges) { (rangeKey, rangeLabel) ->
-                            val isSelected = selectedAmountRange == rangeKey
+                            val isSelected = selectedAmountRange == rangeKey || (rangeKey == null && selectedAmountRange == null && amountRangeSlider.start == 0f && amountRangeSlider.endInclusive >= 50000f)
                             FilterChip(
                                 selected = isSelected,
                                 onClick = {
                                     HapticHelper.performHaptic(context, HapticHelper.FeedbackType.LIGHT)
                                     selectedAmountRange = rangeKey
+                                    amountRangeSlider = when (rangeKey) {
+                                        "UNDER_500" -> 0f..500f
+                                        "500_2000" -> 500f..2000f
+                                        "2000_10000" -> 2000f..10000f
+                                        "ABOVE_10000" -> 10000f..50000f
+                                        else -> 0f..50000f
+                                    }
                                 },
                                 label = { Text(rangeLabel, fontSize = 12.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
                                 shape = RoundedCornerShape(10.dp)
@@ -810,54 +853,32 @@ fun TransactionsScreen(
                     onClick = {
                         try {
                             HapticHelper.performHaptic(context, HapticHelper.FeedbackType.MEDIUM)
-                            val fileExt = if (exportFormat == "CSV") "csv" else "txt"
-                            val fileName = "UPIEasy_Statement_${System.currentTimeMillis()}.$fileExt"
-                            val cacheFile = File(context.cacheDir, fileName)
+                            val merchantName = userName ?: "Merchant"
+                            val orgName = currentOrgName ?: "UPIEasy Merchant"
 
-                            val contentBuilder = StringBuilder()
-                            if (exportFormat == "CSV") {
-                                contentBuilder.append("Date,Payee Name,UPI Handle,Payer,Amount,Status,Ref RRN,Note\n")
-                                exportTransactions.forEach { t ->
-                                    contentBuilder.append("\"${formatTransactionTime(t.occurredAt)}\",")
-                                    contentBuilder.append("\"${t.payeeName}\",")
-                                    contentBuilder.append("\"${t.payeeVpa}\",")
-                                    contentBuilder.append("\"${t.payerName ?: ""}\",")
-                                    contentBuilder.append("${t.amount},")
-                                    contentBuilder.append("\"${t.status}\",")
-                                    contentBuilder.append("\"${t.referenceNumber ?: ""}\",")
-                                    contentBuilder.append("\"${t.note ?: ""}\"\n")
-                                }
+                            val file = if (exportFormat == "CSV") {
+                                StatementExporter.generateCsv(context, exportTransactions)
                             } else {
-                                contentBuilder.append("=========================================\n")
-                                contentBuilder.append("         UPIEASY PAYMENT STATEMENT       \n")
-                                contentBuilder.append("=========================================\n")
-                                contentBuilder.append("Merchant: ${userName ?: "Merchant"}\n")
-                                contentBuilder.append("Organization: ${currentOrgName ?: "UPIEasy Merchant"}\n")
-                                contentBuilder.append("Generated: ${SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.ENGLISH).format(Date())}\n")
-                                contentBuilder.append("Total Records: ${exportTransactions.size}\n")
-                                contentBuilder.append("Total Inflow: INR ${String.format("%,.2f", exportTotal)}\n")
-                                contentBuilder.append("-----------------------------------------\n\n")
-                                exportTransactions.forEachIndexed { i, t ->
-                                    contentBuilder.append("${i + 1}. ${formatTransactionTime(t.occurredAt)} | ${t.payeeName}\n")
-                                    contentBuilder.append("   Amount: INR ${t.amount} [${t.status}]\n")
-                                    contentBuilder.append("   UPI: ${t.payeeVpa} | Ref: ${t.referenceNumber ?: "N/A"}\n\n")
-                                }
-                                contentBuilder.append("=========================================\n")
-                                contentBuilder.append("        NPCI / RBI Compliant Summary     \n")
-                                contentBuilder.append("=========================================\n")
+                                StatementExporter.generatePdf(
+                                    context = context,
+                                    merchantName = merchantName,
+                                    orgName = orgName,
+                                    transactions = exportTransactions,
+                                    totalAmount = exportTotal
+                                )
                             }
 
-                            FileOutputStream(cacheFile).use { it.write(contentBuilder.toString().toByteArray()) }
+                            val mimeType = if (exportFormat == "CSV") "text/csv" else "application/pdf"
+                            StatementExporter.shareFile(
+                                context = context,
+                                file = file,
+                                mimeType = mimeType,
+                                subject = "UPIEasy Payment Statement (${if (exportFormat == "CSV") "CSV" else "PDF"})"
+                            )
 
-                            val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                                type = if (exportFormat == "CSV") "text/csv" else "text/plain"
-                                putExtra(Intent.EXTRA_SUBJECT, "UPIEasy Payment Statement")
-                                putExtra(Intent.EXTRA_TEXT, contentBuilder.toString())
-                            }
-                            context.startActivity(Intent.createChooser(shareIntent, "Share Statement"))
                             HapticHelper.performHaptic(context, HapticHelper.FeedbackType.SUCCESS)
                             showExportSheet = false
-                            Toast.makeText(context, "Statement generated successfully", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "$exportFormat statement generated successfully", Toast.LENGTH_SHORT).show()
                         } catch (e: Exception) {
                             Toast.makeText(context, "Export error: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
                         }
@@ -893,24 +914,11 @@ fun TransactionsScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(50.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    Brush.linearGradient(
-                                        listOf(BrandGradientStart, BrandGradientEnd)
-                                    )
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = (userName?.take(1) ?: "M").uppercase(),
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 20.sp
-                            )
-                        }
+                        UserAvatar(
+                            avatarUrl = userAvatarUrl,
+                            name = userName,
+                            size = 52.dp
+                        )
                         Spacer(modifier = Modifier.width(14.dp))
                         Column {
                             Text(
@@ -1268,10 +1276,16 @@ private fun TransactionCardItem(
                         fontSize = 12.sp
                     )
                 } else {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(3.dp)
+                    ) {
                         Text(
-                            text = "From ",
-                            style = MaterialTheme.typography.bodySmall,
+                            text = "From",
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                platformStyle = PlatformTextStyle(includeFontPadding = false),
+                                lineHeight = 12.sp
+                            ),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 11.sp
                         )
@@ -1282,7 +1296,13 @@ private fun TransactionCardItem(
                                 .background(Color(0xFF0083CA)),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text("₹", color = Color.White, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                            Text(
+                                text = "₹",
+                                color = Color.White,
+                                fontSize = 8.sp,
+                                fontWeight = FontWeight.Bold,
+                                style = TextStyle(platformStyle = PlatformTextStyle(includeFontPadding = false))
+                            )
                         }
                     }
 

@@ -112,14 +112,16 @@ const patchMeHandler = async (c: any) => {
   const schemaValidator = z.object({
     fullName: z.string().min(2).optional(),
     email: z.string().email().optional(),
+    avatarUrl: z.string().optional(),
   });
 
-  const { fullName, email } = schemaValidator.parse(body);
+  const { fullName, email, avatarUrl } = schemaValidator.parse(body);
 
   await db.update(schema.users)
     .set({
       fullName: fullName ?? undefined,
       email: email ?? undefined,
+      avatarUrl: avatarUrl ?? undefined,
       updatedAt: new Date(),
     })
     .where(eq(schema.users.id, userId))

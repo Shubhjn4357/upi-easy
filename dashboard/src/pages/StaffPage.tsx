@@ -13,6 +13,7 @@ import {
   IconCreditCard,
   IconActivity,
 } from '@/components/ui/icons';
+import { StaffPageSkeleton } from '@/components/ui/Skeleton';
 import type { StaffMember, StaffInvite, StaffPageProps } from '@/types';
 
 // Staff & Team Management Page using shadcn/ui with strict TypeScript types
@@ -24,6 +25,10 @@ export function StaffPage({
   onOpenInviteStaff,
   onSelectStaffAction,
 }: StaffPageProps) {
+  if (loading) {
+    return <StaffPageSkeleton />;
+  }
+
   return (
     <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
       {/* Header */}
@@ -48,14 +53,7 @@ export function StaffPage({
         )}
       </div>
 
-      {loading ? (
-        <Card className="p-12 flex flex-col items-center justify-center text-center">
-          <div className="w-8 h-8 rounded-full border-2 border-brand-500 border-t-transparent animate-spin mb-3" />
-          <p className="text-xs text-muted-foreground font-medium">Loading store staff & permissions...</p>
-        </Card>
-      ) : (
-        <>
-          {/* Staff Table */}
+        {/* Staff Table */}
           <Card className="overflow-hidden">
             <div className="px-6 py-4 border-b border-border flex items-center justify-between">
               <CardTitle className="text-sm font-bold">Active Members ({staffList.length})</CardTitle>
@@ -120,7 +118,7 @@ export function StaffPage({
                       size="sm"
                       onClick={() => onSelectStaffAction('manage', member)}
                       className="rounded-lg h-7 px-2.5 text-xs gap-1">
-                      <span>Manage</span>
+                      
                       <IconMoreVertical className="w-3 h-3" />
                     </Button>
                   ) : (
@@ -164,8 +162,6 @@ export function StaffPage({
           </div>
         </div>
       </Card>
-        </>
-      )}
     </div>
   );
 }

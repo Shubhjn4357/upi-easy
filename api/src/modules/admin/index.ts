@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { getRawDb, db } from "../../db/index.js";
+import { getRawDbClient, db } from "../../db/index.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { AppError, NotFoundError } from "../../lib/errors.js";
 import { seedDemoMerchantData } from "../../db/seed.js";
@@ -39,13 +39,13 @@ function isAllowedTable(name: string): name is AllowedTable {
 
 // 1. Telemetry & Comprehensive System Health
 adminRouter.get("/health", async (c) => {
-  const sqlite = getRawDb();
+  const client = getRawDbClient(c.env);
   const tableCounts: Record<string, number> = {};
 
-  if (sqlite) {
+  if (client) {
     for (const table of ALLOWED_TABLES) {
       try {
-        const row = sqlite.prepare(`SELECT count(*) as count FROM ${table}`).get() as { count: number };
+        const row = await client.get<{ count: number }>(`SELECT count(*) as count FROM ${table}`);
         tableCounts[table] = row ? row.count : 0;
       } catch {
         tableCounts[table] = 0;
@@ -53,17 +53,18 @@ adminRouter.get("/health", async (c) => {
     }
   }
 
-  const mem = process.memoryUsage();
+  const mem = typeof process !== "undefined" && process.memoryUsage ? process.memoryUsage() : { rss: 0, heapTotal: 0, heapUsed: 0, external: 0 };
+  const uptime = typeof process !== "undefined" && process.uptime ? Math.floor(process.uptime()) : 0;
 
   return c.json({
     status: "healthy",
     timestamp: new Date().toISOString(),
-    uptimeSeconds: Math.floor(process.uptime()),
+    uptimeSeconds: uptime,
     service: "upi-easy-api",
     version: "1.0.0",
-    nodeVersion: process.version,
-    platform: process.platform,
-    environment: process.env.NODE_ENV || "development",
+    nodeVersion: typeof process !== "undefined" ? process.version : "worker",
+    platform: typeof process !== "undefined" ? process.platform : "cloudflare",
+    environment: ((c.env as any)?.NODE_ENV as string) || (typeof process !== "undefined" ? process.env.NODE_ENV : "production") || "production",
     memory: {
       rssMb: (mem.rss / 1024 / 1024).toFixed(1),
       heapTotalMb: (mem.heapTotal / 1024 / 1024).toFixed(1),
@@ -76,41 +77,43 @@ adminRouter.get("/health", async (c) => {
 
 // 2. List all tables with schema details & counts
 adminRouter.get("/tables", async (c) => {
-  const sqlite = getRawDb();
-  if (!sqlite) {
+  const client = getRawDbClient(c.env);
+  if (!client) {
     return c.json({ success: true, tables: [] });
   }
 
-  const tables = ALLOWED_TABLES.map((tableName) => {
-    try {
-      const countRow = sqlite.prepare(`SELECT count(*) as count FROM ${tableName}`).get() as { count: number };
-      const columns = sqlite.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{
-        cid: number;
-        name: string;
-        type: string;
-        notnull: number;
-        dflt_value: any;
-        pk: number;
-      }>;
+  const tables = await Promise.all(
+    ALLOWED_TABLES.map(async (tableName) => {
+      try {
+        const countRow = await client.get<{ count: number }>(`SELECT count(*) as count FROM ${tableName}`);
+        const columns = await client.all<{
+          cid: number;
+          name: string;
+          type: string;
+          notnull: number;
+          dflt_value: any;
+          pk: number;
+        }>(`PRAGMA table_info(${tableName})`);
 
-      return {
-        name: tableName,
-        rowCount: countRow ? countRow.count : 0,
-        columns: columns.map((col) => ({
-          name: col.name,
-          type: col.type,
-          isPrimary: col.pk === 1,
-          isNullable: col.notnull === 0,
-        })),
-      };
-    } catch {
-      return {
-        name: tableName,
-        rowCount: 0,
-        columns: [],
-      };
-    }
-  });
+        return {
+          name: tableName,
+          rowCount: countRow ? countRow.count : 0,
+          columns: columns.map((col) => ({
+            name: col.name,
+            type: col.type,
+            isPrimary: col.pk === 1,
+            isNullable: col.notnull === 0,
+          })),
+        };
+      } catch {
+        return {
+          name: tableName,
+          rowCount: 0,
+          columns: [],
+        };
+      }
+    })
+  );
 
   return c.json({ success: true, tables });
 });
@@ -122,8 +125,8 @@ adminRouter.get("/tables/:table", async (c) => {
     throw new AppError(`Table '${tableName}' is not accessible or invalid`, 400);
   }
 
-  const sqlite = getRawDb();
-  if (!sqlite) {
+  const client = getRawDbClient(c.env);
+  if (!client) {
     throw new AppError("Database instance unavailable", 500);
   }
 
@@ -131,11 +134,11 @@ adminRouter.get("/tables/:table", async (c) => {
   const offset = Math.max(Number(c.req.query("offset")) || 0, 0);
   const search = c.req.query("search")?.trim();
 
-  const columns = sqlite.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{
+  const columns = await client.all<{
     name: string;
     type: string;
     pk: number;
-  }>;
+  }>(`PRAGMA table_info(${tableName})`);
 
   let countQuery = `SELECT count(*) as count FROM ${tableName}`;
   let dataQuery = `SELECT * FROM ${tableName}`;
@@ -155,7 +158,7 @@ adminRouter.get("/tables/:table", async (c) => {
     }
   }
 
-  const countRow = sqlite.prepare(countQuery).get(...params) as { count: number };
+  const countRow = await client.get<{ count: number }>(countQuery, params);
   const total = countRow ? countRow.count : 0;
 
   // Order by primary key desc or created_at desc if exists
@@ -164,7 +167,7 @@ adminRouter.get("/tables/:table", async (c) => {
   const orderCol = hasCreatedAt ? "created_at" : pkCol;
 
   dataQuery += ` ORDER BY ${orderCol} DESC LIMIT ? OFFSET ?`;
-  const rows = sqlite.prepare(dataQuery).all(...params, limit, offset);
+  const rows = await client.all(dataQuery, [...params, limit, offset]);
 
   return c.json({
     success: true,
@@ -189,14 +192,14 @@ adminRouter.patch("/tables/:table/:id", async (c) => {
     throw new AppError(`Table '${tableName}' is not accessible or invalid`, 400);
   }
 
-  const sqlite = getRawDb();
-  if (!sqlite) throw new AppError("Database instance unavailable", 500);
+  const client = getRawDbClient(c.env);
+  if (!client) throw new AppError("Database instance unavailable", 500);
 
   const body = await c.req.json();
-  const columns = sqlite.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{
+  const columns = await client.all<{
     name: string;
     pk: number;
-  }>;
+  }>(`PRAGMA table_info(${tableName})`);
 
   const validColumnNames = new Set(columns.map((c) => c.name));
   const pkCol = columns.find((c) => c.pk === 1)?.name || "id";
@@ -222,13 +225,13 @@ adminRouter.patch("/tables/:table/:id", async (c) => {
   }
 
   values.push(id);
-  const result = sqlite.prepare(`UPDATE ${tableName} SET ${updates.join(", ")} WHERE ${pkCol} = ?`).run(...values);
+  const result = await client.run(`UPDATE ${tableName} SET ${updates.join(", ")} WHERE ${pkCol} = ?`, values);
 
   if (result.changes === 0) {
     throw new NotFoundError(`Record with ${pkCol}='${id}' not found in ${tableName}`);
   }
 
-  const updatedRow = sqlite.prepare(`SELECT * FROM ${tableName} WHERE ${pkCol} = ?`).get(id);
+  const updatedRow = await client.get(`SELECT * FROM ${tableName} WHERE ${pkCol} = ?`, [id]);
   return c.json({ success: true, message: "Record updated successfully", row: updatedRow });
 });
 
@@ -240,16 +243,16 @@ adminRouter.delete("/tables/:table/:id", async (c) => {
     throw new AppError(`Table '${tableName}' is not accessible or invalid`, 400);
   }
 
-  const sqlite = getRawDb();
-  if (!sqlite) throw new AppError("Database instance unavailable", 500);
+  const client = getRawDbClient(c.env);
+  if (!client) throw new AppError("Database instance unavailable", 500);
 
-  const columns = sqlite.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{
+  const columns = await client.all<{
     name: string;
     pk: number;
-  }>;
+  }>(`PRAGMA table_info(${tableName})`);
   const pkCol = columns.find((c) => c.pk === 1)?.name || "id";
 
-  const result = sqlite.prepare(`DELETE FROM ${tableName} WHERE ${pkCol} = ?`).run(id);
+  const result = await client.run(`DELETE FROM ${tableName} WHERE ${pkCol} = ?`, [id]);
   if (result.changes === 0) {
     throw new NotFoundError(`Record with ${pkCol}='${id}' not found in ${tableName}`);
   }
@@ -264,15 +267,15 @@ adminRouter.post("/tables/:table", async (c) => {
     throw new AppError(`Table '${tableName}' is not accessible or invalid`, 400);
   }
 
-  const sqlite = getRawDb();
-  if (!sqlite) throw new AppError("Database instance unavailable", 500);
+  const client = getRawDbClient(c.env);
+  if (!client) throw new AppError("Database instance unavailable", 500);
 
   const body = await c.req.json();
-  const columns = sqlite.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{
+  const columns = await client.all<{
     name: string;
     pk: number;
     notnull: number;
-  }>;
+  }>(`PRAGMA table_info(${tableName})`);
 
   const validColumnNames = new Set(columns.map((c) => c.name));
   const pkCol = columns.find((c) => c.pk === 1)?.name || "id";
@@ -306,11 +309,12 @@ adminRouter.post("/tables/:table", async (c) => {
     throw new AppError("No valid columns provided for insert", 400);
   }
 
-  sqlite
-    .prepare(`INSERT INTO ${tableName} (${insertCols.join(", ")}) VALUES (${placeholders.join(", ")})`)
-    .run(...insertVals);
+  await client.run(
+    `INSERT INTO ${tableName} (${insertCols.join(", ")}) VALUES (${placeholders.join(", ")})`,
+    insertVals
+  );
 
-  const insertedRow = sqlite.prepare(`SELECT * FROM ${tableName} WHERE ${pkCol} = ?`).get(body[pkCol]);
+  const insertedRow = await client.get(`SELECT * FROM ${tableName} WHERE ${pkCol} = ?`, [body[pkCol]]);
   return c.json({ success: true, message: "Record inserted successfully", row: insertedRow }, 201);
 });
 

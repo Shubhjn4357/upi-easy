@@ -244,6 +244,38 @@ paymentEventsRouter.post(
       })
       .run();
 
+    // 4b. Insert Outbox Event: transaction.created for mobile & ledger delta sync
+    await db
+      .insert(schema.outboxEvents)
+      .values({
+        id: generateId("evt"),
+        organizationId: orgId,
+        eventType: "transaction.created",
+        payloadJson: JSON.stringify({
+          id: txnId,
+          transactionId: txnId,
+          organizationId: orgId,
+          paymentAccountId: verifiedPaymentAccountId,
+          type: "PAYMENT",
+          direction: data.direction === "SENT" ? "SENT" : "RECEIVED",
+          amount: amountRupees,
+          currency: "INR",
+          status: "SUCCESS",
+          paymentMethod: "UPI",
+          referenceNumber: data.reference || null,
+          payerName: data.payerName || null,
+          payerVpa: data.payerVpa || null,
+          payeeName: paymentAccountLabel,
+          payeeVpa: payeeVpa,
+          note: `Observed from ${data.source.type.replace("NOTIFICATION_", "")} notification`,
+          occurredAt: validObservedDate.getTime(),
+          createdAt: now.getTime(),
+        }),
+        status: "PENDING",
+        createdAt: now,
+      })
+      .run();
+
     // 5. Trigger notification distribution for staff devices
     try {
       await notifyOrganizationPayment(orgId, {

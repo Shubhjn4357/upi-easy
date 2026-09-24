@@ -16,6 +16,8 @@ import {
 } from '@/components/ui/icons';
 import type { DashboardStats, Transaction } from '@/types';
 
+import { BentoOverviewSkeleton } from '@/components/ui/Skeleton';
+
 export interface OverviewPageProps {
   stats: any;
   loading?: boolean;
@@ -35,23 +37,7 @@ export function OverviewPage({
   onInspectTxn,
 }: OverviewPageProps) {
   if (loading || !stats) {
-    return (
-      <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
-        <div>
-          <h2 className="text-xl sm:text-2xl font-extrabold tracking-tight text-foreground">
-            Dashboard Overview
-          </h2>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Real-time merchant collections, UPI volume and transaction status
-          </p>
-        </div>
-        <Card className="p-16 flex flex-col items-center justify-center text-center">
-          <div className="w-9 h-9 rounded-full border-2 border-brand-500 border-t-transparent animate-spin mb-4" />
-          <p className="text-sm font-semibold text-foreground">Synchronizing merchant telemetry...</p>
-          <p className="text-xs text-muted-foreground mt-1">Aggregating live UPI inflows and store ledger</p>
-        </Card>
-      </div>
-    );
+    return <BentoOverviewSkeleton />;
   }
 
   return (

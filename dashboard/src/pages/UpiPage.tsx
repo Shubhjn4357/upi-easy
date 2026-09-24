@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { IconPlus, IconQrCode, IconMoreVertical } from '@/components/ui/icons';
+import { UpiPageSkeleton } from '@/components/ui/Skeleton';
 import type { UpiAccount } from '@/types';
 
 export interface UpiPageProps {
@@ -15,6 +16,10 @@ export interface UpiPageProps {
 
 // UPI IDs & QR Codes Management Page using shadcn/ui with strict TypeScript types
 export function UpiPage({ upiAccounts, canManageUpi = true, loading = false, onOpenNewUpi, onSelectUpiAction }: UpiPageProps) {
+  if (loading) {
+    return <UpiPageSkeleton />;
+  }
+
   return (
     <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
       {/* Header */}
@@ -39,12 +44,7 @@ export function UpiPage({ upiAccounts, canManageUpi = true, loading = false, onO
         )}
       </div>
 
-      {loading ? (
-        <Card className="p-12 flex flex-col items-center justify-center text-center">
-          <div className="w-8 h-8 rounded-full border-2 border-brand-500 border-t-transparent animate-spin mb-3" />
-          <p className="text-xs text-muted-foreground font-medium">Loading UPI handles & QR counters...</p>
-        </Card>
-      ) : upiAccounts.length === 0 ? (
+      {upiAccounts.length === 0 ? (
         <Card className="p-12 text-center flex flex-col items-center justify-center space-y-3">
           <div className="w-12 h-12 rounded-2xl bg-brand-500/10 text-brand-600 dark:text-cyan-400 flex items-center justify-center">
             <IconQrCode className="w-6 h-6" />

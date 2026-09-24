@@ -2,11 +2,14 @@ package com.aerotech.upieasy.feature.settings
 
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -22,6 +25,7 @@ import com.aerotech.upieasy.core.network.PermissionDto
 import com.aerotech.upieasy.core.network.RoleDto
 import com.aerotech.upieasy.core.network.UpdateRolePermissionsRequest
 import com.aerotech.upieasy.core.security.SessionManager
+import com.aerotech.upieasy.core.ui.RolesPermissionsSkeleton
 import com.aerotech.upieasy.ui.theme.BrandPrimary
 import com.aerotech.upieasy.ui.theme.SuccessGreen
 import com.aerotech.upieasy.ui.theme.FailedRed
@@ -88,8 +92,8 @@ fun RolesPermissionsScreen(
         containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
         if (isLoading) {
-            Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = BrandPrimary)
+            Box(Modifier.fillMaxSize().padding(padding)) {
+                RolesPermissionsSkeleton()
             }
             return@Scaffold
         }
@@ -271,25 +275,28 @@ private fun RoleCard(
                     val grantedPerms = perms.filter { p -> role.permissions.contains(p.id) }
                     if (grantedPerms.isNotEmpty() || perms.isNotEmpty()) {
                         Text(
-                            category.replaceFirstChar { it.uppercase() },
+                            formatCategoryName(category),
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 6.dp, bottom = 4.dp)
+                            modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
                         )
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState())
                         ) {
                             perms.forEach { perm ->
                                 val hasIt = role.permissions.contains(perm.id)
-                                val chipLabel = perm.name.substringAfter(".")
+                                val chipLabel = formatPermissionAction(perm.name)
                                 SuggestionChip(
                                     onClick = {},
                                     label = {
                                         Text(
                                             chipLabel,
                                             style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Medium,
                                             color = if (hasIt) SuccessGreen else FailedRed
                                         )
                                     },
@@ -311,6 +318,52 @@ private fun RoleCard(
     }
 }
 
+private fun formatPermissionAction(permName: String): String {
+    val action = permName.substringAfter(".", permName).lowercase()
+    return when (action) {
+        "read" -> "Read"
+        "export" -> "Export"
+        "create" -> "Create"
+        "refund" -> "Refund"
+        "ingest" -> "Ingest"
+        "manage" -> "Manage"
+        else -> action.replaceFirstChar { it.uppercase() }
+    }
+}
+
+private fun formatPermissionDescription(permName: String, fallbackDesc: String?): String {
+    return when (permName) {
+        "transactions.read" -> "View payment transactions & settlement history"
+        "transactions.export" -> "Export reports to Excel & CSV spreadsheets"
+        "transactions.create" -> "Record manual payments & initiate transactions"
+        "transactions.refund" -> "Process payment refunds back to customers"
+        "payment_events.ingest" -> "Auto-detect and capture payment notifications & SMS"
+        "accounts.read" -> "View settlement bank accounts"
+        "accounts.manage" -> "Add, update, or remove linked bank accounts"
+        "upi.read" -> "View active UPI IDs and VPAs"
+        "upi.manage" -> "Configure and manage business UPI handles"
+        "qr.create" -> "Generate custom counter and customer QR codes"
+        "staff.read" -> "View team members and staff list"
+        "staff.manage" -> "Invite staff, assign roles, or remove members"
+        "reports.read" -> "Access sales reports and business analytics"
+        "organization.manage" -> "Manage organization settings and business profile"
+        else -> fallbackDesc ?: ""
+    }
+}
+
+private fun formatCategoryName(category: String): String {
+    return when (category.lowercase()) {
+        "transactions" -> "Transactions & Ledger"
+        "accounts" -> "Bank Accounts"
+        "upi" -> "UPI Handles"
+        "qr" -> "QR Codes"
+        "staff" -> "Staff & Team"
+        "reports" -> "Reports & Analytics"
+        "organization" -> "Business Settings"
+        else -> category.replaceFirstChar { it.uppercase() }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun EditRolePermissionsSheet(
@@ -321,85 +374,131 @@ private fun EditRolePermissionsSheet(
     onDismiss: () -> Unit,
     onSave: (List<String>) -> Unit
 ) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val selected = remember { mutableStateListOf<String>().apply { addAll(role.permissions) } }
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    ModalBottomSheet(
+        onDismissRequest = { if (!isSaving) onDismiss() },
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surface,
+        dragHandle = { BottomSheetDefaults.DragHandle() }
+    ) {
         Column(
             modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp)
-                .padding(bottom = 32.dp)
+                .padding(bottom = 36.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    "Edit Permissions — ${role.name}",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                TextButton(onClick = onDismiss, enabled = !isSaving) { Text("Cancel") }
+                Column {
+                    Text(
+                        "Edit Permissions — ${role.name}",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        role.description ?: "Configure access permissions for this role",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                IconButton(onClick = onDismiss, enabled = !isSaving) {
+                    Icon(Icons.Default.Close, contentDescription = "Close")
+                }
             }
-
-            Text(
-                role.description ?: "",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            // Render all permission categories cleanly
             permissionCategories.forEach { (category, perms) ->
-                Text(
-                    category.replaceFirstChar { it.uppercase() },
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(vertical = 4.dp)
-                )
-                perms.forEach { perm ->
-                    val isChecked = selected.contains(perm.id)
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(perm.name, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
-                            perm.description?.let {
-                                Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 6.dp)
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Text(
+                            formatCategoryName(category),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = BrandPrimary,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+
+                        perms.forEachIndexed { index, perm ->
+                            val isChecked = selected.contains(perm.id)
+                            val actionName = formatPermissionAction(perm.name)
+                            val description = formatPermissionDescription(perm.name, perm.description)
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                                    Text(
+                                        actionName,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    Text(
+                                        description,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                Switch(
+                                    checked = isChecked,
+                                    onCheckedChange = { checked ->
+                                        if (checked) selected.add(perm.id)
+                                        else selected.remove(perm.id)
+                                    },
+                                    enabled = !isSaving
+                                )
+                            }
+                            if (index < perms.size - 1) {
+                                HorizontalDivider(
+                                    thickness = 0.5.dp,
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                                )
                             }
                         }
-                        Switch(
-                            checked = isChecked,
-                            onCheckedChange = { checked ->
-                                if (checked) selected.add(perm.id)
-                                else selected.remove(perm.id)
-                            },
-                            enabled = !isSaving
-                        )
                     }
-                    HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
                 }
-                Spacer(modifier = Modifier.height(8.dp))
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(16.dp))
+
             Button(
                 onClick = { onSave(selected.toList()) },
                 enabled = !isSaving,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary),
                 shape = RoundedCornerShape(14.dp)
             ) {
                 if (isSaving) {
-                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
                     Spacer(Modifier.width(8.dp))
-                    Text("Saving...")
+                    Text("Saving Changes...", fontWeight = FontWeight.SemiBold)
                 } else {
-                    Text("Save Permissions")
+                    Icon(Icons.Default.Save, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Save Permissions", fontWeight = FontWeight.SemiBold)
                 }
             }
         }

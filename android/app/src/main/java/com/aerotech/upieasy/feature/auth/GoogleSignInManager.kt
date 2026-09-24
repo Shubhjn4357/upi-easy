@@ -17,7 +17,8 @@ import java.security.SecureRandom
 
 data class GoogleAuthResult(
     val idToken: String,
-    val nonce: String
+    val nonce: String,
+    val profilePictureUri: String? = null
 )
 
 class GoogleSignInManager(private val context: Context) {
@@ -118,7 +119,8 @@ class GoogleSignInManager(private val context: Context) {
                 Result.success(
                     GoogleAuthResult(
                         idToken = googleIdTokenCredential.idToken,
-                        nonce = nonce
+                        nonce = nonce,
+                        profilePictureUri = googleIdTokenCredential.profilePictureUri?.toString()
                     )
                 )
             } catch (e: GoogleIdTokenParsingException) {

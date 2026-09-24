@@ -24,6 +24,7 @@ import com.aerotech.upieasy.core.database.AppDatabase
 import com.aerotech.upieasy.core.network.NetworkClient
 import com.aerotech.upieasy.core.security.SessionManager
 import com.aerotech.upieasy.core.util.BiometricPromptHelper
+import com.aerotech.upieasy.core.ui.SettingsSkeleton
 import com.aerotech.upieasy.data.repository.OrganizationRepository
 import com.aerotech.upieasy.feature.settings.components.*
 import com.aerotech.upieasy.ui.components.OrganizationSwitcher
@@ -47,8 +48,10 @@ fun SettingsScreen(
     val orgRepository = remember { OrganizationRepository(context, apiService, database, sessionManager) }
     val organizations by orgRepository.observeOrganizations().collectAsState(initial = emptyList())
 
+    var isInitialLoading by remember { mutableStateOf(true) }
     LaunchedEffect(Unit) {
         orgRepository.refreshOrganizations()
+        isInitialLoading = false
     }
 
     // Session and Organization State
@@ -62,6 +65,7 @@ fun SettingsScreen(
     val isOwner = userRole?.equals("OWNER", ignoreCase = true) == true
     val userEmail by sessionManager.userEmailFlow.collectAsState(initial = null)
     val userName by sessionManager.userNameFlow.collectAsState(initial = null)
+    val userAvatarUrl by sessionManager.userAvatarUrlFlow.collectAsState(initial = null)
 
     // User Preferences State
     val soundNotifications by sessionManager.soundNotificationsFlow.collectAsState(initial = true)
@@ -101,6 +105,11 @@ fun SettingsScreen(
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
+        if (isInitialLoading && currentOrgName == null && userName == null) {
+            Box(Modifier.fillMaxSize().padding(padding)) {
+                SettingsSkeleton()
+            }
+        } else {
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -142,7 +151,8 @@ fun SettingsScreen(
                     currentOrgCategory = currentOrgCategory,
                     currentOrgPan = currentOrgPan,
                     currentOrgGstin = currentOrgGstin,
-                    onEditClick = { showEditProfileBottomSheet = true }
+                    onEditClick = { showEditProfileBottomSheet = true },
+                    avatarUrl = userAvatarUrl
                 )
 
                 // Bento Tile: Firms & Organizations
@@ -401,6 +411,7 @@ fun SettingsScreen(
 
                 Spacer(modifier = Modifier.height(96.dp))
             }
+        }
         }
     }
 

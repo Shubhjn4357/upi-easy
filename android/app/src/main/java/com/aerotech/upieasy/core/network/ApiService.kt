@@ -29,7 +29,8 @@ data class OrganizationMembershipDto(
 
 data class UpdateProfileRequest(
     val fullName: String? = null,
-    val email: String? = null
+    val email: String? = null,
+    val avatarUrl: String? = null
 )
 
 data class UserDto(
@@ -159,6 +160,15 @@ data class AddBankAccountRequest(
     val ifscCode: String,
     val accountType: String = "CURRENT",
     val isDefault: Boolean = false
+)
+
+data class UpdateBankAccountRequest(
+    val bankName: String? = null,
+    val accountHolderName: String? = null,
+    val accountNumber: String? = null,
+    val ifscCode: String? = null,
+    val accountType: String? = null,
+    val isDefault: Boolean? = null
 )
 
 // Roles and Permissions (RBAC) DTOs
@@ -536,6 +546,13 @@ interface ApiService {
     suspend fun addBankAccount(
         @Path("orgId") orgId: String,
         @Body request: AddBankAccountRequest
+    ): Response<ApiResponse<Any>>
+
+    @PATCH("api/v1/organizations/{orgId}/accounts/{accountId}")
+    suspend fun updateBankAccount(
+        @Path("orgId") orgId: String,
+        @Path("accountId") accountId: String,
+        @Body request: UpdateBankAccountRequest
     ): Response<ApiResponse<Any>>
 
     @PATCH("api/v1/organizations/{orgId}/accounts/{accountId}/default")

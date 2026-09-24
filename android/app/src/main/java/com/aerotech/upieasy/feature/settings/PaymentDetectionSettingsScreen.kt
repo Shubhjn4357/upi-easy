@@ -122,61 +122,58 @@ fun PaymentDetectionSettingsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Main Access Status Card
-            Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = if (isListenerGranted) Color(0xFFE8F5E9) else Color(0xFFFFF3E0),
-                border = BorderStroke(
-                    1.dp,
-                    if (isListenerGranted) Color(0xFFA5D6A7) else Color(0xFFFFCC80)
-                ),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
+            // Main Access Status Card (Only shown when permission is not active)
+            if (!isListenerGranted) {
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    border = BorderStroke(
+                        1.dp,
+                        MaterialTheme.colorScheme.error.copy(alpha = 0.25f)
+                    ),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(CircleShape)
-                            .background(if (isListenerGranted) SuccessGreen else Color(0xFFE65100)),
-                        contentAlignment = Alignment.Center
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = if (isListenerGranted) Icons.Default.CheckCircle else Icons.Default.Warning,
-                            contentDescription = null,
-                            tint = Color.White
-                        )
-                    }
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.error),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Warning,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onError
+                            )
+                        }
 
-                    Spacer(modifier = Modifier.width(14.dp))
+                        Spacer(modifier = Modifier.width(14.dp))
 
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = if (isListenerGranted) "Notification Access Active" else "Notification Access Required",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = if (isListenerGranted) Color(0xFF1B5E20) else Color(0xFFBF360C)
-                        )
-                        Text(
-                            text = if (isListenerGranted)
-                                "UPI-Easy is actively observing payment notifications on this device."
-                            else
-                                "Grant Android notification access to observe incoming PhonePe and Google Pay payments.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Notification Access Required",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                            Text(
+                                text = "Grant Android notification access to observe incoming PhonePe and Google Pay payments.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.85f)
+                            )
+                        }
                     }
                 }
-            }
 
-            if (!isListenerGranted) {
                 Button(
                     onClick = { showPermissionDialog = true },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                 ) {
                     Icon(Icons.Default.NotificationsActive, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))

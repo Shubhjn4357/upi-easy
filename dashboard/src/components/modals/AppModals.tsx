@@ -13,6 +13,7 @@ import type {
   UpiAccount,
   StaffMember,
   TableData,
+  BankAccount,
 } from '../../types';
 
 export interface AppModalsProps {
@@ -38,6 +39,9 @@ export interface AppModalsProps {
 
   showNewBankModal: boolean;
   setShowNewBankModal: (open: boolean) => void;
+
+  editingBank?: BankAccount | null;
+  setEditingBank?: (b: BankAccount | null) => void;
 
   showTableRowModal: {
     mode: 'insert' | 'edit';
@@ -73,6 +77,8 @@ export function AppModals({
   setShowStaffModal,
   showNewBankModal,
   setShowNewBankModal,
+  editingBank,
+  setEditingBank,
   showTableRowModal,
   setShowTableRowModal,
   inspectTxn,
@@ -102,6 +108,8 @@ export function AppModals({
             payerName: HTMLInputElement;
             payerVpa: HTMLInputElement;
             note: HTMLInputElement;
+            referenceNumber?: HTMLInputElement;
+            status?: HTMLSelectElement;
           };
           setIsSaving(true);
           try {
@@ -114,6 +122,8 @@ export function AppModals({
                 payeeName: activeOrg.name,
                 payeeVpa: upiAccounts[0]?.vpa || `${activeOrg?.id}@upieasy`,
                 note: form.note.value || 'Counter Sale',
+                referenceNumber: form.referenceNumber?.value.trim() || undefined,
+                status: form.status?.value || 'SUCCESS',
                 direction: 'RECEIVED',
                 source: 'UPI_INTENT',
               }),
@@ -239,10 +249,14 @@ export function AppModals({
         }}
       />
 
-      {/* 5. Link Bank Account Modal */}
+      {/* 5. Link & Edit Bank Account Modal */}
       <BankAccountModal
-        isOpen={showNewBankModal}
-        onClose={() => setShowNewBankModal(false)}
+        isOpen={showNewBankModal || Boolean(editingBank)}
+        onClose={() => {
+          setShowNewBankModal(false);
+          setEditingBank?.(null);
+        }}
+        accountToEdit={editingBank}
         activeOrg={activeOrg}
         isSaving={isSaving}
         onSubmitBank={async (e) => {
@@ -257,21 +271,36 @@ export function AppModals({
           };
           setIsSaving(true);
           try {
-            await apiFetch(`/api/v1/organizations/${activeOrg.id}/accounts`, {
-              method: 'POST',
-              body: JSON.stringify({
-                bankName: form.bankName.value.trim(),
-                accountHolderName: form.holderName.value.trim(),
-                accountNumber: form.accountNumber.value.trim(),
-                ifscCode: form.ifsc.value.trim().toUpperCase(),
-                accountType: form.type.value,
-              }),
-            });
-            showToast('Bank account linked!');
+            if (editingBank) {
+              await apiFetch(`/api/v1/organizations/${activeOrg.id}/accounts/${editingBank.id}`, {
+                method: 'PATCH',
+                body: JSON.stringify({
+                  bankName: form.bankName.value.trim(),
+                  accountHolderName: form.holderName.value.trim(),
+                  ...(form.accountNumber.value.trim() ? { accountNumber: form.accountNumber.value.trim() } : {}),
+                  ifscCode: form.ifsc.value.trim().toUpperCase(),
+                  accountType: form.type.value,
+                }),
+              });
+              showToast('Bank account updated successfully!');
+            } else {
+              await apiFetch(`/api/v1/organizations/${activeOrg.id}/accounts`, {
+                method: 'POST',
+                body: JSON.stringify({
+                  bankName: form.bankName.value.trim(),
+                  accountHolderName: form.holderName.value.trim(),
+                  accountNumber: form.accountNumber.value.trim(),
+                  ifscCode: form.ifsc.value.trim().toUpperCase(),
+                  accountType: form.type.value,
+                }),
+              });
+              showToast('Bank account linked!');
+            }
             setShowNewBankModal(false);
+            setEditingBank?.(null);
             onBankSaved();
           } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : 'Error linking bank account';
+            const msg = err instanceof Error ? err.message : 'Error saving bank account';
             showToast(msg, 'error');
           } finally {
             setIsSaving(false);

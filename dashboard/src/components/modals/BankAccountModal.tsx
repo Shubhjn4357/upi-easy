@@ -2,37 +2,42 @@ import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Input, Label } from '@/components/ui/input';
 import Modal from '@/components/Modal';
-import type { Organization } from '@/types';
+import type { BankAccount, Organization } from '@/types';
 
 export interface BankAccountModalProps {
   isOpen: boolean;
   onClose: () => void;
   activeOrg: Organization | null;
+  accountToEdit?: BankAccount | null;
   isSaving?: boolean;
   onSubmitBank: (e: React.FormEvent<HTMLFormElement>) => void | Promise<void>;
 }
 
-// Link Bank Account Modal with strict TypeScript types
+// Link & Edit Settlement Bank Account Modal
 export function BankAccountModal({
   isOpen,
   onClose,
   activeOrg,
+  accountToEdit,
   isSaving = false,
   onSubmitBank,
 }: BankAccountModalProps) {
+  const isEditing = Boolean(accountToEdit);
+
   return (
     <Modal
       isOpen={isOpen}
       onClose={isSaving ? () => {} : onClose}
-      title="Link Bank Account"
-      subtitle="Connect settlement bank destination">
+      title={isEditing ? 'Edit Bank Account' : 'Link Bank Account'}
+      subtitle={isEditing ? 'Update settlement destination details' : 'Connect settlement bank destination'}>
       <form onSubmit={onSubmitBank} className="space-y-4 text-xs">
         <div className="space-y-1.5">
           <Label>Bank Name</Label>
           <Input
             type="text"
             name="bankName"
-            placeholder="e.g. HDFC Bank"
+            defaultValue={accountToEdit?.bankName || ''}
+            placeholder="e.g. HDFC Bank, SBI"
             required
             disabled={isSaving}
           />
@@ -42,7 +47,7 @@ export function BankAccountModal({
           <Input
             type="text"
             name="holderName"
-            defaultValue={activeOrg?.name || ''}
+            defaultValue={accountToEdit?.accountHolderName || activeOrg?.name || ''}
             required
             disabled={isSaving}
           />
@@ -53,8 +58,8 @@ export function BankAccountModal({
             <Input
               type="text"
               name="accountNumber"
-              placeholder="1234567890"
-              required
+              placeholder={isEditing ? `Keep: ${accountToEdit?.accountNumberMasked || '••••'}` : '1234567890'}
+              required={!isEditing}
               disabled={isSaving}
               className="font-mono"
             />
@@ -64,6 +69,7 @@ export function BankAccountModal({
             <Input
               type="text"
               name="ifsc"
+              defaultValue={accountToEdit?.ifscCode || ''}
               placeholder="HDFC0001234"
               required
               disabled={isSaving}
@@ -75,7 +81,7 @@ export function BankAccountModal({
           <Label>Account Type</Label>
           <select
             name="type"
-            defaultValue="CURRENT"
+            defaultValue={accountToEdit?.accountType || 'CURRENT'}
             disabled={isSaving}
             className="w-full h-9 bg-background border border-input rounded-xl px-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring">
             <option value="CURRENT" className="bg-card text-card-foreground">CURRENT</option>
@@ -99,10 +105,10 @@ export function BankAccountModal({
             {isSaving ? (
               <>
                 <div className="w-3.5 h-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" />
-                <span>Linking...</span>
+                <span>{isEditing ? 'Updating...' : 'Linking...'}</span>
               </>
             ) : (
-              'Link Account'
+              isEditing ? 'Save Changes' : 'Link Account'
             )}
           </Button>
         </div>

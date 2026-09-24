@@ -35,6 +35,7 @@ import com.aerotech.upieasy.ui.components.UpieasyConfirmBottomDrawer
 import com.aerotech.upieasy.ui.theme.*
 import kotlinx.coroutines.launch
 
+import com.aerotech.upieasy.core.ui.DashboardSkeleton
 import com.aerotech.upieasy.ui.components.UpieasyNotificationsSheet
 import com.aerotech.upieasy.ui.components.OrganizationSwitcher
 import com.aerotech.upieasy.core.database.AppDatabase
@@ -65,6 +66,7 @@ fun DashboardScreen(
     val currentOrgId by sessionManager.currentOrgIdFlow.collectAsState(initial = null)
     val currentOrgName by sessionManager.currentOrgNameFlow.collectAsState(initial = null)
     val userName by sessionManager.userNameFlow.collectAsState(initial = null)
+    val userAvatarUrl by sessionManager.userAvatarUrlFlow.collectAsState(initial = null)
     val themeMode by sessionManager.themeModeFlow.collectAsState(initial = "SYSTEM")
 
     val alertHistory by PaymentAlertManager.alertHistory.collectAsState()
@@ -167,15 +169,16 @@ fun DashboardScreen(
                     onMenuLegalClick = onNavigateToLegal,
                     onMenuLogoutClick = { showSignOutConfirm = true },
                     userName = userName,
-                    organizationName = currentOrgName
+                    organizationName = currentOrgName,
+                    avatarUrl = userAvatarUrl
                 )
             }
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
         if (isLoading) {
-            Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+            Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+                DashboardSkeleton()
             }
         } else {
             Box(modifier = Modifier.fillMaxSize().padding(padding)) {

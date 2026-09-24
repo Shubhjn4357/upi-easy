@@ -42,15 +42,15 @@ class SyncWorker(
                         val obj = jsonElement.asJsonObject
 
                         when (event.eventType) {
-                            "transaction.created" -> {
+                            "transaction.created", "PAYMENT_OBSERVED", "transaction.observed" -> {
                                 val txnId = obj.get("id")?.asString ?: obj.get("transactionId")?.asString ?: ""
                                 if (txnId.isNotBlank()) {
                                     val existing = database.transactionDao().getTransactionById(txnId)
                                     val direction = obj.get("direction")?.asString ?: "RECEIVED"
-                                    val status = obj.get("status")?.asString ?: "PENDING"
-                                    val amount = obj.get("amount")?.asDouble ?: 0.0
+                                    val status = obj.get("status")?.asString ?: if (event.eventType == "PAYMENT_OBSERVED") "SUCCESS" else "PENDING"
+                                    val amount = if (obj.has("amount")) obj.get("amount").asDouble else if (obj.has("amountMinor")) obj.get("amountMinor").asDouble / 100.0 else 0.0
                                     val payerName = if (obj.has("payerName") && !obj.get("payerName").isJsonNull) obj.get("payerName").asString else null
-                                    val refNum = if (obj.has("referenceNumber") && !obj.get("referenceNumber").isJsonNull) obj.get("referenceNumber").asString else null
+                                    val refNum = if (obj.has("referenceNumber") && !obj.get("referenceNumber").isJsonNull) obj.get("referenceNumber").asString else if (obj.has("reference") && !obj.get("reference").isJsonNull) obj.get("reference").asString else null
 
                                     val entity = TransactionEntity(
                                         id = txnId,

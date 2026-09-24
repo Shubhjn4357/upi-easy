@@ -96,11 +96,11 @@ export interface BankAccount {
   accountHolderName: string;
   accountNumber?: string;
   accountNumberMasked?: string;
+  isDefault: boolean;
   ifscCode: string;
   bankName: string;
   accountType?: string;
   isVerified?: boolean;
-  isPrimary?: boolean;
 }
 
 export interface AmountCountSummary {

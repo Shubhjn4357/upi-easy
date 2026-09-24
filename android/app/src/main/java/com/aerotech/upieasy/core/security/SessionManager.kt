@@ -26,6 +26,7 @@ class SessionManager(private val context: Context) {
         private val KEY_MOBILE_NUMBER = stringPreferencesKey("mobile_number")
         private val KEY_USER_EMAIL = stringPreferencesKey("user_email")
         private val KEY_USER_NAME = stringPreferencesKey("user_name")
+        private val KEY_USER_AVATAR_URL = stringPreferencesKey("user_avatar_url")
         private val KEY_IS_SETUP_COMPLETE = androidx.datastore.preferences.core.booleanPreferencesKey("is_setup_complete")
         private val KEY_SOUND_NOTIFICATIONS = androidx.datastore.preferences.core.booleanPreferencesKey("sound_notifications")
         private val KEY_BIOMETRIC_LOCK = androidx.datastore.preferences.core.booleanPreferencesKey("biometric_lock")
@@ -47,6 +48,7 @@ class SessionManager(private val context: Context) {
     val mobileNumberFlow: Flow<String?> = context.dataStore.data.map { it[KEY_MOBILE_NUMBER] }
     val userEmailFlow: Flow<String?> = context.dataStore.data.map { it[KEY_USER_EMAIL] }
     val userNameFlow: Flow<String?> = context.dataStore.data.map { it[KEY_USER_NAME] }
+    val userAvatarUrlFlow: Flow<String?> = context.dataStore.data.map { it[KEY_USER_AVATAR_URL] }
     val isSetupCompleteFlow: Flow<Boolean> = context.dataStore.data.map { it[KEY_IS_SETUP_COMPLETE] ?: false }
     val soundNotificationsFlow: Flow<Boolean> = context.dataStore.data.map { it[KEY_SOUND_NOTIFICATIONS] ?: true }
     val biometricLockFlow: Flow<Boolean> = context.dataStore.data.map { it[KEY_BIOMETRIC_LOCK] ?: false }
@@ -118,7 +120,8 @@ class SessionManager(private val context: Context) {
         userId: String,
         mobileNumber: String,
         email: String? = null,
-        fullName: String? = null
+        fullName: String? = null,
+        avatarUrl: String? = null
     ) {
         context.dataStore.edit { prefs ->
             prefs[KEY_ACCESS_TOKEN] = accessToken
@@ -127,6 +130,14 @@ class SessionManager(private val context: Context) {
             prefs[KEY_MOBILE_NUMBER] = mobileNumber
             if (email != null) prefs[KEY_USER_EMAIL] = email
             if (fullName != null) prefs[KEY_USER_NAME] = fullName
+            if (avatarUrl != null) prefs[KEY_USER_AVATAR_URL] = avatarUrl
+        }
+    }
+
+    suspend fun updateAvatarUrl(avatarUrl: String?) {
+        context.dataStore.edit { prefs ->
+            if (avatarUrl != null) prefs[KEY_USER_AVATAR_URL] = avatarUrl
+            else prefs.remove(KEY_USER_AVATAR_URL)
         }
     }
 

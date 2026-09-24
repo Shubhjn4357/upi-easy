@@ -34,6 +34,7 @@ import type {
   StaffInvite,
   TableColumnDef,
   BottomSheetConfig,
+  BankAccount,
 } from './types';
 
 function AppContent() {
@@ -57,6 +58,7 @@ function AppContent() {
   const [showQrModal, setShowQrModal] = useState<UpiAccount | null>(null);
   const [showStaffModal, setShowStaffModal] = useState<StaffMember | Record<string, never> | null>(null);
   const [showNewBankModal, setShowNewBankModal] = useState<boolean>(false);
+  const [editingBank, setEditingBank] = useState<BankAccount | null>(null);
   const [showTableRowModal, setShowTableRowModal] = useState<{
     mode: 'insert' | 'edit';
     row?: Record<string, unknown>;
@@ -506,6 +508,7 @@ function AppContent() {
                     canManageAccounts={canManageAccounts}
                     loading={accountsLoading}
                     onOpenNewBank={() => setShowNewBankModal(true)}
+                    onEditBank={(acc) => setEditingBank(acc)}
                   />
                 }
               />
@@ -652,13 +655,15 @@ function AppContent() {
         setShowStaffModal={setShowStaffModal}
         showNewBankModal={showNewBankModal}
         setShowNewBankModal={setShowNewBankModal}
+        editingBank={editingBank}
+        setEditingBank={setEditingBank}
         showTableRowModal={showTableRowModal}
         setShowTableRowModal={setShowTableRowModal}
         inspectTxn={inspectTxn}
         setInspectTxn={setInspectTxn}
         onPaymentRecorded={() => {
           loadOverview();
-          if (activeTab === 'transactions') loadTransactions();
+          loadTransactions();
         }}
         onUpiSaved={loadUpi}
         onStaffSaved={loadStaff}

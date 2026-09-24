@@ -2,12 +2,16 @@ package com.aerotech.upieasy.feature.bank
 
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -23,10 +27,17 @@ import androidx.compose.ui.unit.dp
 import com.aerotech.upieasy.core.network.AddBankAccountRequest
 import com.aerotech.upieasy.core.network.BankAccountDto
 import com.aerotech.upieasy.core.network.NetworkClient
+import com.aerotech.upieasy.core.network.UpdateBankAccountRequest
 import com.aerotech.upieasy.core.security.SessionManager
+import com.aerotech.upieasy.core.ui.BankAccountsSkeleton
 import com.aerotech.upieasy.ui.theme.BrandPrimary
 import com.aerotech.upieasy.ui.theme.SuccessGreen
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -45,7 +56,9 @@ fun BankAccountsScreen(
     var bankAccounts by remember { mutableStateOf<List<BankAccountDto>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var showAddDialog by remember { mutableStateOf(false) }
+    var editingAccount by remember { mutableStateOf<BankAccountDto?>(null) }
     var isSaving by remember { mutableStateOf(false) }
+    var isUpdating by remember { mutableStateOf(false) }
     var deletingId by remember { mutableStateOf<String?>(null) }
 
     suspend fun loadAccounts() {
@@ -99,19 +112,7 @@ fun BankAccountsScreen(
         ) {
             when {
                 isLoading -> {
-                    Column(
-                        modifier = Modifier.fillMaxSize(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        CircularProgressIndicator(color = BrandPrimary)
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text(
-                            "Loading bank accounts...",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    BankAccountsSkeleton()
                 }
                 bankAccounts.isEmpty() -> {
                     Column(
@@ -167,6 +168,7 @@ fun BankAccountsScreen(
                                 account = account,
                                 isOwner = isOwner,
                                 isDeleting = deletingId == account.id,
+                                onEdit = { editingAccount = account },
                                 onSetDefault = {
                                     scope.launch {
                                         try {
@@ -199,9 +201,48 @@ fun BankAccountsScreen(
         }
     }
 
-    // Add Bank Account Dialog
+    // Edit Bank Account Bottom Sheet (Drawer)
+    if (editingAccount != null && isOwner) {
+        EditBankAccountBottomSheet(
+            account = editingAccount!!,
+            isSaving = isUpdating,
+            onDismiss = { editingAccount = null },
+            onSubmit = { bankName, holderName, accountNumber, ifsc, accountType ->
+                scope.launch {
+                    isUpdating = true
+                    try {
+                        val id = orgId ?: return@launch
+                        val res = apiService.updateBankAccount(
+                            orgId = id,
+                            accountId = editingAccount!!.id,
+                            request = UpdateBankAccountRequest(
+                                bankName = bankName,
+                                accountHolderName = holderName,
+                                accountNumber = accountNumber,
+                                ifscCode = ifsc.uppercase(),
+                                accountType = accountType
+                            )
+                        )
+                        if (res.isSuccessful) {
+                            editingAccount = null
+                            loadAccounts()
+                            Toast.makeText(context, "Bank account updated successfully!", Toast.LENGTH_SHORT).show()
+                        } else {
+                            Toast.makeText(context, "Failed to update bank account", Toast.LENGTH_SHORT).show()
+                        }
+                    } catch (e: Exception) {
+                        Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                    } finally {
+                        isUpdating = false
+                    }
+                }
+            }
+        )
+    }
+
+    // Add Bank Account Bottom Sheet (Drawer)
     if (showAddDialog && isOwner) {
-        AddBankAccountDialog(
+        AddBankAccountBottomSheet(
             isSaving = isSaving,
             onDismiss = { showAddDialog = false },
             onSubmit = { bankName, holderName, accountNumber, ifsc, accountType ->
@@ -242,6 +283,7 @@ private fun BankAccountCard(
     account: BankAccountDto,
     isOwner: Boolean,
     isDeleting: Boolean,
+    onEdit: () -> Unit,
     onSetDefault: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -326,6 +368,15 @@ private fun BankAccountCard(
             if (isOwner) {
                 Spacer(modifier = Modifier.height(12.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = onEdit,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Edit", style = MaterialTheme.typography.labelSmall)
+                    }
                     if (!account.isDefault) {
                         OutlinedButton(
                             onClick = onSetDefault,
@@ -334,7 +385,7 @@ private fun BankAccountCard(
                         ) {
                             Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(4.dp))
-                            Text("Set Default", style = MaterialTheme.typography.labelSmall)
+                            Text("Default", style = MaterialTheme.typography.labelSmall)
                         }
                     }
                     OutlinedButton(
@@ -378,111 +429,642 @@ private fun BankAccountCard(
     }
 }
 
+private data class BankBranchDetails(
+    val bank: String,
+    val branch: String,
+    val address: String,
+    val city: String,
+    val state: String
+)
+
+private val POPULAR_INDIAN_BANKS = listOf(
+    "State Bank of India",
+    "HDFC Bank",
+    "ICICI Bank",
+    "Axis Bank",
+    "Kotak Mahindra Bank",
+    "Punjab National Bank",
+    "Bank of Baroda",
+    "Canara Bank",
+    "Union Bank of India",
+    "IndusInd Bank",
+    "Yes Bank",
+    "IDFC FIRST Bank",
+    "Federal Bank",
+    "Indian Bank",
+    "Central Bank of India"
+)
+
+private suspend fun fetchBankDetailsByIfsc(ifsc: String): BankBranchDetails? = withContext(Dispatchers.IO) {
+    try {
+        val url = URL("https://ifsc.razorpay.com/$ifsc")
+        val conn = url.openConnection() as HttpURLConnection
+        conn.connectTimeout = 4000
+        conn.readTimeout = 4000
+        conn.requestMethod = "GET"
+        if (conn.responseCode == 200) {
+            val jsonStr = conn.inputStream.bufferedReader().use { it.readText() }
+            val obj = JSONObject(jsonStr)
+            BankBranchDetails(
+                bank = obj.optString("BANK", ""),
+                branch = obj.optString("BRANCH", ""),
+                address = obj.optString("ADDRESS", ""),
+                city = obj.optString("CITY", ""),
+                state = obj.optString("STATE", "")
+            )
+        } else {
+            null
+        }
+    } catch (_: Exception) {
+        null
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AddBankAccountDialog(
+private fun AddBankAccountBottomSheet(
     isSaving: Boolean,
     onDismiss: () -> Unit,
     onSubmit: (bankName: String, holderName: String, accountNumber: String, ifsc: String, accountType: String) -> Unit
 ) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var bankName by remember { mutableStateOf("") }
     var holderName by remember { mutableStateOf("") }
     var accountNumber by remember { mutableStateOf("") }
     var ifsc by remember { mutableStateOf("") }
     var accountType by remember { mutableStateOf("CURRENT") }
-    var expanded by remember { mutableStateOf(false) }
+    var bankDropdownExpanded by remember { mutableStateOf(false) }
+    var typeDropdownExpanded by remember { mutableStateOf(false) }
+
+    var isSearchingIfsc by remember { mutableStateOf(false) }
+    var ifscDetails by remember { mutableStateOf<BankBranchDetails?>(null) }
+    var ifscSearchAttempted by remember { mutableStateOf(false) }
+
+    val filteredBanks = remember(bankName) {
+        if (bankName.isBlank()) POPULAR_INDIAN_BANKS.take(6)
+        else POPULAR_INDIAN_BANKS.filter { it.contains(bankName, ignoreCase = true) }
+    }
+
+    // Auto-discover bank details when 11-digit IFSC code is entered
+    LaunchedEffect(ifsc) {
+        if (ifsc.length == 11) {
+            isSearchingIfsc = true
+            ifscSearchAttempted = true
+            val details = fetchBankDetailsByIfsc(ifsc)
+            ifscDetails = details
+            if (details != null && bankName.isBlank()) {
+                bankName = details.bank
+            }
+            isSearchingIfsc = false
+        } else {
+            ifscDetails = null
+            ifscSearchAttempted = false
+        }
+    }
 
     val isValid = bankName.isNotBlank() && holderName.isNotBlank()
         && accountNumber.length >= 9 && ifsc.length == 11
 
-    AlertDialog(
+    ModalBottomSheet(
         onDismissRequest = { if (!isSaving) onDismiss() },
-        title = { Text("Link Bank Account", fontWeight = FontWeight.Bold) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(
-                    value = bankName,
-                    onValueChange = { bankName = it },
-                    label = { Text("Bank Name") },
-                    placeholder = { Text("e.g. HDFC Bank") },
-                    enabled = !isSaving,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                )
-                OutlinedTextField(
-                    value = holderName,
-                    onValueChange = { holderName = it },
-                    label = { Text("Account Holder Name") },
-                    enabled = !isSaving,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                )
-                OutlinedTextField(
-                    value = accountNumber,
-                    onValueChange = { accountNumber = it.filter { c -> c.isDigit() } },
-                    label = { Text("Account Number") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    enabled = !isSaving,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                )
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surface,
+        dragHandle = { BottomSheetDefaults.DragHandle() }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 36.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // Header
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        "Link Bank Account",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        "Add settlement account for payouts & reconciliation",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                IconButton(onClick = onDismiss, enabled = !isSaving) {
+                    Icon(Icons.Default.Close, contentDescription = "Close")
+                }
+            }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+            // 1. Bank Name with suggestions
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                ExposedDropdownMenuBox(
+                    expanded = bankDropdownExpanded,
+                    onExpandedChange = { bankDropdownExpanded = !bankDropdownExpanded }
+                ) {
+                    OutlinedTextField(
+                        value = bankName,
+                        onValueChange = { newText ->
+                            bankName = newText
+                            bankDropdownExpanded = newText.isNotBlank() && POPULAR_INDIAN_BANKS.any { it.contains(newText, ignoreCase = true) }
+                        },
+                        label = { Text("Bank Name") },
+                        placeholder = { Text("e.g. HDFC Bank, SBI") },
+                        leadingIcon = { Icon(Icons.Default.AccountBalance, contentDescription = null, tint = BrandPrimary) },
+                        trailingIcon = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (bankName.isNotEmpty()) {
+                                    IconButton(
+                                        onClick = {
+                                            bankName = ""
+                                            bankDropdownExpanded = false
+                                        },
+                                        modifier = Modifier.size(24.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Clear,
+                                            contentDescription = "Clear bank name",
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                }
+                                ExposedDropdownMenuDefaults.TrailingIcon(expanded = bankDropdownExpanded)
+                            }
+                        },
+                        singleLine = true,
+                        enabled = !isSaving,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .menuAnchor(),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    if (filteredBanks.isNotEmpty()) {
+                        ExposedDropdownMenu(
+                            expanded = bankDropdownExpanded,
+                            onDismissRequest = { bankDropdownExpanded = false }
+                        ) {
+                            filteredBanks.forEach { bank ->
+                                DropdownMenuItem(
+                                    text = { Text(bank, fontWeight = FontWeight.Medium) },
+                                    leadingIcon = { Icon(Icons.Default.AccountBalance, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                                    onClick = {
+                                        bankName = bank
+                                        bankDropdownExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Quick selection chips for top banks
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    listOf("HDFC Bank", "SBI", "ICICI Bank", "Axis Bank", "Kotak").forEach { quickBank ->
+                        SuggestionChip(
+                            onClick = {
+                                bankName = if (quickBank == "SBI") "State Bank of India" else quickBank
+                                bankDropdownExpanded = false
+                            },
+                            label = { Text(quickBank, style = MaterialTheme.typography.labelSmall) }
+                        )
+                    }
+                }
+            }
+
+            // 2. Account Holder Name
+            OutlinedTextField(
+                value = holderName,
+                onValueChange = { holderName = it },
+                label = { Text("Account Holder Name") },
+                placeholder = { Text("As per bank records") },
+                leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
+                enabled = !isSaving,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
+            )
+
+            // 3. Account Number
+            OutlinedTextField(
+                value = accountNumber,
+                onValueChange = { accountNumber = it.filter { c -> c.isDigit() } },
+                label = { Text("Account Number") },
+                placeholder = { Text("e.g. 50100234567890") },
+                leadingIcon = { Icon(Icons.Default.Pin, contentDescription = null) },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                enabled = !isSaving,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
+            )
+
+            // 4. IFSC Code with automatic Bank Address Finder
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 OutlinedTextField(
                     value = ifsc,
                     onValueChange = { ifsc = it.uppercase().take(11) },
-                    label = { Text("IFSC Code") },
+                    label = { Text("IFSC Code (11 characters)") },
                     placeholder = { Text("HDFC0001234") },
+                    leadingIcon = { Icon(Icons.Default.LocationCity, contentDescription = null) },
+                    trailingIcon = {
+                        if (isSearchingIfsc) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                        } else if (ifscDetails != null) {
+                            Icon(Icons.Default.CheckCircle, contentDescription = "Verified", tint = SuccessGreen)
+                        }
+                    },
                     keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters),
                     enabled = !isSaving,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
                 )
+
+                // Auto-found Address Card
+                if (ifscDetails != null) {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = SuccessGreen.copy(alpha = 0.08f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, SuccessGreen.copy(alpha = 0.3f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalAlignment = Alignment.Top
+                        ) {
+                            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = SuccessGreen, modifier = Modifier.size(20.dp))
+                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text(
+                                    "${ifscDetails!!.bank} — ${ifscDetails!!.branch} Branch",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    "${ifscDetails!!.address}, ${ifscDetails!!.city}, ${ifscDetails!!.state}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                } else if (ifscSearchAttempted && !isSearchingIfsc && ifsc.length == 11) {
+                    Text(
+                        "Branch details not found online. You can still link this account.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 4.dp)
+                    )
+                }
+            }
+
+            // 5. Account Type
+            ExposedDropdownMenuBox(
+                expanded = typeDropdownExpanded,
+                onExpandedChange = { typeDropdownExpanded = !typeDropdownExpanded }
+            ) {
+                OutlinedTextField(
+                    value = accountType,
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Account Type") },
+                    leadingIcon = { Icon(Icons.Default.Badge, contentDescription = null) },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(typeDropdownExpanded) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .menuAnchor(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+                ExposedDropdownMenu(
+                    expanded = typeDropdownExpanded,
+                    onDismissRequest = { typeDropdownExpanded = false }
+                ) {
+                    listOf("CURRENT", "SAVINGS", "OVERDRAFT").forEach { type ->
+                        DropdownMenuItem(
+                            text = { Text(type) },
+                            onClick = {
+                                accountType = type
+                                typeDropdownExpanded = false
+                            }
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // Submit Button
+            Button(
+                onClick = { onSubmit(bankName, holderName, accountNumber, ifsc, accountType) },
+                enabled = isValid && !isSaving,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)
+            ) {
+                if (isSaving) {
+                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Linking Account...", fontWeight = FontWeight.SemiBold)
+                } else {
+                    Icon(Icons.Default.AddLink, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Link Bank Account", fontWeight = FontWeight.SemiBold)
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun EditBankAccountBottomSheet(
+    account: BankAccountDto,
+    isSaving: Boolean,
+    onDismiss: () -> Unit,
+    onSubmit: (bankName: String, holderName: String, accountNumber: String?, ifsc: String, accountType: String) -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var bankName by remember { mutableStateOf(account.bankName) }
+    var holderName by remember { mutableStateOf(account.accountHolderName) }
+    var accountNumber by remember { mutableStateOf("") }
+    var ifsc by remember { mutableStateOf(account.ifscCode) }
+    var accountType by remember { mutableStateOf(account.accountType) }
+    var bankDropdownExpanded by remember { mutableStateOf(false) }
+    var typeDropdownExpanded by remember { mutableStateOf(false) }
+
+    var isSearchingIfsc by remember { mutableStateOf(false) }
+    var ifscDetails by remember { mutableStateOf<BankBranchDetails?>(null) }
+    var ifscSearchAttempted by remember { mutableStateOf(false) }
+
+    val filteredBanks = remember(bankName) {
+        if (bankName.isBlank()) POPULAR_INDIAN_BANKS.take(6)
+        else POPULAR_INDIAN_BANKS.filter { it.contains(bankName, ignoreCase = true) }
+    }
+
+    LaunchedEffect(ifsc) {
+        if (ifsc.length == 11) {
+            isSearchingIfsc = true
+            ifscSearchAttempted = true
+            val details = fetchBankDetailsByIfsc(ifsc)
+            ifscDetails = details
+            if (details != null && bankName.isBlank()) {
+                bankName = details.bank
+            }
+            isSearchingIfsc = false
+        } else {
+            ifscDetails = null
+            ifscSearchAttempted = false
+        }
+    }
+
+    val isValid = bankName.isNotBlank() && holderName.isNotBlank() && ifsc.length == 11
+        && (accountNumber.isBlank() || accountNumber.length >= 9)
+
+    ModalBottomSheet(
+        onDismissRequest = { if (!isSaving) onDismiss() },
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surface,
+        dragHandle = { BottomSheetDefaults.DragHandle() }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 36.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        "Edit Bank Account",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        "Update settlement destination details",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                IconButton(onClick = onDismiss, enabled = !isSaving) {
+                    Icon(Icons.Default.Close, contentDescription = "Close")
+                }
+            }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+            // Bank Name with suggestions and backspace fix
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 ExposedDropdownMenuBox(
-                    expanded = expanded,
-                    onExpandedChange = { expanded = !expanded }
+                    expanded = bankDropdownExpanded,
+                    onExpandedChange = { bankDropdownExpanded = !bankDropdownExpanded }
                 ) {
                     OutlinedTextField(
-                        value = accountType,
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text("Account Type") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
-                        modifier = Modifier.fillMaxWidth().menuAnchor(),
+                        value = bankName,
+                        onValueChange = { newText ->
+                            bankName = newText
+                            bankDropdownExpanded = newText.isNotBlank() && POPULAR_INDIAN_BANKS.any { it.contains(newText, ignoreCase = true) }
+                        },
+                        label = { Text("Bank Name") },
+                        placeholder = { Text("e.g. HDFC Bank, SBI") },
+                        leadingIcon = { Icon(Icons.Default.AccountBalance, contentDescription = null, tint = BrandPrimary) },
+                        trailingIcon = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (bankName.isNotEmpty()) {
+                                    IconButton(
+                                        onClick = {
+                                            bankName = ""
+                                            bankDropdownExpanded = false
+                                        },
+                                        modifier = Modifier.size(24.dp)
+                                    ) {
+                                        Icon(Icons.Default.Clear, contentDescription = "Clear", modifier = Modifier.size(18.dp))
+                                    }
+                                }
+                                ExposedDropdownMenuDefaults.TrailingIcon(expanded = bankDropdownExpanded)
+                            }
+                        },
+                        singleLine = true,
+                        enabled = !isSaving,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .menuAnchor(),
                         shape = RoundedCornerShape(12.dp)
                     )
-                    ExposedDropdownMenu(
-                        expanded = expanded,
-                        onDismissRequest = { expanded = false }
-                    ) {
-                        listOf("CURRENT", "SAVINGS", "OVERDRAFT").forEach { type ->
-                            DropdownMenuItem(
-                                text = { Text(type) },
-                                onClick = {
-                                    accountType = type
-                                    expanded = false
-                                }
-                            )
+                    if (filteredBanks.isNotEmpty()) {
+                        ExposedDropdownMenu(
+                            expanded = bankDropdownExpanded,
+                            onDismissRequest = { bankDropdownExpanded = false }
+                        ) {
+                            filteredBanks.forEach { bank ->
+                                DropdownMenuItem(
+                                    text = { Text(bank, fontWeight = FontWeight.Medium) },
+                                    leadingIcon = { Icon(Icons.Default.AccountBalance, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                                    onClick = {
+                                        bankName = bank
+                                        bankDropdownExpanded = false
+                                    }
+                                )
+                            }
                         }
                     }
                 }
             }
-        },
-        confirmButton = {
+
+            // Account Holder Name
+            OutlinedTextField(
+                value = holderName,
+                onValueChange = { holderName = it },
+                label = { Text("Account Holder Name") },
+                placeholder = { Text("As per bank records") },
+                leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
+                singleLine = true,
+                enabled = !isSaving,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
+            )
+
+            // Account Number (optional update)
+            OutlinedTextField(
+                value = accountNumber,
+                onValueChange = { accountNumber = it.filter { c -> c.isDigit() } },
+                label = { Text("Account Number") },
+                placeholder = { Text("Leave empty to keep ${account.accountNumberMasked}") },
+                supportingText = { Text("Current: ${account.accountNumberMasked}") },
+                leadingIcon = { Icon(Icons.Default.Pin, contentDescription = null) },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                singleLine = true,
+                enabled = !isSaving,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
+            )
+
+            // IFSC Code
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                OutlinedTextField(
+                    value = ifsc,
+                    onValueChange = { ifsc = it.uppercase().take(11) },
+                    label = { Text("IFSC Code (11 characters)") },
+                    placeholder = { Text("HDFC0001234") },
+                    leadingIcon = { Icon(Icons.Default.LocationCity, contentDescription = null) },
+                    trailingIcon = {
+                        if (isSearchingIfsc) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                        } else if (ifscDetails != null) {
+                            Icon(Icons.Default.CheckCircle, contentDescription = "Verified", tint = SuccessGreen)
+                        }
+                    },
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters),
+                    singleLine = true,
+                    enabled = !isSaving,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                if (ifscDetails != null) {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = SuccessGreen.copy(alpha = 0.08f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, SuccessGreen.copy(alpha = 0.3f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalAlignment = Alignment.Top
+                        ) {
+                            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = SuccessGreen, modifier = Modifier.size(20.dp))
+                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text(
+                                    "${ifscDetails!!.bank} — ${ifscDetails!!.branch} Branch",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    "${ifscDetails!!.address}, ${ifscDetails!!.city}, ${ifscDetails!!.state}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Account Type
+            ExposedDropdownMenuBox(
+                expanded = typeDropdownExpanded,
+                onExpandedChange = { typeDropdownExpanded = !typeDropdownExpanded }
+            ) {
+                OutlinedTextField(
+                    value = accountType,
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Account Type") },
+                    leadingIcon = { Icon(Icons.Default.Badge, contentDescription = null) },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(typeDropdownExpanded) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .menuAnchor(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+                ExposedDropdownMenu(
+                    expanded = typeDropdownExpanded,
+                    onDismissRequest = { typeDropdownExpanded = false }
+                ) {
+                    listOf("CURRENT", "SAVINGS", "OVERDRAFT").forEach { type ->
+                        DropdownMenuItem(
+                            text = { Text(type) },
+                            onClick = {
+                                accountType = type
+                                typeDropdownExpanded = false
+                            }
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
             Button(
-                onClick = { onSubmit(bankName, holderName, accountNumber, ifsc, accountType) },
+                onClick = { onSubmit(bankName, holderName, accountNumber.ifBlank { null }, ifsc, accountType) },
                 enabled = isValid && !isSaving,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+                shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)
             ) {
                 if (isSaving) {
-                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
-                    Spacer(Modifier.width(6.dp))
-                    Text("Linking...")
+                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Updating...", fontWeight = FontWeight.SemiBold)
                 } else {
-                    Text("Link Account")
+                    Icon(Icons.Default.Save, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Save Changes", fontWeight = FontWeight.SemiBold)
                 }
             }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss, enabled = !isSaving) { Text("Cancel") }
         }
-    )
+    }
 }
+

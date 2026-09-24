@@ -93,7 +93,10 @@ export function useDashboardData({
         if (txnStatus) url += `&status=${txnStatus}`;
         if (txnSearch) url += `&search=${encodeURIComponent(txnSearch)}`;
         const data = await apiFetch<any>(url);
-        if (data.success) setTransactions(data.transactions || []);
+        if (data.success) {
+          const list = data.transactions || data.data || [];
+          setTransactions(list);
+        }
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : 'Error loading ledger';
         if (!silent) showToast(msg, 'error');
@@ -163,9 +166,12 @@ export function useDashboardData({
     try {
       const data = await apiFetch<any>('/api/v1/admin/tables');
       if (data.success) {
-        setAdminTables(data.tables || []);
-        if (data.tables?.length > 0 && !selectedTable) {
-          setSelectedTable(data.tables[0].name);
+        const fetchedTables = data.tables || [];
+        setAdminTables(fetchedTables);
+        if (fetchedTables.length > 0) {
+          if (!selectedTable || !fetchedTables.some((t: any) => t.name === selectedTable)) {
+            setSelectedTable(fetchedTables[0].name);
+          }
         }
       }
     } catch (err: unknown) {
@@ -175,12 +181,19 @@ export function useDashboardData({
   }, [apiFetch, selectedTable, showToast]);
 
   const loadTableData = useCallback(async () => {
+    if (!selectedTable) return;
     setTableLoading(true);
     try {
       let url = `/api/v1/admin/tables/${selectedTable}?limit=25&offset=${tableOffset}`;
       if (tableSearch) url += `&search=${encodeURIComponent(tableSearch)}`;
       const data = await apiFetch<any>(url);
-      if (data.success) setTableData(data);
+      if (data.success) {
+        setTableData({
+          rows: data.rows || [],
+          columns: data.columns || [],
+          total: data.total || 0,
+        });
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error loading table data';
       showToast(msg, 'error');

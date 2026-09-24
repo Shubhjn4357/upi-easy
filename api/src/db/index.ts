@@ -25,14 +25,67 @@ try {
   // Better-sqlite3 native addon not available in Cloudflare Workers isolate
 }
 
+let rawD1: any = null;
+
 export function setD1Database(d1Database: any) {
   if (d1Database) {
+    rawD1 = d1Database;
     dbInstance = drizzleD1(d1Database, { schema });
   }
 }
 
+export function getRawD1(): any {
+  return rawD1;
+}
+
 export function getRawDb(): any {
   return sqlite;
+}
+
+export interface RawDbClient {
+  all<T = any>(query: string, params?: any[]): Promise<T[]>;
+  get<T = any>(query: string, params?: any[]): Promise<T | null>;
+  run(query: string, params?: any[]): Promise<{ changes: number }>;
+}
+
+export function getRawDbClient(env?: any): RawDbClient | null {
+  const d1 = env?.upi_easy_db || env?.DB || rawD1;
+  if (d1) {
+    return {
+      async all<T = any>(query: string, params: any[] = []): Promise<T[]> {
+        const stmt = params.length > 0 ? d1.prepare(query).bind(...params) : d1.prepare(query);
+        const res = await stmt.all();
+        return (res.results || []) as T[];
+      },
+      async get<T = any>(query: string, params: any[] = []): Promise<T | null> {
+        const stmt = params.length > 0 ? d1.prepare(query).bind(...params) : d1.prepare(query);
+        const res = await stmt.first();
+        return (res ?? null) as T | null;
+      },
+      async run(query: string, params: any[] = []): Promise<{ changes: number }> {
+        const stmt = params.length > 0 ? d1.prepare(query).bind(...params) : d1.prepare(query);
+        const res = await stmt.run();
+        return { changes: res.meta?.changes ?? (res.success ? 1 : 0) };
+      },
+    };
+  }
+
+  if (sqlite) {
+    return {
+      async all<T = any>(query: string, params: any[] = []): Promise<T[]> {
+        return sqlite.prepare(query).all(...params) as T[];
+      },
+      async get<T = any>(query: string, params: any[] = []): Promise<T | null> {
+        return (sqlite.prepare(query).get(...params) ?? null) as T | null;
+      },
+      async run(query: string, params: any[] = []): Promise<{ changes: number }> {
+        const res = sqlite.prepare(query).run(...params);
+        return { changes: res.changes };
+      },
+    };
+  }
+
+  return null;
 }
 
 export const db = new Proxy({} as any, {

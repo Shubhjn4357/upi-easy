@@ -46,6 +46,7 @@ import com.aerotech.upieasy.data.repository.OrganizationRepository
 import com.aerotech.upieasy.ui.components.UpieasyPullToRefreshContainer
 import com.aerotech.upieasy.ui.components.SwipeToDeleteContainer
 import com.aerotech.upieasy.ui.components.UpieasyConfirmBottomDrawer
+import com.aerotech.upieasy.core.ui.StaffScreenSkeleton
 import com.aerotech.upieasy.ui.theme.*
 import kotlinx.coroutines.launch
 
@@ -238,9 +239,7 @@ fun StaffScreen(
 
             if (selectedTab == 0) {
             if (isLoading) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = BrandAccent)
-                }
+                StaffScreenSkeleton()
             } else if (staffList.isEmpty()) {
                 Box(
                     modifier = Modifier
@@ -556,12 +555,27 @@ fun StaffScreen(
                                 }
 
                                 Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = staff.fullName ?: "Staff Member",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = staff.fullName ?: "Staff Member",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Surface(
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = roleBg
+                                        ) {
+                                        Text(
+                                            text = staff.role,
+                                            color = roleColor,
+                                            fontSize = 8.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.padding(horizontal = 1.dp, vertical = 1.dp)
+                                        )
+                                        }
+                                    }
                                     if (!staff.mobileNumber.isNullOrBlank()) {
                                         Text(
                                             text = "+91 ${staff.mobileNumber}",
@@ -579,18 +593,7 @@ fun StaffScreen(
                                 }
 
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Surface(
-                                        shape = RoundedCornerShape(8.dp),
-                                        color = roleBg
-                                    ) {
-                                        Text(
-                                            text = staff.role,
-                                            color = roleColor,
-                                            style = MaterialTheme.typography.labelSmall,
-                                            fontWeight = FontWeight.Bold,
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                        )
-                                    }
+                                    
 
                                     val canDeleteThisStaff = isOwner || (canManageStaff && !staff.role.equals("OWNER", ignoreCase = true) && !staff.role.equals("MANAGER", ignoreCase = true))
                                     if (!isSelectionMode && canDeleteThisStaff) {

@@ -44,6 +44,7 @@ import com.aerotech.upieasy.core.security.SessionManager
 import com.aerotech.upieasy.core.util.QrCodeGenerator
 import com.aerotech.upieasy.core.util.UpiPaymentDetails
 import com.aerotech.upieasy.core.util.UpiUriHelper
+import com.aerotech.upieasy.core.ui.QrScreenSkeleton
 import com.aerotech.upieasy.ui.components.UpieasyButton
 import com.aerotech.upieasy.ui.theme.*
 
@@ -176,6 +177,9 @@ fun QrGeneratorScreen(
                     .background(SoftGlowEmerald)
             )
 
+            if (vpa.isEmpty() && localAccounts.isEmpty() && currentOrgId != null) {
+                QrScreenSkeleton()
+            } else {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -522,6 +526,7 @@ fun QrGeneratorScreen(
             )
 
             Spacer(modifier = Modifier.height(32.dp))
+        }
         }
     }
 }

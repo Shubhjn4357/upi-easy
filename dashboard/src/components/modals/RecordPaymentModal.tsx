@@ -65,6 +65,30 @@ export function RecordPaymentModal({
             />
           </div>
         </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label>UTR / Reference (Optional)</Label>
+            <Input
+              type="text"
+              name="referenceNumber"
+              placeholder="Auto-generated if empty"
+              disabled={isSaving}
+              className="font-mono text-[11px]"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Status</Label>
+            <select
+              name="status"
+              defaultValue="SUCCESS"
+              disabled={isSaving}
+              className="w-full h-9 bg-background border border-input rounded-xl px-2.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring">
+              <option value="SUCCESS">SUCCESS (Received)</option>
+              <option value="PENDING">PENDING (Awaiting)</option>
+              <option value="FAILED">FAILED</option>
+            </select>
+          </div>
+        </div>
         <div className="space-y-1.5">
           <Label>Reference Note</Label>
           <Input

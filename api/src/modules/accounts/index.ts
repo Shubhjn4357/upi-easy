@@ -121,6 +121,93 @@ accountsRouter.post(
   }
 );
 
+// Update bank account details
+accountsRouter.patch(
+  "/:orgId/accounts/:accountId",
+  requireTenant,
+  requirePermission("accounts.manage"),
+  async (c) => {
+    const orgId = c.get("organizationId");
+    const accountId = c.req.param("accountId");
+    const actorId = c.get("userId");
+    const body = await c.req.json();
+
+    const validator = z.object({
+      bankName: z.string().min(2).optional(),
+      accountHolderName: z.string().min(2).optional(),
+      accountNumber: z.string().min(9).max(18).optional(),
+      ifscCode: z.string().regex(/^[A-Z]{4}0[A-Z0-9]{6}$/, "Invalid IFSC code format").optional(),
+      accountType: z.enum(["CURRENT", "SAVINGS", "OVERDRAFT"]).optional(),
+      isDefault: z.boolean().optional(),
+    });
+
+    const data = validator.parse(body);
+
+    const existing = await db
+      .select()
+      .from(schema.bankAccounts)
+      .where(and(eq(schema.bankAccounts.id, accountId), eq(schema.bankAccounts.organizationId, orgId)))
+      .get();
+
+    if (!existing) {
+      throw new NotFoundError("Bank account not found");
+    }
+
+    if (data.isDefault) {
+      await db.update(schema.bankAccounts)
+        .set({ isDefault: false })
+        .where(eq(schema.bankAccounts.organizationId, orgId))
+        .run();
+    }
+
+    const updateValues: Record<string, any> = {
+      updatedAt: new Date(),
+    };
+
+    if (data.bankName) updateValues.bankName = data.bankName;
+    if (data.accountHolderName) updateValues.accountHolderName = data.accountHolderName;
+    if (data.ifscCode) updateValues.ifscCode = data.ifscCode.toUpperCase();
+    if (data.accountType) updateValues.accountType = data.accountType;
+    if (data.isDefault !== undefined) updateValues.isDefault = data.isDefault;
+
+    if (data.accountNumber) {
+      const last4 = data.accountNumber.slice(-4);
+      updateValues.accountNumberMasked = `••••••••${last4}`;
+    }
+
+    await db.update(schema.bankAccounts)
+      .set(updateValues)
+      .where(eq(schema.bankAccounts.id, accountId))
+      .run();
+
+    // Audit log
+    await db.insert(schema.auditLogs)
+      .values({
+        id: generateId("aud"),
+        organizationId: orgId,
+        actorId,
+        action: "account.updated",
+        resourceType: "bank_account",
+        resourceId: accountId,
+        metadataJson: JSON.stringify(updateValues),
+        createdAt: new Date(),
+      })
+      .run();
+
+    const updated = await db
+      .select()
+      .from(schema.bankAccounts)
+      .where(eq(schema.bankAccounts.id, accountId))
+      .get();
+
+    return c.json({
+      success: true,
+      message: "Bank account updated successfully",
+      account: updated,
+    });
+  }
+);
+
 // Set bank account as default settlement account
 accountsRouter.patch(
   "/:orgId/accounts/:accountId/default",
