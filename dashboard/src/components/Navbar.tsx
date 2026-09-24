@@ -71,7 +71,6 @@ export function Navbar({
           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-[11px] font-mono">
             <span
               className={`w-1.5 h-1.5 rounded-full bg-emerald-500 ${isSyncing ? 'animate-ping' : 'animate-pulse'}`}></span>
-            <span className="font-semibold">Live</span>
             <span>{pingMs ? `${pingMs}ms` : 'Ready'}</span>
           </div>
 
@@ -81,16 +80,16 @@ export function Navbar({
             size="sm"
             onClick={onToggleTheme}
             title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
-            className="rounded-xl px-2.5 gap-1.5 text-xs">
+            className="rounded-full px-2.5 gap-1.5 text-xs">
             {theme === 'dark' ? (
               <>
                 <IconSun className="w-3.5 h-3.5 text-amber-400" />
-                <span className="hidden lg:inline text-[11px]">Light</span>
+                
               </>
             ) : (
               <>
                 <IconMoon className="w-3.5 h-3.5 text-indigo-500" />
-                <span className="hidden lg:inline text-[11px]">Dark</span>
+                
               </>
             )}
           </Button>
@@ -122,9 +121,9 @@ export function Navbar({
                 size="sm"
                 onClick={onLogout}
                 title="Sign out"
-                className="h-7 px-2.5 rounded-lg text-xs gap-1 font-semibold">
+                className="h-7 px-2.5 rounded-full text-xs gap-1 font-semibold">
                 <IconLogOut className="w-3 h-3" />
-                <span>Logout</span>
+                
               </Button>
             </div>
           )}
@@ -210,9 +209,6 @@ export function Navbar({
                     </option>
                   ))}
                 </select>
-                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground text-xs">
-                  ▼
-                </div>
               </div>
             </div>
           )}
@@ -222,7 +218,6 @@ export function Navbar({
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-mono">
               <span
                 className={`w-2 h-2 rounded-full bg-emerald-500 ${isSyncing ? 'animate-ping' : 'animate-pulse'}`}></span>
-              <span className="font-semibold">Live Telemetry</span>
               <span>{pingMs ? `${pingMs}ms` : 'Ready'}</span>
             </div>
 
@@ -234,17 +229,16 @@ export function Navbar({
               {theme === 'dark' ? (
                 <>
                   <IconSun className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Light</span>
+                  
                 </>
               ) : (
                 <>
                   <IconMoon className="w-3.5 h-3.5 text-indigo-500" />
-                  <span>Dark</span>
+                  
                 </>
               )}
             </Button>
-          </div>
-
+            <div className="flex items-center gap-2">
           {/* Logout Button */}
           {user && (
             <Button
@@ -258,6 +252,9 @@ export function Navbar({
               Sign Out
             </Button>
           )}
+          </div>
+          </div>
+
         </div>
       )}
     </header>
