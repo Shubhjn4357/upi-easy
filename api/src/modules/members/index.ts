@@ -51,9 +51,11 @@ membersRouter.get("/:orgId/invites", requireTenant, requirePermission("staff.rea
   const orgId = c.get("organizationId");
 
   try {
+    const now = new Date();
     const invites = await db
       .select({
         id: schema.organizationInvites.id,
+        token: schema.organizationInvites.token,
         organizationId: schema.organizationInvites.organizationId,
         invitedUserId: schema.organizationInvites.invitedUserId,
         invitedMobile: schema.organizationInvites.invitedMobile,
@@ -69,12 +71,19 @@ membersRouter.get("/:orgId/invites", requireTenant, requirePermission("staff.rea
         invitedBy: schema.organizationInvites.invitedBy,
       })
       .from(schema.organizationInvites)
-      .where(eq(schema.organizationInvites.organizationId, orgId))
+      .where(
+        and(
+          eq(schema.organizationInvites.organizationId, orgId),
+          eq(schema.organizationInvites.status, "PENDING")
+        )
+      )
       .all();
 
-    return c.json({ success: true, invites });
+    const activeInvites = invites.filter((inv: any) => !inv.expiresAt || new Date(inv.expiresAt) > now);
+
+    return c.json({ success: true, invites: activeInvites, invitations: activeInvites });
   } catch (_: any) {
-    return c.json({ success: true, invites: [] });
+    return c.json({ success: true, invites: [], invitations: [] });
   }
 });
 
@@ -84,18 +93,16 @@ const createInviteHandler = async (c: any) => {
   const body = await c.req.json();
 
   const validator = z.object({
+    email: z.string().email("Valid email address is required"),
     mobileNumber: z.string().optional().nullable(),
-    email: z.string().email().optional().nullable(),
     name: z.string().optional().nullable(),
     fullName: z.string().optional().nullable(),
-    role: z.enum(["MANAGER", "CASHIER", "ACCOUNTANT"]),
-  }).refine((data) => Boolean(data.mobileNumber || data.email), {
-    message: "Either mobileNumber or email must be provided",
+    role: z.enum(["MANAGER", "CASHIER", "ACCOUNTANT"]).default("CASHIER"),
   });
 
   const parsed = validator.parse(body);
+  const email = parsed.email.trim().toLowerCase();
   const rawMobile = parsed.mobileNumber?.trim() || undefined;
-  const email = parsed.email?.trim()?.toLowerCase() || undefined;
   const name = parsed.name?.trim() || parsed.fullName?.trim() || undefined;
   const role = parsed.role;
 
@@ -169,57 +176,39 @@ const createInviteHandler = async (c: any) => {
 
   // 6. Prevent duplicate pending invitation
   const now = new Date();
-  const inviteConditions = [
-    eq(schema.organizationInvites.organizationId, orgId),
-    eq(schema.organizationInvites.status, "PENDING"),
-  ];
-
-  if (existingUser) {
-    const duplicate = await db
-      .select()
-      .from(schema.organizationInvites)
-      .where(
-        and(
-          ...inviteConditions,
-          or(
-            eq(schema.organizationInvites.invitedUserId, existingUser.id),
-            normalizedMobile ? eq(schema.organizationInvites.invitedMobile, normalizedMobile) : undefined
-          )
+  const duplicate = await db
+    .select()
+    .from(schema.organizationInvites)
+    .where(
+      and(
+        eq(schema.organizationInvites.organizationId, orgId),
+        eq(schema.organizationInvites.status, "PENDING"),
+        or(
+          eq(schema.organizationInvites.invitedEmail, email),
+          existingUser ? eq(schema.organizationInvites.invitedUserId, existingUser.id) : undefined,
+          normalizedMobile ? eq(schema.organizationInvites.invitedMobile, normalizedMobile) : undefined
         )
       )
-      .get();
+    )
+    .get();
 
-    if (duplicate && new Date(duplicate.expiresAt) > now) {
-      throw new AppError("A pending invitation already exists for this recipient", 409, "DUPLICATE_INVITATION");
-    }
-  } else if (normalizedMobile) {
-    const duplicate = await db
-      .select()
-      .from(schema.organizationInvites)
-      .where(
-        and(
-          ...inviteConditions,
-          eq(schema.organizationInvites.invitedMobile, normalizedMobile)
-        )
-      )
-      .get();
-
-    if (duplicate && new Date(duplicate.expiresAt) > now) {
-      throw new AppError("A pending invitation already exists for this mobile number", 409, "DUPLICATE_INVITATION");
-    }
+  if (duplicate && new Date(duplicate.expiresAt) > now) {
+    throw new AppError("A pending invitation already exists for this email address", 409, "DUPLICATE_INVITATION");
   }
 
   // 7. Create organization invitation (7 days expiry)
   const inviteId = generateId("inv");
+  const token = generateId("invtok");
   const expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
 
   await db.insert(schema.organizationInvites)
     .values({
       id: inviteId,
+      token,
       organizationId: orgId,
       invitedUserId: existingUser ? existingUser.id : null,
-      invitedMobile: normalizedMobile || (email ?? ""),
-      invitedEmail: email ?? null,
+      invitedMobile: normalizedMobile || null,
+      invitedEmail: email,
       invitedName: name ?? null,
       role,
       invitedBy: actorId,
@@ -315,13 +304,21 @@ const createInviteHandler = async (c: any) => {
     }
   }
 
+  const origin = c.req.header("origin") || c.req.header("referer")?.replace(/\/$/, "") || "http://localhost:5173";
+  const baseUrl = origin.replace(/\/invite.*$/, "").replace(/\/$/, "");
+  const inviteUrl = `${baseUrl}/invite/${token}`;
+
   return c.json({
     success: true,
-    message: "Invitation sent successfully",
+    message: "Invitation link created successfully",
     invite: {
       id: inviteId,
+      token,
+      inviteUrl,
       organizationId: orgId,
       organizationName: org.name,
+      invitedEmail: email,
+      invitedMobile: normalizedMobile || null,
       role,
       status: "PENDING",
       expiresAt: expiresAt.toISOString(),
@@ -335,17 +332,17 @@ const directAddStaffHandler = async (c: any) => {
   const body = await c.req.json();
 
   const validator = z.object({
+    email: z.string().email().optional().nullable(),
     mobileNumber: z.string().nullable().optional(),
-    email: z.string().nullable().optional(),
     fullName: z.string().nullable().optional(),
-    role: z.enum(["MANAGER", "CASHIER", "ACCOUNTANT"]),
-  }).refine((data) => Boolean(data.mobileNumber || data.email), {
-    message: "Either mobileNumber or email must be provided",
+    role: z.enum(["MANAGER", "CASHIER", "ACCOUNTANT"]).default("CASHIER"),
+  }).refine((data) => Boolean(data.email || data.mobileNumber), {
+    message: "Either email or mobile number must be provided",
   });
 
   const parsed = validator.parse(body);
+  const email = parsed.email?.trim() ? parsed.email.trim().toLowerCase() : undefined;
   const mobileNumber = parsed.mobileNumber?.trim() ? parsed.mobileNumber.trim() : undefined;
-  const email = parsed.email?.trim() ? parsed.email.trim() : undefined;
   const fullName = parsed.fullName?.trim() ? parsed.fullName.trim() : undefined;
   const role = parsed.role;
 
@@ -431,6 +428,44 @@ const directAddStaffHandler = async (c: any) => {
 };
 
 membersRouter.post("/:orgId/invites", requireTenant, requirePermission("staff.manage"), createInviteHandler);
+membersRouter.delete("/:orgId/invites/:inviteId", requireTenant, requirePermission("staff.manage"), async (c) => {
+  const orgId = c.get("organizationId");
+  const actorId = c.get("userId");
+  const inviteId = c.req.param("inviteId");
+
+  const invite = await db
+    .select()
+    .from(schema.organizationInvites)
+    .where(
+      and(
+        eq(schema.organizationInvites.id, inviteId),
+        eq(schema.organizationInvites.organizationId, orgId)
+      )
+    )
+    .get();
+
+  if (!invite) {
+    throw new NotFoundError("Invitation not found");
+  }
+
+  await db.delete(schema.organizationInvites)
+    .where(eq(schema.organizationInvites.id, inviteId))
+    .run();
+
+  await db.insert(schema.auditLogs)
+    .values({
+      id: generateId("aud"),
+      organizationId: orgId,
+      actorId,
+      action: "staff.invite.cancelled",
+      resourceType: "organization_invite",
+      resourceId: inviteId,
+      createdAt: new Date(),
+    })
+    .run();
+
+  return c.json({ success: true, message: "Invitation cancelled successfully" });
+});
 membersRouter.post("/:orgId/staff/invite", requireTenant, requirePermission("staff.manage"), directAddStaffHandler);
 
 membersRouter.patch(

@@ -210,7 +210,7 @@ class OrganizationRepository(
         return try {
             val response = apiService.rejectInvitation(inviteId)
             if (response.isSuccessful) {
-                organizationDao.updateInviteStatus(inviteId, "REJECTED")
+                organizationDao.deleteInvite(inviteId)
                 Result.success(Unit)
             } else {
                 Result.failure(Exception("Failed to reject invitation: ${response.code()}"))
@@ -225,7 +225,7 @@ class OrganizationRepository(
         return try {
             val response = apiService.cancelInvitation(inviteId)
             if (response.isSuccessful) {
-                organizationDao.updateInviteStatus(inviteId, "CANCELLED")
+                organizationDao.deleteInvite(inviteId)
                 Result.success(Unit)
             } else {
                 Result.failure(Exception("Failed to cancel invitation: ${response.code()}"))
@@ -238,7 +238,7 @@ class OrganizationRepository(
 
     suspend fun sendInvitation(
         orgId: String,
-        mobileNumber: String,
+        mobileNumber: String?,
         name: String?,
         email: String?,
         role: String
@@ -247,9 +247,9 @@ class OrganizationRepository(
             val response = apiService.sendInvite(
                 orgId = orgId,
                 request = SendInviteRequest(
-                    mobileNumber = mobileNumber,
-                    name = name,
-                    email = email,
+                    mobileNumber = mobileNumber?.takeIf { it.isNotBlank() },
+                    name = name?.takeIf { it.isNotBlank() },
+                    email = email?.takeIf { it.isNotBlank() },
                     role = role
                 )
             )

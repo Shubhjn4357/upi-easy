@@ -56,9 +56,10 @@ export const organizationInvites = sqliteTable(
   "organization_invites",
   {
     id: text("id").primaryKey(),
+    token: text("token").unique(),
     organizationId: text("organization_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
     invitedUserId: text("invited_user_id").references(() => users.id, { onDelete: "cascade" }),
-    invitedMobile: text("invited_mobile").notNull(),
+    invitedMobile: text("invited_mobile"),
     invitedEmail: text("invited_email"),
     invitedName: text("invited_name"),
     role: text("role").notNull(),

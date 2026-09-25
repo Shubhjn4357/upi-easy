@@ -23,6 +23,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.platform.LocalContext
 import com.aerotech.upieasy.core.util.HapticHelper
@@ -85,9 +87,11 @@ fun StaffScreen(
     var selectedTab by remember { mutableIntStateOf(0) }
     var actionLoadingId by remember { mutableStateOf<String?>(null) }
 
-    fun refresh() {
+    fun refresh(silent: Boolean = false) {
         currentOrgId?.let { orgId ->
-            isLoading = true
+            if (!silent && staffList.isEmpty()) {
+                isLoading = true
+            }
             scope.launch {
                 try {
                     val res = apiService.getStaff(orgId)
@@ -100,9 +104,10 @@ fun StaffScreen(
                 try {
                     val invitesRes = apiService.getOrganizationInvites(orgId)
                     if (invitesRes.isSuccessful && invitesRes.body()?.success == true) {
-                        sentInvites = invitesRes.body()?.invitations
+                        val rawInvites = invitesRes.body()?.invitations
                             ?: invitesRes.body()?.invites
                             ?: emptyList()
+                        sentInvites = rawInvites.filter { it.status.uppercase() == "PENDING" }
                     }
                 } catch (_: Exception) {}
 
@@ -116,8 +121,15 @@ fun StaffScreen(
         }
     }
 
+    // Auto-refresh: initial fetch + periodic background polling every 5 seconds
     LaunchedEffect(currentOrgId) {
-        refresh()
+        refresh(silent = false)
+        while (isActive) {
+            delay(5000)
+            if (currentOrgId != null) {
+                refresh(silent = true)
+            }
+        }
     }
 
     Scaffold(
@@ -156,6 +168,11 @@ fun StaffScreen(
                 Column {
                     TopAppBar(
                         title = { Text("Staff & Permissions", fontWeight = FontWeight.Bold) },
+                        actions = {
+                            IconButton(onClick = { refresh(silent = false) }) {
+                                Icon(Icons.Default.Refresh, contentDescription = "Refresh Staff & Invites")
+                            }
+                        },
                         colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
                     )
                     TabRow(
@@ -306,7 +323,7 @@ fun StaffScreen(
                     isRefreshing = isRefreshing,
                     onRefresh = {
                         isRefreshing = true
-                        refresh()
+                        refresh(silent = true)
                     }
                 ) {
                     LazyColumn(
@@ -629,7 +646,7 @@ fun StaffScreen(
                     actionLoadingId = actionLoadingId,
                     onRefresh = {
                         isRefreshing = true
-                        refresh()
+                        refresh(silent = true)
                     },
                     onAcceptInvite = { invite ->
                         actionLoadingId = invite.id
@@ -638,7 +655,7 @@ fun StaffScreen(
                             actionLoadingId = null
                             if (res.isSuccess) {
                                 Toast.makeText(context, "Joined ${res.getOrNull()}!", Toast.LENGTH_LONG).show()
-                                refresh()
+                                refresh(silent = true)
                             } else {
                                 Toast.makeText(context, res.exceptionOrNull()?.message ?: "Failed to accept invite", Toast.LENGTH_SHORT).show()
                             }
@@ -651,7 +668,8 @@ fun StaffScreen(
                             actionLoadingId = null
                             if (res.isSuccess) {
                                 Toast.makeText(context, "Invitation rejected", Toast.LENGTH_SHORT).show()
-                                refresh()
+                                orgRepository.refreshInvitations()
+                                refresh(silent = true)
                             } else {
                                 Toast.makeText(context, res.exceptionOrNull()?.message ?: "Failed to reject invite", Toast.LENGTH_SHORT).show()
                             }
@@ -659,14 +677,17 @@ fun StaffScreen(
                     },
                     onCancelInvite = { invite ->
                         actionLoadingId = invite.id
+                        // Instantly delete from the UI list so it disappears immediately
+                        sentInvites = sentInvites.filter { it.id != invite.id }
                         scope.launch {
                             val res = orgRepository.cancelInvitation(invite.id)
                             actionLoadingId = null
                             if (res.isSuccess) {
                                 Toast.makeText(context, "Invitation cancelled", Toast.LENGTH_SHORT).show()
-                                refresh()
+                                refresh(silent = true)
                             } else {
                                 Toast.makeText(context, res.exceptionOrNull()?.message ?: "Failed to cancel invite", Toast.LENGTH_SHORT).show()
+                                refresh(silent = true)
                             }
                         }
                     }

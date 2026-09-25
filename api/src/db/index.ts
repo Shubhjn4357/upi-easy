@@ -8,9 +8,12 @@ import { logger } from "../lib/logger.js";
 import { eq } from "drizzle-orm";
 import { seedDemoMerchantData } from "./seed.js";
 
+const isPostgresUrl = config.DATABASE_URL.startsWith("postgresql:") || config.DATABASE_URL.startsWith("postgres:");
 const sqlitePath = process.env.NODE_ENV === "test"
   ? "./upieasy.test.db"
-  : config.DATABASE_URL.replace("file:", "");
+  : isPostgresUrl || !config.DATABASE_URL
+    ? "./upieasy.db"
+    : config.DATABASE_URL.replace("file:", "");
 
 let sqlite: any;
 let dbInstance: any;
@@ -139,6 +142,10 @@ export function initDatabase() {
       );
     `);
   } catch (_) {}
+
+  // Ensure organization_invites token column exists
+  try { sqlite.exec(`ALTER TABLE organization_invites ADD COLUMN token text;`); } catch (_) {}
+  try { sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS org_invites_token_idx ON organization_invites (token);`); } catch (_) {}
 
   // Ensure updated devices columns exist
   try { sqlite.exec(`ALTER TABLE devices ADD COLUMN platform text DEFAULT 'ANDROID';`); } catch (_) {}

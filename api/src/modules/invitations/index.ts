@@ -11,6 +11,54 @@ import type { AppEnv } from "../../types/hono.js";
 
 export const invitationsRouter = new Hono<AppEnv>();
 
+/**
+ * GET /api/v1/invitations/verify/:token
+ * Public endpoint to verify and display invitation details before accepting.
+ */
+invitationsRouter.get("/verify/:token", async (c) => {
+  const token = c.req.param("token");
+  const now = new Date();
+
+  const invite = await db
+    .select({
+      id: schema.organizationInvites.id,
+      token: schema.organizationInvites.token,
+      organizationId: schema.organizationInvites.organizationId,
+      organizationName: schema.organizations.name,
+      role: schema.organizationInvites.role,
+      status: schema.organizationInvites.status,
+      invitedEmail: schema.organizationInvites.invitedEmail,
+      invitedName: schema.organizationInvites.invitedName,
+      expiresAt: schema.organizationInvites.expiresAt,
+      createdAt: schema.organizationInvites.createdAt,
+    })
+    .from(schema.organizationInvites)
+    .innerJoin(schema.organizations, eq(schema.organizationInvites.organizationId, schema.organizations.id))
+    .where(
+      or(
+        eq(schema.organizationInvites.token, token),
+        eq(schema.organizationInvites.id, token)
+      )
+    )
+    .get();
+
+  if (!invite) {
+    throw new NotFoundError("Invitation not found");
+  }
+
+  const isExpired = new Date(invite.expiresAt) <= now;
+  const isValid = invite.status === "PENDING" && !isExpired;
+
+  return c.json({
+    success: true,
+    isValid,
+    invite: {
+      ...invite,
+      status: isExpired ? "EXPIRED" : invite.status,
+    },
+  });
+});
+
 invitationsRouter.use("*", requireAuth);
 
 /**
@@ -28,8 +76,11 @@ export const getMyInvitationsHandler = async (c: any) => {
   const userMobile10 = user.mobileNumber ? get10DigitMobile(user.mobileNumber) : null;
   const userMobileFull = user.mobileNumber ? normalizeIndianMobileNumber(user.mobileNumber) : null;
 
-  // Query invites where invitedUserId = userId OR invitedMobile matches user's mobile
+  // Query invites where invitedUserId = userId OR invitedEmail matches user's email OR invitedMobile matches user's mobile
   const conditions = [eq(schema.organizationInvites.invitedUserId, userId)];
+  if (user.email) {
+    conditions.push(eq(schema.organizationInvites.invitedEmail, user.email.toLowerCase()));
+  }
   if (userMobileFull) {
     conditions.push(eq(schema.organizationInvites.invitedMobile, userMobileFull));
   }
@@ -40,6 +91,7 @@ export const getMyInvitationsHandler = async (c: any) => {
   const invites = await db
     .select({
       id: schema.organizationInvites.id,
+      token: schema.organizationInvites.token,
       organizationId: schema.organizationInvites.organizationId,
       organizationName: schema.organizations.name,
       role: schema.organizationInvites.role,
@@ -92,7 +144,12 @@ invitationsRouter.post("/:inviteId/accept", async (c) => {
   const invite = await db
     .select()
     .from(schema.organizationInvites)
-    .where(eq(schema.organizationInvites.id, inviteId))
+    .where(
+      or(
+        eq(schema.organizationInvites.id, inviteId),
+        eq(schema.organizationInvites.token, inviteId)
+      )
+    )
     .get();
 
   if (!invite) {
@@ -106,8 +163,9 @@ invitationsRouter.post("/:inviteId/accept", async (c) => {
 
   const matchesUser =
     invite.invitedUserId === userId ||
-    (userMobileFull && inviteMobile === userMobileFull) ||
-    (userMobile10 && (inviteMobile === userMobile10 || inviteMobile === `+91${userMobile10}`));
+    (invite.invitedEmail && user.email && invite.invitedEmail.toLowerCase() === user.email.toLowerCase()) ||
+    (userMobileFull && inviteMobile && inviteMobile === userMobileFull) ||
+    (userMobile10 && inviteMobile && (inviteMobile === userMobile10 || inviteMobile === `+91${userMobile10}`));
 
   if (!matchesUser) {
     throw new ForbiddenError("You are not authorized to accept this invitation");
@@ -347,12 +405,7 @@ invitationsRouter.post("/:inviteId/cancel", async (c) => {
   }
 
   const now = new Date();
-  await db.update(schema.organizationInvites)
-    .set({
-      status: "CANCELLED",
-      cancelledAt: now,
-      updatedAt: now,
-    })
+  await db.delete(schema.organizationInvites)
     .where(eq(schema.organizationInvites.id, inviteId))
     .run();
 

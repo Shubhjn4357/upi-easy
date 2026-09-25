@@ -1,10 +1,10 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
-import { IconPlus, IconSearch, IconMoreVertical } from '@/components/ui/icons';
+import { IconPlus, IconSearch, IconMoreVertical, IconX, IconChevronLeft, IconChevronRight } from '@/components/ui/icons';
 
 export interface ColumnDef {
   name: string;
@@ -29,6 +29,9 @@ export interface TablesPageProps {
   loading: boolean;
   search: string;
   onSearchChange: (search: string) => void;
+  offset?: number;
+  onOffsetChange?: (offset: number) => void;
+  limit?: number;
   onOpenInsertModal: () => void;
   onSelectRowAction: (row: Record<string, any>, tableName: string, columns: ColumnDef[]) => void;
 }
@@ -42,9 +45,33 @@ export function TablesPage({
   loading,
   search,
   onSearchChange,
+  offset = 0,
+  onOffsetChange,
+  limit = 25,
   onOpenInsertModal,
   onSelectRowAction,
 }: TablesPageProps) {
+  // Infer columns from rows if schema columns not populated
+  const displayColumns = useMemo(() => {
+    if (tableData?.columns && tableData.columns.length > 0) {
+      return tableData.columns;
+    }
+    if (tableData?.rows && tableData.rows.length > 0) {
+      return Object.keys(tableData.rows[0]).map((key) => ({
+        name: key,
+        type: 'TEXT',
+        isPrimary: key === 'id',
+      }));
+    }
+    return [];
+  }, [tableData]);
+
+  const total = tableData?.total || 0;
+  const currentPage = Math.floor(offset / limit) + 1;
+  const totalPages = Math.max(1, Math.ceil(total / limit));
+  const hasPrev = offset > 0;
+  const hasNext = offset + limit < total;
+
   return (
     <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
       {/* Header */}
@@ -102,11 +129,21 @@ export function TablesPage({
               placeholder={`Search ${selectedTable}...`}
               value={search}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => onSearchChange(e.target.value)}
-              className="pl-9"
+              className="pl-9 pr-8"
             />
+            {search && (
+              <button
+                type="button"
+                onClick={() => onSearchChange('')}
+                className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground">
+                <IconX className="w-4 h-4" />
+              </button>
+            )}
           </div>
           <div className="text-xs text-muted-foreground font-mono">
-            {tableData?.rows?.length || 0} of {tableData?.total || 0} rows
+            {total > 0
+              ? `${Math.min(offset + 1, total)}–${Math.min(offset + (tableData?.rows?.length || 0), total)} of ${total} records`
+              : '0 records'}
           </div>
         </div>
 
@@ -114,7 +151,7 @@ export function TablesPage({
           <Table>
             <TableHeader className="sticky top-0 backdrop-blur z-10">
               <TableRow>
-                {(tableData?.columns || []).map((col) => (
+                {displayColumns.map((col) => (
                   <TableHead key={col.name} className="font-mono whitespace-nowrap">
                     <span
                       className={
@@ -138,7 +175,7 @@ export function TablesPage({
               {loading ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <TableRow key={i}>
-                    {Array.from({ length: Math.max(tableData?.columns?.length || 5, 4) }).map((_, j) => (
+                    {Array.from({ length: Math.max(displayColumns.length || 5, 4) }).map((_, j) => (
                       <TableCell key={j} className="py-4">
                         <div className="h-4 bg-muted/60 rounded animate-pulse w-24" />
                       </TableCell>
@@ -150,17 +187,17 @@ export function TablesPage({
                 ))
               ) : (tableData?.rows || []).length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={Math.max((tableData?.columns?.length || 0) + 1, 1)} className="py-8 text-center text-muted-foreground">
-                    No records found in {selectedTable}.
+                  <TableCell colSpan={Math.max(displayColumns.length + 1, 1)} className="py-8 text-center text-muted-foreground">
+                    {search ? `No records matching "${search}" in ${selectedTable}.` : `No records found in ${selectedTable}.`}
                   </TableCell>
                 </TableRow>
               ) : (
                 tableData.rows.map((row: any, idx: number) => {
-                  const pkCol = tableData.columns?.find((c) => c.isPrimary)?.name || 'id';
+                  const pkCol = displayColumns.find((c) => c.isPrimary)?.name || 'id';
                   const pkVal = row[pkCol] ?? idx;
                   return (
                     <TableRow key={pkVal}>
-                      {(tableData.columns || []).map((col) => {
+                      {displayColumns.map((col) => {
                         const val = row[col.name];
                         return (
                           <TableCell
@@ -169,6 +206,8 @@ export function TablesPage({
                             title={String(val)}>
                             {val === null || val === undefined ? (
                               <span className="text-muted-foreground/50 italic">null</span>
+                            ) : typeof val === 'object' ? (
+                              JSON.stringify(val)
                             ) : (
                               String(val)
                             )}
@@ -179,7 +218,7 @@ export function TablesPage({
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => onSelectRowAction(row, selectedTable, tableData.columns)}
+                          onClick={() => onSelectRowAction(row, selectedTable, displayColumns)}
                           className="rounded-lg h-7 px-2.5 text-[11px] font-semibold gap-1">
                           <IconMoreVertical className="w-3 h-3" />
                         </Button>
@@ -191,6 +230,35 @@ export function TablesPage({
             </TableBody>
           </Table>
         </div>
+
+        {/* Pagination Controls Footer */}
+        {onOffsetChange && (total > limit || offset > 0) && (
+          <div className="p-3 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
+            <div>
+              Page {currentPage} of {totalPages}
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!hasPrev || loading}
+                onClick={() => onOffsetChange(Math.max(0, offset - limit))}
+                className="rounded-xl h-8 px-3 gap-1">
+                <IconChevronLeft className="w-3.5 h-3.5" />
+                <span>Previous</span>
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!hasNext || loading}
+                onClick={() => onOffsetChange(offset + limit)}
+                className="rounded-xl h-8 px-3 gap-1">
+                <span>Next</span>
+                <IconChevronRight className="w-3.5 h-3.5" />
+              </Button>
+            </div>
+          </div>
+        )}
       </Card>
     </div>
   );

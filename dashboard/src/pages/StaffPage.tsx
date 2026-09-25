@@ -131,6 +131,101 @@ export function StaffPage({
         </Table>
       </Card>
 
+      {/* Pending Invitations Section */}
+      {canManageStaff && (
+        <Card className="overflow-hidden">
+          <div className="px-6 py-4 border-b border-border flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <CardTitle className="text-sm font-bold">Pending Invitations</CardTitle>
+              <Badge variant="secondary" className="text-[10px]">
+                {invitesList.length}
+              </Badge>
+            </div>
+            <p className="text-xs text-muted-foreground hidden sm:block">
+              Shareable invite links for onboarding new team members
+            </p>
+          </div>
+
+          {invitesList.length === 0 ? (
+            <div className="p-8 text-center text-muted-foreground text-xs">
+              No pending invitations. Click <strong>Add Team Member</strong> above to generate an invite link.
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Invited Recipient</TableHead>
+                  <TableHead>Assigned Role</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Expires</TableHead>
+                  <TableHead>Shareable Link</TableHead>
+                  <TableHead className="text-right">Action</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {invitesList.map((invite: any) => {
+                  const targetEmail = invite.invitedEmail || invite.email;
+                  const inviteUrl = `${window.location.origin}/invite/${invite.token || invite.id}`;
+                  return (
+                    <TableRow key={invite.id}>
+                      <TableCell className="font-medium text-foreground">
+                        <div className="font-mono text-xs">{targetEmail}</div>
+                        {(invite.invitedName || invite.invitedMobile) && (
+                          <div className="text-[10px] text-muted-foreground mt-0.5">
+                            {[invite.invitedName, invite.invitedMobile].filter(Boolean).join(' · ')}
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={
+                            invite.role === 'MANAGER'
+                              ? 'secondary'
+                              : invite.role === 'CASHIER'
+                              ? 'success'
+                              : 'outline'
+                          }
+                          className="uppercase tracking-wide text-[10px]">
+                          {invite.role || 'CASHIER'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="warning" className="text-[10px]">
+                          PENDING
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-[11px]">
+                        {invite.expiresAt ? new Date(invite.expiresAt).toLocaleDateString() : '7 days'}
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            navigator.clipboard.writeText(inviteUrl);
+                          }}
+                          className="rounded-lg h-7 px-2.5 text-xs font-mono">
+                          Copy Link
+                        </Button>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => onSelectStaffAction('revoke_invite', invite)}
+                          className="rounded-lg h-7 px-2.5 text-xs">
+                          Revoke
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          )}
+        </Card>
+      )}
+
       {/* Role Capabilities Reference Card */}
       <Card className="p-5">
         <CardTitle className="text-sm font-bold mb-1">Role Permissions Matrix</CardTitle>

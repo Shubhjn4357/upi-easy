@@ -20,6 +20,7 @@ import AccountsPage from './pages/AccountsPage';
 import ProfilePage from './pages/ProfilePage';
 import TablesPage from './pages/TablesPage';
 import HealthPage from './pages/HealthPage';
+import InviteAcceptPage from './pages/InviteAcceptPage';
 
 import { useTheme } from './hooks/useTheme';
 import { useToast } from './hooks/useToast';
@@ -271,6 +272,23 @@ function AppContent() {
   };
 
   const handleSelectStaffAction = (_action: string, member: StaffMember | StaffInvite) => {
+    if (_action === 'revoke_invite') {
+      const invite = member as StaffInvite;
+      const target = (invite as any).invitedEmail || invite.email || 'this recipient';
+      if (!confirm(`Cancel and revoke invitation for ${target}?`)) return;
+      if (!activeOrg) return;
+      apiFetch(`/api/v1/organizations/${activeOrg.id}/invites/${invite.id}`, { method: 'DELETE' })
+        .then(() => {
+          showToast('Invitation cancelled successfully');
+          loadStaff();
+        })
+        .catch((err: unknown) => {
+          const msg = err instanceof Error ? err.message : 'Error cancelling invite';
+          showToast(msg, 'error');
+        });
+      return;
+    }
+
     const staffMember = member as StaffMember;
     setBottomSheetConfig({
       title: staffMember.fullName || staffMember.name || staffMember.mobileNumber || 'Staff Member',
@@ -394,6 +412,35 @@ function AppContent() {
           Restoring secure merchant session...
         </p>
       </div>
+    );
+  }
+
+  // If unauthenticated and on an invite link, allow accepting invitation
+  if (!token && location.pathname.startsWith('/invite')) {
+    return (
+      <InviteAcceptPage
+        token={null}
+        currentUser={null}
+        apiFetch={apiFetch}
+        showToast={showToast}
+        theme={theme}
+        onToggleTheme={toggleTheme}
+        onLoginSuccess={async (newAccessToken, newUser, defaultOrg, refreshToken) => {
+          await handleLoginSuccess(newAccessToken, newUser, defaultOrg, refreshToken);
+          showToast(`Welcome, ${newUser.fullName || newUser.name || 'User'}!`);
+          if (defaultOrg) {
+            setActiveOrg(defaultOrg);
+            localStorage.setItem('upieasy_active_org_id', defaultOrg.id);
+          }
+          await loadOrganizations(newAccessToken);
+          navigate('/overview');
+        }}
+        onInviteAccepted={async (joinedOrg) => {
+          setActiveOrg(joinedOrg);
+          localStorage.setItem('upieasy_active_org_id', joinedOrg.id);
+          navigate('/overview');
+        }}
+      />
     );
   }
 
@@ -576,6 +623,9 @@ function AppContent() {
                       loading={tableLoading}
                       search={tableSearch}
                       onSearchChange={setTableSearch}
+                      offset={tableOffset}
+                      onOffsetChange={setTableOffset}
+                      limit={25}
                       onOpenInsertModal={() => setShowTableRowModal({ mode: 'insert' })}
                       onSelectRowAction={handleSelectTableRowAction}
                     />
@@ -599,6 +649,35 @@ function AppContent() {
                         const msg = err instanceof Error ? err.message : 'Error re-seeding';
                         showToast(msg, 'error');
                       }
+                    }}
+                  />
+                }
+              />
+
+              <Route
+                path="/invite/:token"
+                element={
+                  <InviteAcceptPage
+                    token={token}
+                    currentUser={user}
+                    apiFetch={apiFetch}
+                    showToast={showToast}
+                    theme={theme}
+                    onToggleTheme={toggleTheme}
+                    onLoginSuccess={async (newAccessToken, newUser, defaultOrg, refreshToken) => {
+                      await handleLoginSuccess(newAccessToken, newUser, defaultOrg, refreshToken);
+                      if (defaultOrg) {
+                        setActiveOrg(defaultOrg);
+                        localStorage.setItem('upieasy_active_org_id', defaultOrg.id);
+                      }
+                      await loadOrganizations(newAccessToken);
+                      navigate('/overview');
+                    }}
+                    onInviteAccepted={async (joinedOrg) => {
+                      setActiveOrg(joinedOrg);
+                      localStorage.setItem('upieasy_active_org_id', joinedOrg.id);
+                      if (token) await loadOrganizations(token);
+                      navigate('/overview');
                     }}
                   />
                 }

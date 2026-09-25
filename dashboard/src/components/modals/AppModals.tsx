@@ -227,16 +227,25 @@ export function AppModals({
               });
               showToast('Staff updated successfully!');
             } else {
-              await apiFetch(`/api/v1/organizations/${activeOrg.id}/staff/invite`, {
+              const res = await apiFetch<any>(`/api/v1/organizations/${activeOrg.id}/invites`, {
                 method: 'POST',
                 body: JSON.stringify({
-                  mobileNumber: form.mobile.value.trim(),
-                  name: form.name.value.trim(),
-                  email: form.email.value.trim() || undefined,
+                  email: form.email.value.trim().toLowerCase(),
+                  mobileNumber: form.mobile?.value?.trim() || undefined,
+                  name: form.name?.value?.trim() || undefined,
                   role: form.role.value,
                 }),
               });
-              showToast('Staff member added successfully!');
+              if (res?.invite?.inviteUrl) {
+                try {
+                  await navigator.clipboard.writeText(res.invite.inviteUrl);
+                  showToast(`Invite created! Link copied to clipboard.`);
+                } catch {
+                  showToast('Invitation created successfully!');
+                }
+              } else {
+                showToast('Invitation created successfully!');
+              }
             }
             setShowStaffModal(null);
             onStaffSaved();

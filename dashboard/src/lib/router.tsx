@@ -52,19 +52,59 @@ export function useLocation() {
   return { pathname: context.path };
 }
 
+export const ParamsContext = createContext<Record<string, string>>({});
+
+export function useParams<T extends Record<string, string> = Record<string, string>>(): T {
+  return useContext(ParamsContext) as T;
+}
+
+export function matchPath(pattern: string, pathname: string): { matched: boolean; params: Record<string, string> } {
+  if (pattern === pathname) return { matched: true, params: {} };
+  if (pattern === '*') return { matched: true, params: {} };
+
+  const patternParts = pattern.split('/').filter(Boolean);
+  const pathParts = pathname.split('?')[0].split('/').filter(Boolean);
+
+  if (patternParts.length !== pathParts.length) {
+    return { matched: false, params: {} };
+  }
+
+  const params: Record<string, string> = {};
+  for (let i = 0; i < patternParts.length; i++) {
+    const p = patternParts[i];
+    const val = pathParts[i];
+    if (p.startsWith(':')) {
+      params[p.slice(1)] = decodeURIComponent(val);
+    } else if (p !== val) {
+      return { matched: false, params: {} };
+    }
+  }
+
+  return { matched: true, params };
+}
+
 export function Routes({ children }: { children: ReactNode }) {
   const { path } = useContext(RouterContext);
   let matchedElement: ReactNode = null;
+  let matchedParams: Record<string, string> = {};
 
   React.Children.forEach(children, (child) => {
     if (!React.isValidElement(child)) return;
     const props = child.props as { path: string; element: ReactNode };
-    if (props.path === path || (props.path === '*' && !matchedElement)) {
-      matchedElement = props.element;
+    if (!matchedElement) {
+      const match = matchPath(props.path, path);
+      if (match.matched) {
+        matchedElement = props.element;
+        matchedParams = match.params;
+      }
     }
   });
 
-  return <>{matchedElement}</>;
+  return (
+    <ParamsContext.Provider value={matchedParams}>
+      {matchedElement}
+    </ParamsContext.Provider>
+  );
 }
 
 export function Route({ path: _path, element }: { path: string; element: ReactNode }) {

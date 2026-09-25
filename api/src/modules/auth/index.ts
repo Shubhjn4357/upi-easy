@@ -121,6 +121,7 @@ authRouter.post("/google", async (c) => {
     if (user.mobileNumber) {
       inviteConditions.push(eq(schema.organizationInvites.invitedMobile, user.mobileNumber));
     }
+    inviteConditions.push(eq(schema.organizationInvites.invitedUserId, user.id));
 
     if (inviteConditions.length > 0) {
       const pendingInvites = await db
@@ -129,12 +130,19 @@ authRouter.post("/google", async (c) => {
         .where(
           and(
             eq(schema.organizationInvites.status, "PENDING"),
-            inviteConditions.length === 1 ? inviteConditions[0] : or(...inviteConditions)
+            or(...inviteConditions)
           )
         )
         .all();
 
       for (const inv of pendingInvites) {
+        if (new Date(inv.expiresAt) <= now) {
+          await db.update(schema.organizationInvites)
+            .set({ status: "EXPIRED", updatedAt: now })
+            .where(eq(schema.organizationInvites.id, inv.id))
+            .run();
+          continue;
+        }
         // Ensure not already a member
         const existingMember = await db
           .select()

@@ -118,34 +118,33 @@ export function StaffModal({
         {!isEditing ? (
           <>
             <div className="space-y-1.5">
-              <Label>Full Name</Label>
+              <Label>Email Address *</Label>
               <Input
-                type="text"
-                name="name"
-                placeholder="e.g. Sunil Verma"
+                type="email"
+                name="email"
+                placeholder="colleague@example.com"
                 required
                 disabled={isSaving}
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>Mobile Number</Label>
+                <Label>Full Name</Label>
+                <Input
+                  type="text"
+                  name="name"
+                  placeholder="e.g. Sunil Verma"
+                  disabled={isSaving}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Mobile Number (Optional)</Label>
                 <Input
                   type="tel"
                   name="mobile"
                   placeholder="9876543210"
-                  required
                   disabled={isSaving}
                   className="font-mono"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Email (Optional)</Label>
-                <Input
-                  type="email"
-                  name="email"
-                  placeholder="staff@store.com"
-                  disabled={isSaving}
                 />
               </div>
             </div>
