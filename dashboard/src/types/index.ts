@@ -132,6 +132,8 @@ export interface TableColumnDef {
   isPrimary?: boolean;
 }
 
+export type ColumnDef = TableColumnDef;
+
 export interface TableSchemaItem {
   name: string;
   rowCount?: number;
@@ -252,6 +254,9 @@ export interface TablesPageProps {
   loading: boolean;
   search: string;
   onSearchChange: (search: string) => void;
+  offset?: number;
+  onOffsetChange?: (offset: number) => void;
+  limit?: number;
   onOpenInsertModal: () => void;
   onSelectRowAction: (row: Record<string, unknown>, tableName: string, columns: TableColumnDef[]) => void;
 }

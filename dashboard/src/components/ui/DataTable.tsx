@@ -23,15 +23,17 @@ export interface DropdownOption {
   count?: number;
 }
 
+export interface DataTableColumn<T> {
+  header: string;
+  headerClassName?: string;
+  cell: (item: T) => React.ReactNode;
+  cellClassName?: string;
+}
+
 export interface DataTableProps<T> {
   data: T[];
   keyExtractor: (item: T) => string;
-  columns: {
-    header: string;
-    headerClassName?: string;
-    cell: (item: T) => React.ReactNode;
-    cellClassName?: string;
-  }[];
+  columns: DataTableColumn<T>[];
   loading?: boolean;
   emptyMessage?: string;
 

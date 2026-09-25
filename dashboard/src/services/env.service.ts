@@ -11,11 +11,13 @@ export interface AppEnvironment {
 interface CustomWindow {
   API_BASE_URL?: string;
   GOOGLE_CLIENT_ID?: string;
+  GOOGLE_WEB_CLIENT_ID?: string;
+  DEVICE_ID?: string;
   location?: Location;
 }
 
 function getEnvironment(): AppEnvironment {
-  const metaEnv = typeof import.meta !== 'undefined' ? (import.meta as { env?: Record<string, string> }).env || {} : {};
+  const metaEnv = typeof import.meta !== 'undefined' ? (import.meta as { env?: Record<string, string | boolean> }).env || {} : {};
   const win = (typeof window !== 'undefined' ? window : {}) as unknown as CustomWindow;
 
   const isBrowser = typeof window !== 'undefined';
@@ -27,7 +29,7 @@ function getEnvironment(): AppEnvironment {
     // Production Cloudflare Workers or remote deployment: use active browser origin
     apiBaseUrl = window.location.origin;
   } else if (metaEnv.VITE_API_BASE_URL) {
-    apiBaseUrl = metaEnv.VITE_API_BASE_URL;
+    apiBaseUrl = String(metaEnv.VITE_API_BASE_URL);
   } else if (isBrowser && window.location?.origin) {
     apiBaseUrl = window.location.origin;
   } else {
@@ -37,12 +39,13 @@ function getEnvironment(): AppEnvironment {
   apiBaseUrl = apiBaseUrl.replace(/\/+$/, '');
 
   const googleClientId =
-    metaEnv.VITE_GOOGLE_CLIENT_ID ||
+    (metaEnv.VITE_GOOGLE_CLIENT_ID as string) ||
     win.GOOGLE_WEB_CLIENT_ID ||
+    win.GOOGLE_CLIENT_ID ||
     '332345540842-ks8bq4csr4lklkvv3tesgkig2b221m23.apps.googleusercontent.com';
 
   const deviceId =
-    metaEnv.VITE_DEVICE_ID ||
+    (metaEnv.VITE_DEVICE_ID as string) ||
     win.DEVICE_ID ||
     'web-saas-dashboard';
 
@@ -50,8 +53,8 @@ function getEnvironment(): AppEnvironment {
     API_BASE_URL: apiBaseUrl,
     GOOGLE_CLIENT_ID: googleClientId,
     DEVICE_ID: deviceId,
-    IS_PRODUCTION: metaEnv.PROD || metaEnv.MODE === 'production',
-    IS_DEVELOPMENT: metaEnv.DEV || metaEnv.MODE === 'development',
+    IS_PRODUCTION: Boolean(metaEnv.PROD) || metaEnv.MODE === 'production',
+    IS_DEVELOPMENT: Boolean(metaEnv.DEV) || metaEnv.MODE === 'development',
   };
 }
 

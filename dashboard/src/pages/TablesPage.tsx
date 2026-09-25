@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { DataTable } from '@/components/ui/DataTable';
+import { DataTable, type DataTableColumn } from '@/components/ui/DataTable';
 import {
   IconPlus,
   IconMoreVertical,
@@ -8,7 +8,7 @@ import {
   IconChevronLeft,
   IconChevronRight,
 } from '@/components/ui/icons';
-import type { TablesPageProps, ColumnDef } from '@/types';
+import type { TablesPageProps, TableColumnDef } from '@/types';
 
 export function TablesPage({
   tables,
@@ -27,7 +27,7 @@ export function TablesPage({
   const [selectedRowIds, setSelectedRowIds] = useState<Set<string>>(new Set());
 
   // Infer columns from rows if schema columns not populated
-  const displayColumns: ColumnDef[] = useMemo(() => {
+  const displayColumns: TableColumnDef[] = useMemo(() => {
     if (tableData?.columns && tableData.columns.length > 0) {
       return tableData.columns;
     }
@@ -56,7 +56,7 @@ export function TablesPage({
   };
 
   const columns = useMemo(() => {
-    const cols = displayColumns.map((col) => ({
+    const cols: DataTableColumn<Record<string, unknown>>[] = displayColumns.map((col) => ({
       header: col.name,
       cell: (row: Record<string, unknown>) => {
         const val = row[col.name];
