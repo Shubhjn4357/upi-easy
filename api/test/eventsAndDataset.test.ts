@@ -206,5 +206,73 @@ describe("Database Events & Dataset Seeding Tests", () => {
     expect(paymentNotif?.type).toBe("payment.received");
     expect(paymentNotif?.title).toBe("Payment of ₹3,000 received");
   });
+
+  it("should delete single transaction record and emit outbox event", async () => {
+    // Create a txn to delete
+    const createRes = await app.request(`/api/v1/organizations/${orgId}/transactions`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+        "X-Organization-Id": orgId,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        amount: 125.0,
+        payeeName: "Sharma Store",
+        payeeVpa: "sharma@upi",
+        note: "To be deleted",
+      }),
+    });
+    const { transaction } = await createRes.json();
+    expect(transaction.id).toBeDefined();
+
+    // Delete it
+    const delRes = await app.request(`/api/v1/organizations/${orgId}/transactions/${transaction.id}`, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+        "X-Organization-Id": orgId,
+      },
+    });
+    expect(delRes.status).toBe(200);
+    const delBody = await delRes.json();
+    expect(delBody.success).toBe(true);
+
+    // Verify it is gone from db
+    const checkDb = db.select().from(schema.transactions).where(eq(schema.transactions.id, transaction.id)).get();
+    expect(checkDb).toBeUndefined();
+
+    // Verify outbox event emitted
+    const outbox = db.select().from(schema.outboxEvents).where(eq(schema.outboxEvents.eventType, "transaction.deleted")).all();
+    expect(outbox.some((e: any) => e.payloadJson.includes(transaction.id))).toBe(true);
+  });
+
+  it("should bulk delete transactions and emit outbox events", async () => {
+    const c1 = await app.request(`/api/v1/organizations/${orgId}/transactions`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${authToken}`, "X-Organization-Id": orgId, "Content-Type": "application/json" },
+      body: JSON.stringify({ amount: 50.0, payeeName: "Store", payeeVpa: "store@upi" }),
+    });
+    const c2 = await app.request(`/api/v1/organizations/${orgId}/transactions`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${authToken}`, "X-Organization-Id": orgId, "Content-Type": "application/json" },
+      body: JSON.stringify({ amount: 60.0, payeeName: "Store", payeeVpa: "store@upi" }),
+    });
+    const t1 = (await c1.json()).transaction.id;
+    const t2 = (await c2.json()).transaction.id;
+
+    const bulkRes = await app.request(`/api/v1/organizations/${orgId}/transactions/bulk-delete`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${authToken}`, "X-Organization-Id": orgId, "Content-Type": "application/json" },
+      body: JSON.stringify({ ids: [t1, t2] }),
+    });
+    expect(bulkRes.status).toBe(200);
+    const bulkBody = await bulkRes.json();
+    expect(bulkBody.success).toBe(true);
+    expect(bulkBody.count).toBe(2);
+
+    expect(db.select().from(schema.transactions).where(eq(schema.transactions.id, t1)).get()).toBeUndefined();
+    expect(db.select().from(schema.transactions).where(eq(schema.transactions.id, t2)).get()).toBeUndefined();
+  });
 });
 

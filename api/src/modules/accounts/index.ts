@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { db } from "../../db/index.js";
 import * as schema from "../../db/schema/index.js";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { generateId } from "../../lib/crypto.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { requireTenant } from "../../middleware/tenant.js";
@@ -160,7 +160,7 @@ accountsRouter.patch(
         .run();
     }
 
-    const updateValues: Record<string, any> = {
+    const updateValues: Partial<typeof schema.bankAccounts.$inferInsert> = {
       updatedAt: new Date(),
     };
 
@@ -326,6 +326,83 @@ accountsRouter.delete(
     return c.json({
       success: true,
       message: "Bank account removed successfully",
+    });
+  }
+);
+
+accountsRouter.post(
+  "/:orgId/accounts/bulk-delete",
+  requireTenant,
+  requirePermission("accounts.manage"),
+  async (c) => {
+    const orgId = c.get("organizationId");
+    const actorId = c.get("userId");
+    const body = await c.req.json();
+    const validator = z.object({
+      ids: z.array(z.string().min(1)).min(1),
+    });
+    const { ids } = validator.parse(body);
+
+    const targets = await db
+      .select()
+      .from(schema.bankAccounts)
+      .where(and(inArray(schema.bankAccounts.id, ids), eq(schema.bankAccounts.organizationId, orgId)))
+      .all();
+
+    if (targets.length === 0) {
+      return c.json({ success: true, count: 0, message: "No matching bank accounts found to delete" });
+    }
+
+    const targetIds = targets.map((t) => t.id);
+
+    // Unlink UPI accounts attached to these bank accounts
+    await db.update(schema.upiAccounts)
+      .set({ bankAccountId: null })
+      .where(inArray(schema.upiAccounts.bankAccountId, targetIds))
+      .run();
+
+    // Delete the bank accounts
+    await db.delete(schema.bankAccounts)
+      .where(inArray(schema.bankAccounts.id, targetIds))
+      .run();
+
+    // If any deleted account was default, promote another account if available
+    const hadDefault = targets.some((t) => t.isDefault);
+    if (hadDefault) {
+      const nextAcc = await db
+        .select()
+        .from(schema.bankAccounts)
+        .where(eq(schema.bankAccounts.organizationId, orgId))
+        .limit(1)
+        .get();
+
+      if (nextAcc) {
+        await db.update(schema.bankAccounts)
+          .set({ isDefault: true })
+          .where(eq(schema.bankAccounts.id, nextAcc.id))
+          .run();
+      }
+    }
+
+    for (const target of targets) {
+      await db.insert(schema.auditLogs)
+        .values({
+          id: generateId("aud"),
+          organizationId: orgId,
+          actorId,
+          action: "account.bulk_deleted",
+          resourceType: "bank_account",
+          resourceId: target.id,
+          metadataJson: JSON.stringify({ accountId: target.id, bankName: target.bankName }),
+          createdAt: new Date(),
+        })
+        .run();
+    }
+
+    return c.json({
+      success: true,
+      count: targetIds.length,
+      message: `Successfully deleted ${targetIds.length} bank account(s)`,
     });
   }
 );

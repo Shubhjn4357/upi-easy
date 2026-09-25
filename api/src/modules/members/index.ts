@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { z } from "zod";
 import { db } from "../../db/index.js";
 import * as schema from "../../db/schema/index.js";
@@ -38,7 +38,7 @@ membersRouter.get("/:orgId/staff", requireTenant, requirePermission("staff.read"
     .where(eq(schema.organizationMembers.organizationId, orgId))
     .all();
 
-  const formatted = staff.map((s: any) => ({
+  const formatted = staff.map((s) => ({
     ...s,
     role: s.role || "MEMBER",
   }));
@@ -79,29 +79,36 @@ membersRouter.get("/:orgId/invites", requireTenant, requirePermission("staff.rea
       )
       .all();
 
-    const activeInvites = invites.filter((inv: any) => !inv.expiresAt || new Date(inv.expiresAt) > now);
+    const activeInvites = invites.filter((inv) => !inv.expiresAt || new Date(inv.expiresAt) > now);
 
     return c.json({ success: true, invites: activeInvites, invitations: activeInvites });
-  } catch (_: any) {
+  } catch {
     return c.json({ success: true, invites: [], invitations: [] });
   }
 });
 
-const createInviteHandler = async (c: any) => {
+const createInviteHandler = async (c: Context<AppEnv>) => {
   const orgId = c.get("organizationId");
   const actorId = c.get("userId");
   const body = await c.req.json();
 
-  const validator = z.object({
-    email: z.string().email("Valid email address is required"),
-    mobileNumber: z.string().optional().nullable(),
-    name: z.string().optional().nullable(),
-    fullName: z.string().optional().nullable(),
-    role: z.enum(["MANAGER", "CASHIER", "ACCOUNTANT"]).default("CASHIER"),
-  });
+  const validator = z
+    .object({
+      email: z.string().email("Valid email address is required").optional().nullable().or(z.literal("")),
+      mobileNumber: z.string().optional().nullable(),
+      name: z.string().optional().nullable(),
+      fullName: z.string().optional().nullable(),
+      role: z.enum(["MANAGER", "CASHIER", "ACCOUNTANT"]).default("CASHIER"),
+    })
+    .refine(
+      (data) => Boolean((data.email && data.email.trim()) || (data.mobileNumber && data.mobileNumber.trim())),
+      {
+        message: "Either mobile number or email must be provided",
+      }
+    );
 
   const parsed = validator.parse(body);
-  const email = parsed.email.trim().toLowerCase();
+  const email = parsed.email?.trim() ? parsed.email.trim().toLowerCase() : undefined;
   const rawMobile = parsed.mobileNumber?.trim() || undefined;
   const name = parsed.name?.trim() || parsed.fullName?.trim() || undefined;
   const role = parsed.role;
@@ -146,9 +153,11 @@ const createInviteHandler = async (c: any) => {
 
   // 4. Prevent inviting self
   const actorNormalizedMobile = actor?.mobileNumber ? normalizeIndianMobileNumber(actor.mobileNumber) : null;
+  const actorMobile10 = actor?.mobileNumber ? get10DigitMobile(actor.mobileNumber) : null;
   const isSelfInvite =
     (existingUser && existingUser.id === actorId) ||
     (normalizedMobile && actorNormalizedMobile && normalizedMobile === actorNormalizedMobile) ||
+    (mobile10 && actorMobile10 && mobile10 === actorMobile10) ||
     (email && actor?.email && email.toLowerCase() === actor.email.toLowerCase());
 
   if (isSelfInvite) {
@@ -176,24 +185,28 @@ const createInviteHandler = async (c: any) => {
 
   // 6. Prevent duplicate pending invitation
   const now = new Date();
-  const duplicate = await db
-    .select()
-    .from(schema.organizationInvites)
-    .where(
-      and(
-        eq(schema.organizationInvites.organizationId, orgId),
-        eq(schema.organizationInvites.status, "PENDING"),
-        or(
-          eq(schema.organizationInvites.invitedEmail, email),
-          existingUser ? eq(schema.organizationInvites.invitedUserId, existingUser.id) : undefined,
-          normalizedMobile ? eq(schema.organizationInvites.invitedMobile, normalizedMobile) : undefined
+  const dupConditions = [];
+  if (email) dupConditions.push(eq(schema.organizationInvites.invitedEmail, email));
+  if (existingUser) dupConditions.push(eq(schema.organizationInvites.invitedUserId, existingUser.id));
+  if (normalizedMobile) dupConditions.push(eq(schema.organizationInvites.invitedMobile, normalizedMobile));
+  if (mobile10) dupConditions.push(eq(schema.organizationInvites.invitedMobile, mobile10));
+
+  if (dupConditions.length > 0) {
+    const duplicate = await db
+      .select()
+      .from(schema.organizationInvites)
+      .where(
+        and(
+          eq(schema.organizationInvites.organizationId, orgId),
+          eq(schema.organizationInvites.status, "PENDING"),
+          or(...dupConditions)
         )
       )
-    )
-    .get();
+      .get();
 
-  if (duplicate && new Date(duplicate.expiresAt) > now) {
-    throw new AppError("A pending invitation already exists for this email address", 409, "DUPLICATE_INVITATION");
+    if (duplicate && new Date(duplicate.expiresAt) > now) {
+      throw new AppError("A pending invitation already exists for this recipient", 409, "DUPLICATE_INVITATION");
+    }
   }
 
   // 7. Create organization invitation (7 days expiry)
@@ -207,8 +220,8 @@ const createInviteHandler = async (c: any) => {
       token,
       organizationId: orgId,
       invitedUserId: existingUser ? existingUser.id : null,
-      invitedMobile: normalizedMobile || null,
-      invitedEmail: email,
+      invitedMobile: normalizedMobile || mobile10 || null,
+      invitedEmail: email || null,
       invitedName: name ?? null,
       role,
       invitedBy: actorId,
@@ -299,8 +312,9 @@ const createInviteHandler = async (c: any) => {
           });
         }
       }
-    } catch (err: any) {
-      console.warn(`[Invite] Notification dispatch notice:`, err?.message);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(`[Invite] Notification dispatch notice:`, msg);
     }
   }
 
@@ -326,7 +340,7 @@ const createInviteHandler = async (c: any) => {
   });
 };
 
-const directAddStaffHandler = async (c: any) => {
+const directAddStaffHandler = async (c: Context<AppEnv>) => {
   const orgId = c.get("organizationId");
   const actorId = c.get("userId");
   const body = await c.req.json();
@@ -466,6 +480,52 @@ membersRouter.delete("/:orgId/invites/:inviteId", requireTenant, requirePermissi
 
   return c.json({ success: true, message: "Invitation cancelled successfully" });
 });
+
+// Bulk cancel/delete invitations
+membersRouter.post("/:orgId/invites/bulk-delete", requireTenant, requirePermission("staff.manage"), async (c) => {
+  const orgId = c.get("organizationId");
+  const actorId = c.get("userId");
+  const body = await c.req.json();
+  const validator = z.object({
+    ids: z.array(z.string()).min(1, "At least one ID is required"),
+  });
+  const { ids } = validator.parse(body);
+
+  let deletedCount = 0;
+  for (const invId of ids) {
+    const invite = await db
+      .select()
+      .from(schema.organizationInvites)
+      .where(
+        and(
+          eq(schema.organizationInvites.id, invId),
+          eq(schema.organizationInvites.organizationId, orgId)
+        )
+      )
+      .get();
+    if (invite) {
+      await db.delete(schema.organizationInvites).where(eq(schema.organizationInvites.id, invId)).run();
+      deletedCount++;
+    }
+  }
+
+  await db.insert(schema.auditLogs)
+    .values({
+      id: generateId("aud"),
+      organizationId: orgId,
+      actorId,
+      action: "staff.invites.bulk_cancelled",
+      resourceType: "organization_invite",
+      resourceId: `${deletedCount}_invites`,
+      metadataJson: JSON.stringify({ count: deletedCount, ids }),
+      createdAt: new Date(),
+    })
+    .run();
+
+  return c.json({ success: true, count: deletedCount, message: `Cancelled ${deletedCount} invitation(s)` });
+});
+
+// Direct add staff endpoint
 membersRouter.post("/:orgId/staff/invite", requireTenant, requirePermission("staff.manage"), directAddStaffHandler);
 
 membersRouter.patch(
@@ -490,7 +550,10 @@ membersRouter.patch(
       .from(schema.organizationMembers)
       .where(
         and(
-          eq(schema.organizationMembers.id, memberId),
+          or(
+            eq(schema.organizationMembers.id, memberId),
+            eq(schema.organizationMembers.userId, memberId)
+          ),
           eq(schema.organizationMembers.organizationId, orgId)
         )
       )
@@ -513,7 +576,7 @@ membersRouter.patch(
         status: status ?? member.status,
         updatedAt: new Date(),
       })
-      .where(eq(schema.organizationMembers.id, memberId))
+      .where(eq(schema.organizationMembers.id, member.id))
       .run();
 
     // Audit log
@@ -524,7 +587,7 @@ membersRouter.patch(
         actorId,
         action: "role.changed",
         resourceType: "organization_member",
-        resourceId: memberId,
+        resourceId: member.id,
         metadataJson: JSON.stringify({ newRole: role, newStatus: status }),
         createdAt: new Date(),
       })
@@ -544,21 +607,51 @@ membersRouter.delete(
     const memberId = c.req.param("memberId");
 
     const member = await db
-      .select()
+      .select({
+        id: schema.organizationMembers.id,
+        userId: schema.organizationMembers.userId,
+        roleId: schema.organizationMembers.roleId,
+        roleName: schema.roles.name,
+      })
       .from(schema.organizationMembers)
+      .leftJoin(schema.roles, eq(schema.organizationMembers.roleId, schema.roles.id))
       .where(
         and(
-          eq(schema.organizationMembers.id, memberId),
+          or(
+            eq(schema.organizationMembers.id, memberId),
+            eq(schema.organizationMembers.userId, memberId)
+          ),
           eq(schema.organizationMembers.organizationId, orgId)
         )
       )
       .get();
 
     if (!member) {
-      throw new NotFoundError("Staff member not found");
+      // Check if it's an invite that they want to cancel
+      const invite = await db
+        .select()
+        .from(schema.organizationInvites)
+        .where(
+          and(
+            eq(schema.organizationInvites.id, memberId),
+            eq(schema.organizationInvites.organizationId, orgId)
+          )
+        )
+        .get();
+
+      if (invite) {
+        await db.delete(schema.organizationInvites).where(eq(schema.organizationInvites.id, memberId)).run();
+        return c.json({ success: true, message: "Invitation cancelled successfully" });
+      }
+
+      throw new NotFoundError("Staff member or invitation not found");
     }
 
-    await db.delete(schema.organizationMembers).where(eq(schema.organizationMembers.id, memberId)).run();
+    if (member.roleName === "OWNER" && member.userId === actorId) {
+      throw new AppError("Organization owner cannot remove their own account", 400);
+    }
+
+    await db.delete(schema.organizationMembers).where(eq(schema.organizationMembers.id, member.id)).run();
 
     await db.insert(schema.auditLogs)
       .values({
@@ -567,11 +660,121 @@ membersRouter.delete(
         actorId,
         action: "staff.removed",
         resourceType: "organization_member",
-        resourceId: memberId,
+        resourceId: member.id,
+        createdAt: new Date(),
+      })
+      .run();
+
+    // Outbox event for mobile live sync
+    await db.insert(schema.outboxEvents)
+      .values({
+        id: generateId("evt"),
+        organizationId: orgId,
+        eventType: "staff.removed",
+        payloadJson: JSON.stringify({
+          memberId: member.id,
+          userId: member.userId,
+          organizationId: orgId,
+        }),
+        status: "PENDING",
         createdAt: new Date(),
       })
       .run();
 
     return c.json({ success: true, message: "Staff member removed successfully" });
+  }
+);
+
+// Bulk delete staff members
+membersRouter.post(
+  "/:orgId/staff/bulk-delete",
+  requireTenant,
+  requirePermission("staff.manage"),
+  async (c) => {
+    const orgId = c.get("organizationId");
+    const actorId = c.get("userId");
+    const body = await c.req.json();
+
+    const validator = z.object({
+      ids: z.array(z.string()).min(1, "At least one ID is required"),
+    });
+
+    const { ids } = validator.parse(body);
+    let deletedCount = 0;
+    const now = new Date();
+
+    for (const memberId of ids) {
+      const member = await db
+        .select({
+          id: schema.organizationMembers.id,
+          userId: schema.organizationMembers.userId,
+          roleName: schema.roles.name,
+        })
+        .from(schema.organizationMembers)
+        .leftJoin(schema.roles, eq(schema.organizationMembers.roleId, schema.roles.id))
+        .where(
+          and(
+            or(
+              eq(schema.organizationMembers.id, memberId),
+              eq(schema.organizationMembers.userId, memberId)
+            ),
+            eq(schema.organizationMembers.organizationId, orgId)
+          )
+        )
+        .get();
+
+      if (member) {
+        if (member.roleName === "OWNER" && member.userId === actorId) continue;
+        await db.delete(schema.organizationMembers).where(eq(schema.organizationMembers.id, member.id)).run();
+        deletedCount++;
+
+        await db.insert(schema.outboxEvents)
+          .values({
+            id: generateId("evt"),
+            organizationId: orgId,
+            eventType: "staff.removed",
+            payloadJson: JSON.stringify({
+              memberId: member.id,
+              userId: member.userId,
+              organizationId: orgId,
+            }),
+            status: "PENDING",
+            createdAt: now,
+          })
+          .run();
+      } else {
+        // Check if it's an invite ID
+        const invite = await db
+          .select()
+          .from(schema.organizationInvites)
+          .where(
+            and(
+              eq(schema.organizationInvites.id, memberId),
+              eq(schema.organizationInvites.organizationId, orgId)
+            )
+          )
+          .get();
+
+        if (invite) {
+          await db.delete(schema.organizationInvites).where(eq(schema.organizationInvites.id, memberId)).run();
+          deletedCount++;
+        }
+      }
+    }
+
+    await db.insert(schema.auditLogs)
+      .values({
+        id: generateId("aud"),
+        organizationId: orgId,
+        actorId,
+        action: "staff.bulk_removed",
+        resourceType: "organization_member",
+        resourceId: `${deletedCount}_staff`,
+        metadataJson: JSON.stringify({ count: deletedCount, ids }),
+        createdAt: now,
+      })
+      .run();
+
+    return c.json({ success: true, count: deletedCount, message: `Removed ${deletedCount} staff member(s)` });
   }
 );

@@ -94,8 +94,6 @@ class PhonePeNotificationParserTest {
         )
 
         val parsed = parser.parse(raw)
-        assertNotNull(parsed)
-        assertNull(parsed!!.amount)
-        assertEquals(ParseConfidence.LOW, parsed.confidence)
+        assertNull(parsed)
     }
 }

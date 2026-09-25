@@ -35,7 +35,7 @@ auditRouter.get("/:orgId/audit", requireTenant, requirePermission("organization.
 
   return c.json({
     success: true,
-    auditLogs: logs.map((l: any) => ({
+    auditLogs: logs.map((l) => ({
       ...l,
       metadata: l.metadata ? JSON.parse(l.metadata) : null,
     })),

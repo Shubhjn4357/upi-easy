@@ -115,6 +115,13 @@ class SyncWorker(
                                 }
                             }
 
+                            "transaction.deleted" -> {
+                                val txId = obj.get("id")?.asString ?: ""
+                                if (txId.isNotBlank()) {
+                                    database.transactionDao().deleteTransaction(txId)
+                                }
+                            }
+
                             "upi.created" -> {
                                 val upiId = obj.get("id")?.asString ?: ""
                                 if (upiId.isNotBlank()) {

@@ -97,7 +97,10 @@ fun AppSetupScreen(
         }
     }
 
-    // Auto-skip onboarding if user already has an active firm or pending invitation (e.g. invited staff)
+    var pendingInvite by remember { mutableStateOf<com.aerotech.upieasy.core.network.InvitationDto?>(null) }
+    var isAcceptingInvite by remember { mutableStateOf(false) }
+
+    // Check if user has an active firm or pending invitation (e.g. invited staff)
     LaunchedEffect(Unit) {
         try {
             // 1. Check if user already belongs to an organization
@@ -124,37 +127,71 @@ fun AppSetupScreen(
                 isSessionExpired = true
             }
 
-            // 2. Check if user has any pending invitations to auto-accept
+            // 2. Check if user has any pending invitations to show popup
             val inviteRes = apiService.getMyInvitations()
             if (inviteRes.isSuccessful && inviteRes.body()?.success == true) {
                 val invites = inviteRes.body()?.invitations ?: inviteRes.body()?.invites ?: emptyList()
-                val pendingInvite = invites.firstOrNull { it.status.equals("PENDING", ignoreCase = true) }
-                if (pendingInvite != null) {
-                    val acceptRes = apiService.acceptInvitation(pendingInvite.id)
-                    if (acceptRes.isSuccessful && acceptRes.body()?.success == true) {
-                        val orgRes2 = apiService.getOrganizations()
-                        if (orgRes2.isSuccessful && orgRes2.body()?.success == true) {
-                            val orgs2 = orgRes2.body()!!.organizations
-                            val target = orgs2.find { it.id == pendingInvite.organizationId } ?: orgs2.firstOrNull()
-                            if (target != null) {
-                                sessionManager.setOrganization(
-                                    orgId = target.id,
-                                    orgName = target.name,
-                                    role = target.role,
-                                    legalName = target.legalBusinessName,
-                                    category = target.category,
-                                    panNumber = target.panNumber,
-                                    gstin = target.gstin
-                                )
-                                sessionManager.setSetupComplete(true)
-                                onSetupComplete()
-                                return@LaunchedEffect
-                            }
-                        }
-                    }
+                val pending = invites.firstOrNull { it.status.equals("PENDING", ignoreCase = true) }
+                if (pending != null) {
+                    pendingInvite = pending
                 }
             }
         } catch (_: Exception) {}
+    }
+
+    // Pending Invitation Popup Modal
+    pendingInvite?.let { invite ->
+        com.aerotech.upieasy.ui.components.UpieasyPendingInviteModal(
+            visible = true,
+            orgName = invite.organizationName ?: "Workspace",
+            role = invite.role,
+            invitedBy = invite.inviterName,
+            isProcessing = isAcceptingInvite,
+            onAccept = {
+                scope.launch {
+                    isAcceptingInvite = true
+                    try {
+                        val acceptRes = apiService.acceptInvitation(invite.id)
+                        if (acceptRes.isSuccessful && acceptRes.body()?.success == true) {
+                            val orgRes2 = apiService.getOrganizations()
+                            if (orgRes2.isSuccessful && orgRes2.body()?.success == true) {
+                                val orgs2 = orgRes2.body()!!.organizations
+                                val target = orgs2.find { it.id == invite.organizationId } ?: orgs2.firstOrNull()
+                                if (target != null) {
+                                    sessionManager.setOrganization(
+                                        orgId = target.id,
+                                        orgName = target.name,
+                                        role = target.role,
+                                        legalName = target.legalBusinessName,
+                                        category = target.category,
+                                        panNumber = target.panNumber,
+                                        gstin = target.gstin
+                                    )
+                                    sessionManager.setSetupComplete(true)
+                                    pendingInvite = null
+                                    onSetupComplete()
+                                    return@launch
+                                }
+                            }
+                        } else {
+                            errorMessage = acceptRes.body()?.message ?: "Failed to accept invitation"
+                        }
+                    } catch (e: Exception) {
+                        errorMessage = e.localizedMessage ?: "Network error accepting invitation"
+                    } finally {
+                        isAcceptingInvite = false
+                    }
+                }
+            },
+            onDecline = {
+                scope.launch {
+                    try {
+                        apiService.rejectInvitation(invite.id)
+                    } catch (_: Exception) {}
+                    pendingInvite = null
+                }
+            }
+        )
     }
 
     // UPI Discovery Bottom Sheet

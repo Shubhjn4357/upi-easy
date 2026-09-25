@@ -35,6 +35,7 @@ class SessionManager(private val context: Context) {
         private val KEY_DYNAMIC_COLOR = androidx.datastore.preferences.core.booleanPreferencesKey("dynamic_color")
         private val KEY_HAPTIC_FEEDBACK = androidx.datastore.preferences.core.booleanPreferencesKey("haptic_feedback")
         private val KEY_DEVICE_ID = stringPreferencesKey("device_id")
+        private val KEY_USER_PERMISSIONS = androidx.datastore.preferences.core.stringSetPreferencesKey("user_permissions")
     }
 
     val accessTokenFlow: Flow<String?> = context.dataStore.data.map { it[KEY_ACCESS_TOKEN] }
@@ -45,6 +46,7 @@ class SessionManager(private val context: Context) {
     val currentOrgPanFlow: Flow<String?> = context.dataStore.data.map { it[KEY_CURRENT_ORG_PAN] }
     val currentOrgGstinFlow: Flow<String?> = context.dataStore.data.map { it[KEY_CURRENT_ORG_GSTIN] }
     val userRoleFlow: Flow<String?> = context.dataStore.data.map { it[KEY_USER_ROLE] }
+    val userPermissionsFlow: Flow<Set<String>> = context.dataStore.data.map { it[KEY_USER_PERMISSIONS] ?: emptySet() }
     val mobileNumberFlow: Flow<String?> = context.dataStore.data.map { it[KEY_MOBILE_NUMBER] }
     val userEmailFlow: Flow<String?> = context.dataStore.data.map { it[KEY_USER_EMAIL] }
     val userNameFlow: Flow<String?> = context.dataStore.data.map { it[KEY_USER_NAME] }
@@ -148,7 +150,8 @@ class SessionManager(private val context: Context) {
         legalName: String? = null,
         category: String? = null,
         panNumber: String? = null,
-        gstin: String? = null
+        gstin: String? = null,
+        permissions: List<String> = emptyList()
     ) {
         context.dataStore.edit { prefs ->
             prefs[KEY_CURRENT_ORG_ID] = orgId
@@ -158,7 +161,50 @@ class SessionManager(private val context: Context) {
             if (category != null) prefs[KEY_CURRENT_ORG_CATEGORY] = category
             if (panNumber != null) prefs[KEY_CURRENT_ORG_PAN] = panNumber
             if (gstin != null) prefs[KEY_CURRENT_ORG_GSTIN] = gstin
+
+            if (permissions.isNotEmpty()) {
+                prefs[KEY_USER_PERMISSIONS] = permissions.toSet()
+            } else if (role.equals("OWNER", ignoreCase = true)) {
+                prefs[KEY_USER_PERMISSIONS] = setOf("*")
+            } else {
+                val defaultPerms = when (role.uppercase()) {
+                    "MANAGER" -> setOf(
+                        "transactions.read", "transactions.export", "transactions.create", "transactions.refund", "transactions.delete",
+                        "accounts.read", "upi.read", "upi.manage", "qr.create", "staff.read", "staff.manage", "reports.read"
+                    )
+                    "CASHIER" -> setOf("transactions.read", "transactions.create", "qr.create", "upi.read")
+                    "ACCOUNTANT" -> setOf("transactions.read", "transactions.export", "reports.read", "accounts.read", "upi.read")
+                    else -> emptySet()
+                }
+                prefs[KEY_USER_PERMISSIONS] = defaultPerms
+            }
         }
+    }
+
+    suspend fun setPermissions(permissions: Set<String>) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_USER_PERMISSIONS] = permissions
+        }
+    }
+
+    suspend fun getPermissions(): Set<String> {
+        return context.dataStore.data.first()[KEY_USER_PERMISSIONS] ?: emptySet()
+    }
+
+    suspend fun hasPermission(permission: String): Boolean {
+        val role = context.dataStore.data.first()[KEY_USER_ROLE]
+        if (role?.equals("OWNER", ignoreCase = true) == true) return true
+        val perms = getPermissions()
+        if (perms.contains("*")) return true
+        return perms.contains(permission)
+    }
+
+    suspend fun hasModuleAccess(module: String): Boolean {
+        val role = context.dataStore.data.first()[KEY_USER_ROLE]
+        if (role?.equals("OWNER", ignoreCase = true) == true) return true
+        val perms = getPermissions()
+        if (perms.contains("*")) return true
+        return perms.any { it.startsWith("$module.") }
     }
 
     suspend fun getAccessToken(): String? {

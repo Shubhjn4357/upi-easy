@@ -46,7 +46,7 @@ organizationsRouter.get("/", async (c) => {
 
   // Attach permissions for each organization
   const orgsWithPermissions = await Promise.all(
-    orgRows.map(async (org: any) => {
+    orgRows.map(async (org) => {
       const roleName = org.role || "MEMBER";
       let permissions: string[] = [];
       if (roleName === "OWNER") {
@@ -257,8 +257,9 @@ organizationsRouter.delete("/:orgId", requireTenant, async (c) => {
     await db.delete(schema.organizations).where(eq(schema.organizations.id, orgId)).run();
 
     return c.json({ success: true, message: "Organization and all associated data deleted successfully" });
-  } catch (err: any) {
-    return c.json({ success: false, error: { code: "DELETION_FAILED", message: err.message || "Failed to delete organization" } }, 500);
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : "Failed to delete organization";
+    return c.json({ success: false, error: { code: "DELETION_FAILED", message: errorMsg } }, 500);
   }
 });
 

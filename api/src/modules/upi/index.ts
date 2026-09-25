@@ -1,8 +1,8 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { z } from "zod";
 import { db } from "../../db/index.js";
 import * as schema from "../../db/schema/index.js";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { generateId } from "../../lib/crypto.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { requireTenant } from "../../middleware/tenant.js";
@@ -282,6 +282,86 @@ upiRouter.delete(
   }
 );
 
+upiRouter.post(
+  "/:orgId/upi/bulk-delete",
+  requireTenant,
+  requirePermission("upi.manage"),
+  async (c) => {
+    const orgId = c.get("organizationId");
+    const actorId = c.get("userId");
+    const body = await c.req.json();
+    const validator = z.object({
+      ids: z.array(z.string().min(1)).min(1),
+    });
+    const { ids } = validator.parse(body);
+    const now = new Date();
+
+    const targets = await db
+      .select()
+      .from(schema.upiAccounts)
+      .where(and(inArray(schema.upiAccounts.id, ids), eq(schema.upiAccounts.organizationId, orgId)))
+      .all();
+
+    if (targets.length === 0) {
+      return c.json({ success: true, count: 0, message: "No matching UPI accounts found to delete" });
+    }
+
+    const targetIds = targets.map((t: typeof schema.upiAccounts.$inferSelect) => t.id);
+
+    try {
+      await db.update(schema.transactions)
+        .set({ upiAccountId: null })
+        .where(inArray(schema.transactions.upiAccountId, targetIds))
+        .run();
+    } catch (_) {}
+
+    await db.delete(schema.qrCodes)
+      .where(inArray(schema.qrCodes.upiAccountId, targetIds))
+      .run();
+
+    await db.delete(schema.upiAccounts)
+      .where(inArray(schema.upiAccounts.id, targetIds))
+      .run();
+
+    for (const target of targets) {
+      await db.insert(schema.auditLogs)
+        .values({
+          id: generateId("aud"),
+          organizationId: orgId,
+          actorId,
+          action: "upi.bulk_deleted",
+          resourceType: "upi_account",
+          resourceId: target.id,
+          metadataJson: JSON.stringify({ vpa: target.vpa }),
+          createdAt: now,
+        })
+        .run();
+
+      await db.insert(schema.outboxEvents)
+        .values({
+          id: generateId("evt"),
+          organizationId: orgId,
+          eventType: "upi.deleted",
+          payloadJson: JSON.stringify({
+            organizationId: orgId,
+            upiId: target.id,
+            vpa: target.vpa,
+            deletedAt: now.getTime(),
+          }),
+          status: "PENDING",
+          createdAt: now,
+        })
+        .run();
+    }
+
+    return c.json({
+      success: true,
+      count: targetIds.length,
+      message: `Successfully deleted ${targetIds.length} UPI ID(s)`,
+    });
+  }
+);
+
 const updateUpiValidator = z.object({
   vpa: z.string().regex(/^[\w.-]+@[\w.-]+$/, "Invalid UPI VPA format (e.g. name@bank)").optional(),
   payeeName: z.string().min(2).optional(),
@@ -289,10 +369,13 @@ const updateUpiValidator = z.object({
   isDefault: z.boolean().optional(),
 });
 
-const handleUpdateUpi = async (c: any) => {
+const handleUpdateUpi = async (c: Context<AppEnv>) => {
   const orgId = c.get("organizationId");
   const actorId = c.get("userId");
   const upiId = c.req.param("upiId");
+  if (!upiId) {
+    throw new AppError("UPI Account ID is required", 400);
+  }
   const body = await c.req.json();
 
   const data = updateUpiValidator.parse(body);

@@ -20,14 +20,14 @@ rolesRouter.get("/:orgId/roles", requireTenant, async (c) => {
   const allPermissions = await db.select().from(schema.permissions).all();
   const allRolePerms = await db.select().from(schema.rolePermissions).all();
 
-  const formattedRoles = allRoles.map((role: any) => {
+  const formattedRoles = allRoles.map((role) => {
     let permIds: string[] = [];
     if (role.name === "OWNER") {
-      permIds = allPermissions.map((p: any) => p.id);
+      permIds = allPermissions.map((p) => p.id);
     } else {
       permIds = allRolePerms
-        .filter((rp: any) => rp.roleId === role.id)
-        .map((rp: any) => rp.permissionId);
+        .filter((rp) => rp.roleId === role.id)
+        .map((rp) => rp.permissionId);
     }
 
     return {

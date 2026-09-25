@@ -146,12 +146,17 @@ export interface TabsProps {
   children?: React.ReactNode;
 }
 
+interface TabChildProps {
+  activeTab?: string;
+  setActiveTab?: (value: string) => void;
+}
+
 export function Tabs({ value, onValueChange, className = '', children }: TabsProps) {
   return (
     <div className={`space-y-4 ${className}`}>
       {React.Children.map(children, (child) => {
         if (!React.isValidElement(child)) return null;
-        return React.cloneElement(child as React.ReactElement<any>, { activeTab: value, setActiveTab: onValueChange });
+        return React.cloneElement(child as React.ReactElement<TabChildProps>, { activeTab: value, setActiveTab: onValueChange });
       })}
     </div>
   );
@@ -170,7 +175,7 @@ export function TabsList({ className = '', activeTab, setActiveTab, children }: 
       className={`inline-flex h-10 items-center justify-center rounded-xl bg-muted p-1 text-muted-foreground ${className}`}>
       {React.Children.map(children, (child) => {
         if (!React.isValidElement(child)) return null;
-        return React.cloneElement(child as React.ReactElement<any>, { activeTab, setActiveTab });
+        return React.cloneElement(child as React.ReactElement<TabChildProps>, { activeTab, setActiveTab });
       })}
     </div>
   );

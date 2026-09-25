@@ -10,6 +10,7 @@ import BottomNav from './components/BottomNav';
 import BottomSheet from './components/BottomSheet';
 import Toast from './components/Toast';
 import AppModals from './components/modals/AppModals';
+import PendingInviteModal, { type PendingInvite } from './components/modals/PendingInviteModal';
 
 import LoginPage from './pages/LoginPage';
 import OverviewPage from './pages/OverviewPage';
@@ -21,6 +22,7 @@ import ProfilePage from './pages/ProfilePage';
 import TablesPage from './pages/TablesPage';
 import HealthPage from './pages/HealthPage';
 import InviteAcceptPage from './pages/InviteAcceptPage';
+import { ENV } from './services/env.service';
 
 import { useTheme } from './hooks/useTheme';
 import { useToast } from './hooks/useToast';
@@ -66,6 +68,29 @@ function AppContent() {
   } | null>(null);
   const [inspectTxn, setInspectTxn] = useState<Transaction | null>(null);
   const [isSavingProfile, setIsSavingProfile] = useState<boolean>(false);
+  const [pendingLoginInvite, setPendingLoginInvite] = useState<PendingInvite | null>(null);
+
+  // Check for pending team invitations upon user login
+  const checkPendingInvitations = React.useCallback(async (authToken: string) => {
+    try {
+      const res = await fetch(`${ENV.API_BASE_URL}/api/v1/me/invitations`, {
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+          Accept: 'application/json',
+        },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const invites: PendingInvite[] = data.invitations || data.invites || [];
+        const pending = invites.find((inv) => inv.status?.toUpperCase() === 'PENDING');
+        if (pending) {
+          setPendingLoginInvite(pending);
+        }
+      }
+    } catch {
+      // Ignore background check error
+    }
+  }, []);
 
   // Organizations Hook (Forward ref for apiFetch)
   const orgRef = React.useRef<{ activeOrgId: string | null }>({ activeOrgId: null });
@@ -135,10 +160,13 @@ function AppContent() {
     authSessionRef.current = { token, handleUnauthorized };
   }, [token, handleUnauthorized]);
 
-  // Re-load organizations when token activates
+  // Re-load organizations and check invitations when token activates
   React.useEffect(() => {
-    if (token) loadOrganizations(token);
-  }, [token, loadOrganizations]);
+    if (token) {
+      loadOrganizations(token);
+      checkPendingInvitations(token);
+    }
+  }, [token, loadOrganizations, checkPendingInvitations]);
 
   // Unified Dashboard Data Hook
   const {
@@ -211,6 +239,25 @@ function AppContent() {
           label: 'Issue Refund',
           onClick: () => showToast('Refund initiated to customer account'),
         },
+        {
+          label: 'Delete Transaction Record',
+          variant: 'destructive',
+          onClick: async () => {
+            if (!activeOrg) return;
+            if (!confirm(`Permanently delete transaction ${txn.referenceNumber || txn.id}?`)) return;
+            try {
+              await apiFetch(`/api/v1/organizations/${activeOrg.id}/transactions/${txn.id}`, {
+                method: 'DELETE',
+              });
+              showToast('Transaction deleted successfully');
+              loadTransactions();
+              loadOverview();
+            } catch (err: unknown) {
+              const msg = err instanceof Error ? err.message : 'Error deleting transaction';
+              showToast(msg, 'error');
+            }
+          },
+        },
       ],
     });
   };
@@ -271,10 +318,57 @@ function AppContent() {
     });
   };
 
+  const handleSelectAccountAction = (_action: string, account: BankAccount) => {
+    setBottomSheetConfig({
+      title: account.bankName,
+      subtitle: `${account.accountHolderName} • ${account.accountNumberMasked || '••••'}`,
+      actions: [
+        {
+          label: account.isDefault ? 'Default Settlement Account' : 'Set as Default Settlement Account',
+          onClick: async () => {
+            if (!activeOrg || account.isDefault) return;
+            try {
+              await apiFetch(`/api/v1/organizations/${activeOrg.id}/accounts/${account.id}/default`, {
+                method: 'POST',
+              });
+              showToast('Settlement account set as default');
+              loadAccounts();
+            } catch (err: unknown) {
+              const msg = err instanceof Error ? err.message : 'Error updating bank account';
+              showToast(msg, 'error');
+            }
+          },
+        },
+        {
+          label: 'Edit Bank Account',
+          onClick: () => setEditingBank(account),
+        },
+        {
+          label: 'Delete Bank Account',
+          variant: 'destructive',
+          onClick: async () => {
+            if (!activeOrg) return;
+            if (!confirm(`Delete bank account ${account.bankName} (${account.accountNumberMasked || '••••'})?`)) return;
+            try {
+              await apiFetch(`/api/v1/organizations/${activeOrg.id}/accounts/${account.id}`, {
+                method: 'DELETE',
+              });
+              showToast('Bank account removed');
+              loadAccounts();
+            } catch (err: unknown) {
+              const msg = err instanceof Error ? err.message : 'Error removing bank account';
+              showToast(msg, 'error');
+            }
+          },
+        },
+      ],
+    });
+  };
+
   const handleSelectStaffAction = (_action: string, member: StaffMember | StaffInvite) => {
     if (_action === 'revoke_invite') {
       const invite = member as StaffInvite;
-      const target = (invite as any).invitedEmail || invite.email || 'this recipient';
+      const target = invite.invitedEmail || invite.email || 'this recipient';
       if (!confirm(`Cancel and revoke invitation for ${target}?`)) return;
       if (!activeOrg) return;
       apiFetch(`/api/v1/organizations/${activeOrg.id}/invites/${invite.id}`, { method: 'DELETE' })
@@ -516,6 +610,22 @@ function AppContent() {
                     onStatusChange={setTxnStatus}
                     onOpenNewTxn={() => setShowNewTxnModal(true)}
                     onSelectTxnAction={handleSelectTxnAction}
+                    onBulkDelete={async (ids) => {
+                      if (!activeOrg) return;
+                      if (!confirm(`Delete ${ids.length} selected transaction(s)?`)) return;
+                      try {
+                        await apiFetch(`/api/v1/organizations/${activeOrg.id}/transactions/bulk-delete`, {
+                          method: 'POST',
+                          body: JSON.stringify({ ids }),
+                        });
+                        showToast(`Deleted ${ids.length} transactions`);
+                        loadTransactions();
+                        loadOverview();
+                      } catch (err: unknown) {
+                        const msg = err instanceof Error ? err.message : 'Error in bulk delete';
+                        showToast(msg, 'error');
+                      }
+                    }}
                   />
                 }
               />
@@ -529,6 +639,21 @@ function AppContent() {
                     loading={upiLoading}
                     onOpenNewUpi={() => setShowUpiModal({})}
                     onSelectUpiAction={handleSelectUpiAction}
+                    onBulkDelete={async (ids) => {
+                      if (!activeOrg) return;
+                      if (!confirm(`Delete ${ids.length} selected UPI account(s)?`)) return;
+                      try {
+                        await apiFetch(`/api/v1/organizations/${activeOrg.id}/upi/bulk-delete`, {
+                          method: 'POST',
+                          body: JSON.stringify({ ids }),
+                        });
+                        showToast(`Deleted ${ids.length} UPI account(s)`);
+                        loadUpi();
+                      } catch (err: unknown) {
+                        const msg = err instanceof Error ? err.message : 'Error in bulk delete';
+                        showToast(msg, 'error');
+                      }
+                    }}
                   />
                 }
               />
@@ -543,6 +668,36 @@ function AppContent() {
                     loading={staffLoading}
                     onOpenInviteStaff={() => setShowStaffModal({})}
                     onSelectStaffAction={handleSelectStaffAction}
+                    onBulkDeleteStaff={async (ids) => {
+                      if (!activeOrg) return;
+                      if (!confirm(`Remove ${ids.length} selected staff member(s)?`)) return;
+                      try {
+                        await apiFetch(`/api/v1/organizations/${activeOrg.id}/staff/bulk-delete`, {
+                          method: 'POST',
+                          body: JSON.stringify({ ids }),
+                        });
+                        showToast(`Removed ${ids.length} staff member(s)`);
+                        loadStaff();
+                      } catch (err: unknown) {
+                        const msg = err instanceof Error ? err.message : 'Error in bulk delete';
+                        showToast(msg, 'error');
+                      }
+                    }}
+                    onBulkDeleteInvites={async (ids) => {
+                      if (!activeOrg) return;
+                      if (!confirm(`Revoke ${ids.length} selected invitation(s)?`)) return;
+                      try {
+                        await apiFetch(`/api/v1/organizations/${activeOrg.id}/invites/bulk-delete`, {
+                          method: 'POST',
+                          body: JSON.stringify({ ids }),
+                        });
+                        showToast(`Revoked ${ids.length} invitation(s)`);
+                        loadStaff();
+                      } catch (err: unknown) {
+                        const msg = err instanceof Error ? err.message : 'Error in bulk delete';
+                        showToast(msg, 'error');
+                      }
+                    }}
                   />
                 }
               />
@@ -555,7 +710,22 @@ function AppContent() {
                     canManageAccounts={canManageAccounts}
                     loading={accountsLoading}
                     onOpenNewBank={() => setShowNewBankModal(true)}
-                    onEditBank={(acc) => setEditingBank(acc)}
+                    onSelectAccountAction={handleSelectAccountAction}
+                    onBulkDelete={async (ids) => {
+                      if (!activeOrg) return;
+                      if (!confirm(`Delete ${ids.length} selected bank account(s)?`)) return;
+                      try {
+                        await apiFetch(`/api/v1/organizations/${activeOrg.id}/accounts/bulk-delete`, {
+                          method: 'POST',
+                          body: JSON.stringify({ ids }),
+                        });
+                        showToast(`Deleted ${ids.length} bank account(s)`);
+                        loadAccounts();
+                      } catch (err: unknown) {
+                        const msg = err instanceof Error ? err.message : 'Error in bulk delete';
+                        showToast(msg, 'error');
+                      }
+                    }}
                   />
                 }
               />
@@ -752,6 +922,46 @@ function AppContent() {
 
       {/* Global Notification Toast */}
       <Toast toast={toast} onClose={hideToast} />
+
+      {/* Pending Organization Invitation Popup Modal */}
+      <PendingInviteModal
+        invite={pendingLoginInvite}
+        onAccept={async (invite) => {
+          try {
+            const res = await apiFetch<{ success: boolean; organization?: Organization }>(
+              `/api/v1/invitations/${invite.id}/accept`,
+              {
+                method: 'POST',
+              }
+            );
+            showToast('Invitation accepted! Welcome to the workspace.');
+            setPendingLoginInvite(null);
+            if (token) {
+              await loadOrganizations(token);
+            }
+            if (res.organization) {
+              setActiveOrg(res.organization);
+              localStorage.setItem('upieasy_active_org_id', res.organization.id);
+            }
+            navigate('/overview');
+          } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : 'Failed to accept invitation';
+            showToast(msg, 'error');
+          }
+        }}
+        onDecline={async (invite) => {
+          try {
+            await apiFetch(`/api/v1/invitations/${invite.id}/reject`, {
+              method: 'POST',
+            });
+            showToast('Invitation declined.');
+          } catch {
+            // Ignore error on decline
+          } finally {
+            setPendingLoginInvite(null);
+          }
+        }}
+      />
     </div>
   );
 }

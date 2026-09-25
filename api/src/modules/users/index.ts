@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { z } from "zod";
 import { db } from "../../db/index.js";
 import * as schema from "../../db/schema/index.js";
@@ -11,7 +11,7 @@ export const usersRouter = new Hono<AppEnv>();
 
 usersRouter.use("*", requireAuth);
 
-const getMeHandler = async (c: any) => {
+const getMeHandler = async (c: Context<AppEnv>) => {
   const userId = c.get("userId");
   const user = await db.select().from(schema.users).where(eq(schema.users.id, userId)).get();
 
@@ -53,7 +53,7 @@ import { getMyInvitationsHandler } from "../invitations/index.js";
 
 usersRouter.get("/me", getMeHandler);
 usersRouter.get("/invitations", getMyInvitationsHandler);
-usersRouter.get("/organizations", async (c: any) => {
+usersRouter.get("/organizations", async (c: Context<AppEnv>) => {
   const userId = c.get("userId");
   const memberships = await db
     .select({
@@ -75,8 +75,22 @@ usersRouter.get("/organizations", async (c: any) => {
     .where(eq(schema.organizationMembers.userId, userId))
     .all();
 
+  interface MembershipRow {
+    id: string;
+    organizationId: string;
+    name: string;
+    organizationName: string;
+    legalBusinessName: string | null;
+    category: string | null;
+    roleId: string | null;
+    role: string | null;
+    roleName: string | null;
+    status: string;
+    memberStatus: string;
+  }
+
   const orgsWithPermissions = await Promise.all(
-    memberships.map(async (m: any) => {
+    (memberships as MembershipRow[]).map(async (m: MembershipRow) => {
       const role = m.role || "MEMBER";
       let permissions: string[] = [];
       if (role === "OWNER") {
@@ -106,7 +120,7 @@ usersRouter.get("/organizations", async (c: any) => {
 });
 usersRouter.get("/", getMeHandler);
 
-const patchMeHandler = async (c: any) => {
+const patchMeHandler = async (c: Context<AppEnv>) => {
   const userId = c.get("userId");
   const body = await c.req.json();
   const schemaValidator = z.object({
@@ -133,7 +147,7 @@ const patchMeHandler = async (c: any) => {
 usersRouter.patch("/me", patchMeHandler);
 usersRouter.patch("/", patchMeHandler);
 
-const deleteMeHandler = async (c: any) => {
+const deleteMeHandler = async (c: Context<AppEnv>) => {
   const userId = c.get("userId");
 
   try {
@@ -183,13 +197,14 @@ const deleteMeHandler = async (c: any) => {
       success: true,
       message: "User account and all associated sessions deleted successfully",
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : "Failed to delete account completely";
     return c.json(
       {
         success: false,
         error: {
           code: "DELETION_FAILED",
-          message: err.message || "Failed to delete account completely",
+          message: errorMsg,
         },
       },
       500

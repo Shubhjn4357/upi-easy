@@ -180,13 +180,17 @@ class PaymentNotificationListenerService : NotificationListenerService() {
                     database.paymentAccountDao().updateLastDetectedTime(paId, raw.postTime)
                 }
 
-                // Section 2 & 25: For RECEIVED payments with non-null amount, create local transaction record
-                // Important: NEVER set status = SUCCESS directly from a notification!
-                if (event.direction == PaymentDirection.RECEIVED && event.amount != null) {
+                // Record genuine payment notifications (RECEIVED or SENT) into local ledger database
+                if (event.amount != null && (event.direction == PaymentDirection.RECEIVED || event.direction == PaymentDirection.SENT)) {
                     val amountDouble = event.amount.toDouble()
                     val orgName = sessionManager.currentOrgNameFlow.first() ?: "Merchant Store"
                     val accountLabel = resolution.candidateAccounts.firstOrNull()?.label ?: "${event.sourceApp} Account"
                     val payeeVpa = resolution.candidateAccounts.firstOrNull()?.upiId ?: "merchant@upi"
+                    val isReceived = event.direction == PaymentDirection.RECEIVED
+                    val directionStr = if (isReceived) "RECEIVED" else "SENT"
+
+                    val payerName = if (isReceived) (event.payerName ?: "UPI Customer") else orgName
+                    val payeeName = if (isReceived) accountLabel else (event.payerName ?: "Vendor / Merchant")
 
                     val txnEntity = TransactionEntity(
                         id = txnId,
@@ -194,17 +198,17 @@ class PaymentNotificationListenerService : NotificationListenerService() {
                         bankAccountId = null,
                         upiAccountId = null,
                         type = "PAYMENT",
-                        direction = "RECEIVED",
+                        direction = directionStr,
                         amount = amountDouble,
                         currency = "INR",
                         status = "UNKNOWN", // UNKNOWN / PENDING per Section 2 & 25
                         paymentMethod = "UPI",
                         referenceNumber = event.reference,
-                        payerName = event.payerName ?: "UPI Customer",
+                        payerName = payerName,
                         payerVpa = event.payerVpa,
-                        payeeName = accountLabel,
+                        payeeName = payeeName,
                         payeeVpa = payeeVpa,
-                        note = "Payment observed from ${event.sourceApp}",
+                        note = "Payment $directionStr observed from ${event.sourceApp}",
                         occurredAt = raw.postTime,
                         syncStatus = "PENDING",
                         paymentAccountId = resolution.paymentAccountId,
@@ -218,7 +222,7 @@ class PaymentNotificationListenerService : NotificationListenerService() {
                     PaymentAlertManager.notifyPayment(
                         context = context,
                         amount = amountDouble,
-                        payerName = event.payerName ?: "UPI Customer",
+                        payerName = event.payerName ?: (if (isReceived) "UPI Customer" else payeeName),
                         referenceNumber = event.reference
                     )
                 }

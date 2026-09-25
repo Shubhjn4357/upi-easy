@@ -91,7 +91,7 @@ adminRouter.get("/tables", async (c) => {
           name: string;
           type: string;
           notnull: number;
-          dflt_value: any;
+          dflt_value: unknown;
           pk: number;
         }>(`PRAGMA table_info(${tableName})`);
 
@@ -142,7 +142,7 @@ adminRouter.get("/tables/:table", async (c) => {
 
   let countQuery = `SELECT count(*) as count FROM ${tableName}`;
   let dataQuery = `SELECT * FROM ${tableName}`;
-  const params: any[] = [];
+  const params: unknown[] = [];
 
   if (search) {
     // Search text-compatible columns
@@ -205,7 +205,7 @@ adminRouter.patch("/tables/:table/:id", async (c) => {
   const pkCol = columns.find((c) => c.pk === 1)?.name || "id";
 
   const updates: string[] = [];
-  const values: any[] = [];
+  const values: unknown[] = [];
 
   for (const [key, val] of Object.entries(body)) {
     if (key !== pkCol && validColumnNames.has(key)) {
@@ -294,7 +294,7 @@ adminRouter.post("/tables/:table", async (c) => {
   }
 
   const insertCols: string[] = [];
-  const insertVals: any[] = [];
+  const insertVals: unknown[] = [];
   const placeholders: string[] = [];
 
   for (const [key, val] of Object.entries(body)) {

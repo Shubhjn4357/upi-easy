@@ -8,7 +8,7 @@ export interface ApiFetchOptions extends RequestInit {
   headers?: Record<string, string>;
 }
 
-export type ApiClient = <T = any>(endpoint: string, options?: ApiFetchOptions) => Promise<T>;
+export type ApiClient = <T = unknown>(endpoint: string, options?: ApiFetchOptions) => Promise<T>;
 
 export function createApiClient(
   getToken: TokenProvider,
@@ -16,7 +16,7 @@ export function createApiClient(
   onLatency?: (latencyMs: number) => void,
   getOrgId?: OrgIdProvider
 ): ApiClient {
-  return async function apiFetch<T = any>(endpoint: string, options: ApiFetchOptions = {}): Promise<T> {
+  return async function apiFetch<T = unknown>(endpoint: string, options: ApiFetchOptions = {}): Promise<T> {
     let token = typeof getToken === 'function' ? getToken() : getToken;
     const orgId = typeof getOrgId === 'function' ? getOrgId() : getOrgId;
 

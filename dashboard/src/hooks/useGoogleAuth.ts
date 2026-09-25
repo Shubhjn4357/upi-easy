@@ -83,9 +83,15 @@ export function useGoogleAuth({ theme, onSuccess }: UseGoogleAuthOptions) {
     };
   }, [theme]);
 
+  interface GooglePromptMomentNotification {
+    isNotDisplayed: () => boolean;
+    isSkippedMoment: () => boolean;
+    isDismissedMoment?: () => boolean;
+  }
+
   const promptOneTap = (onNotDisplayed?: () => void) => {
     if (typeof window !== 'undefined' && window.google?.accounts?.id) {
-      window.google.accounts.id.prompt((notification: any) => {
+      window.google.accounts.id.prompt((notification: GooglePromptMomentNotification) => {
         if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
           onNotDisplayed?.();
         }

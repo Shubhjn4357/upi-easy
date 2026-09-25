@@ -19,7 +19,7 @@ import type { DashboardStats, Transaction } from '@/types';
 import { BentoOverviewSkeleton } from '@/components/ui/Skeleton';
 
 export interface OverviewPageProps {
-  stats: any;
+  stats: DashboardStats | null;
   loading?: boolean;
   onOpenNewTxn: () => void;
   onOpenNewUpi: () => void;
@@ -158,7 +158,7 @@ export function OverviewPage({
                   </TableCell>
                 </TableRow>
               ) : (
-                (stats.recentTransactions as any[]).map((txn) => (
+                (stats.recentTransactions || []).map((txn: Transaction) => (
                   <TableRow
                     key={txn.id}
                     onClick={() => onInspectTxn('view', txn)}

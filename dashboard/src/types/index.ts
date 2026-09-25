@@ -1,4 +1,4 @@
-// Domain and Application TypeScript Definitions (Strictly Typed, Zero 'any')
+// Domain and Application TypeScript Definitions
 
 export type UserRole = 'OWNER' | 'MANAGER' | 'CASHIER' | 'MEMBER';
 
@@ -58,12 +58,14 @@ export interface UpiAccount {
   vpa?: string;
   upiId?: string;
   payeeName?: string;
-  accountHolderName: string;
-  bankName?: string;
-  accountNumberMasked?: string;
+  accountHolderName?: string;
+  bankAccountId?: string | null;
+  bankName?: string | null;
+  accountNumberMasked?: string | null;
   merchantCategoryCode?: string;
   transactionCount?: number;
-  isActive: boolean;
+  isActive?: boolean;
+  status?: string;
   isDefault?: boolean;
   isPrimary?: boolean;
   qrCodeUrl?: string;
@@ -86,6 +88,9 @@ export interface StaffMember {
 export interface StaffInvite {
   id: string;
   email: string;
+  invitedEmail?: string;
+  invitedMobile?: string;
+  invitedName?: string;
   role: UserRole | string;
   expiresAt: string;
   token?: string;
@@ -202,6 +207,7 @@ export interface TransactionsPageProps {
   onStatusChange: (status: string) => void;
   onOpenNewTxn: () => void;
   onSelectTxnAction: (action: string, txn: Transaction) => void;
+  onBulkDelete?: (ids: string[]) => Promise<void> | void;
 }
 
 export interface UpiPageProps {
@@ -210,6 +216,7 @@ export interface UpiPageProps {
   loading?: boolean;
   onOpenNewUpi: () => void;
   onSelectUpiAction: (upi: UpiAccount, action: string) => void;
+  onBulkDelete?: (ids: string[]) => Promise<void> | void;
 }
 
 export interface StaffPageProps {
@@ -219,6 +226,8 @@ export interface StaffPageProps {
   loading?: boolean;
   onOpenInviteStaff: () => void;
   onSelectStaffAction: (action: string, staff: StaffMember | StaffInvite) => void;
+  onBulkDeleteStaff?: (ids: string[]) => Promise<void> | void;
+  onBulkDeleteInvites?: (ids: string[]) => Promise<void> | void;
 }
 
 export interface AccountsPageProps {
@@ -226,6 +235,8 @@ export interface AccountsPageProps {
   canManageAccounts?: boolean;
   loading?: boolean;
   onOpenNewBank: () => void;
+  onSelectAccountAction?: (action: string, account: BankAccount) => void;
+  onBulkDelete?: (ids: string[]) => Promise<void> | void;
 }
 
 export interface ProfilePageProps {

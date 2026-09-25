@@ -44,7 +44,7 @@ syncRouter.post("/", async (c) => {
     )
     .all();
 
-  const activeOrgSet = new Set(activeMemberships.map((m: any) => m.organizationId));
+  const activeOrgSet = new Set(activeMemberships.map((m) => m.organizationId));
   const now = new Date();
   const results = [];
 
@@ -108,15 +108,16 @@ syncRouter.post("/", async (c) => {
       organizationId: orgId,
       nextCursor,
       hasMore: events.length === limit,
-      changes: events.map((e: any) => {
-        let payload: any = {};
+      changes: events.map((e: typeof schema.outboxEvents.$inferSelect) => {
+        let payload: Record<string, unknown> = {};
         try {
           payload = JSON.parse(e.payloadJson);
         } catch (_) {}
+        const entityId = (payload.id || payload.entityId || payload.memberId || payload.transactionId || e.id) as string;
         return {
           sequence: e.sequence,
           type: e.eventType,
-          entityId: payload.id || payload.entityId || payload.memberId || payload.transactionId || e.id,
+          entityId,
           payload,
           createdAt: e.createdAt,
         };
@@ -190,7 +191,7 @@ syncRouter.get("/:orgId/sync", requireTenant, async (c) => {
   return c.json({
     success: true,
     data: {
-      events: events.map((e: any) => ({
+      events: events.map((e: typeof schema.outboxEvents.$inferSelect) => ({
         sequence: e.sequence,
         id: e.id,
         eventType: e.eventType,

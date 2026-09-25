@@ -7,7 +7,7 @@ export interface JwtPayload {
   role?: string;
   exp?: number;
   iat?: number;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export function parseJwtPayload(token: string | null | undefined): JwtPayload | null {

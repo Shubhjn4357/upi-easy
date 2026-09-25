@@ -11,7 +11,7 @@ import type { User, Organization, Theme } from '../types';
 export interface InviteAcceptPageProps {
   token?: string | null;
   currentUser?: User | null;
-  apiFetch: <T = any>(endpoint: string, options?: any) => Promise<T>;
+  apiFetch: <T = unknown>(endpoint: string, options?: RequestInit) => Promise<T>;
   showToast: (message: string, type?: 'success' | 'error' | 'info') => void;
   onLoginSuccess: (token: string, user: User, defaultOrg?: Organization | null, refreshToken?: string) => Promise<void>;
   onInviteAccepted: (org: Organization) => Promise<void>;

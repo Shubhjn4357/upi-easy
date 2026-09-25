@@ -47,6 +47,8 @@ fun GoogleSignInScreen(
 
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var pendingInvite by remember { mutableStateOf<com.aerotech.upieasy.core.network.InvitationDto?>(null) }
+    var isAcceptingInvite by remember { mutableStateOf(false) }
 
     fun handleGoogleAuth() {
         isLoading = true
@@ -111,6 +113,18 @@ fun GoogleSignInScreen(
                             if (body.isSetupComplete) {
                                 onNavigateToMain()
                             } else {
+                                // Check if user has any pending invites
+                                try {
+                                    val inviteRes = apiService.getMyInvitations()
+                                    if (inviteRes.isSuccessful && inviteRes.body()?.success == true) {
+                                        val invites = inviteRes.body()?.invitations ?: inviteRes.body()?.invites ?: emptyList()
+                                        val pending = invites.firstOrNull { it.status.equals("PENDING", ignoreCase = true) }
+                                        if (pending != null) {
+                                            pendingInvite = pending
+                                            return@launch
+                                        }
+                                    }
+                                } catch (_: Exception) {}
                                 onNavigateToSetup()
                             }
                         } else {
@@ -130,6 +144,62 @@ fun GoogleSignInScreen(
                 isLoading = false
             }
         }
+    }
+
+    // Pending Invitation Popup Modal
+    pendingInvite?.let { invite ->
+        com.aerotech.upieasy.ui.components.UpieasyPendingInviteModal(
+            visible = true,
+            orgName = invite.organizationName ?: "Workspace",
+            role = invite.role,
+            invitedBy = invite.inviterName,
+            isProcessing = isAcceptingInvite,
+            onAccept = {
+                scope.launch {
+                    isAcceptingInvite = true
+                    try {
+                        val acceptRes = apiService.acceptInvitation(invite.id)
+                        if (acceptRes.isSuccessful && acceptRes.body()?.success == true) {
+                            val orgRes = apiService.getOrganizations()
+                            if (orgRes.isSuccessful && orgRes.body()?.success == true) {
+                                val orgs = orgRes.body()!!.organizations
+                                val target = orgs.find { it.id == invite.organizationId } ?: orgs.firstOrNull()
+                                if (target != null) {
+                                    sessionManager.setOrganization(
+                                        orgId = target.id,
+                                        orgName = target.name,
+                                        role = target.role,
+                                        legalName = target.legalBusinessName,
+                                        category = target.category,
+                                        panNumber = target.panNumber,
+                                        gstin = target.gstin
+                                    )
+                                    sessionManager.setSetupComplete(true)
+                                    pendingInvite = null
+                                    onNavigateToMain()
+                                    return@launch
+                                }
+                            }
+                        } else {
+                            errorMessage = acceptRes.body()?.message ?: "Failed to accept invitation"
+                        }
+                    } catch (e: Exception) {
+                        errorMessage = e.localizedMessage ?: "Network error accepting invitation"
+                    } finally {
+                        isAcceptingInvite = false
+                    }
+                }
+            },
+            onDecline = {
+                scope.launch {
+                    try {
+                        apiService.rejectInvitation(invite.id)
+                    } catch (_: Exception) {}
+                    pendingInvite = null
+                    onNavigateToSetup()
+                }
+            }
+        )
     }
 
     Box(

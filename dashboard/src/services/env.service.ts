@@ -8,9 +8,15 @@ export interface AppEnvironment {
   IS_DEVELOPMENT: boolean;
 }
 
+interface CustomWindow {
+  API_BASE_URL?: string;
+  GOOGLE_CLIENT_ID?: string;
+  location?: Location;
+}
+
 function getEnvironment(): AppEnvironment {
-  const metaEnv = typeof import.meta !== 'undefined' ? (import.meta as any).env || {} : {};
-  const win = typeof window !== 'undefined' ? (window as any) : {};
+  const metaEnv = typeof import.meta !== 'undefined' ? (import.meta as { env?: Record<string, string> }).env || {} : {};
+  const win = (typeof window !== 'undefined' ? window : {}) as unknown as CustomWindow;
 
   const isBrowser = typeof window !== 'undefined';
 

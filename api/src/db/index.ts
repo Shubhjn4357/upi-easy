@@ -7,6 +7,8 @@ import { config } from "../config/index.js";
 import { logger } from "../lib/logger.js";
 import { eq } from "drizzle-orm";
 import { seedDemoMerchantData } from "./seed.js";
+import type { D1Database } from "@cloudflare/workers-types";
+import type { AppBindings } from "../types/hono.js";
 
 const isPostgresUrl = config.DATABASE_URL.startsWith("postgresql:") || config.DATABASE_URL.startsWith("postgres:");
 const sqlitePath = process.env.NODE_ENV === "test"
@@ -15,8 +17,10 @@ const sqlitePath = process.env.NODE_ENV === "test"
     ? "./upieasy.db"
     : config.DATABASE_URL.replace("file:", "");
 
-let sqlite: any;
-let dbInstance: any;
+let sqlite: Database.Database | null = null;
+type BetterDb = ReturnType<typeof drizzleBetterSqlite3<typeof schema>>;
+type D1Db = ReturnType<typeof drizzleD1<typeof schema>>;
+let dbInstance: BetterDb | D1Db | null = null;
 
 try {
   sqlite = new Database(sqlitePath, { timeout: 15000 });
@@ -24,48 +28,48 @@ try {
   sqlite.pragma("foreign_keys = ON");
   sqlite.pragma("busy_timeout = 15000");
   dbInstance = drizzleBetterSqlite3(sqlite, { schema });
-} catch (err: any) {
+} catch {
   // Better-sqlite3 native addon not available in Cloudflare Workers isolate
 }
 
-let rawD1: any = null;
+let rawD1: D1Database | null = null;
 
-export function setD1Database(d1Database: any) {
+export function setD1Database(d1Database: D1Database | null) {
   if (d1Database) {
     rawD1 = d1Database;
     dbInstance = drizzleD1(d1Database, { schema });
   }
 }
 
-export function getRawD1(): any {
+export function getRawD1(): D1Database | null {
   return rawD1;
 }
 
-export function getRawDb(): any {
+export function getRawDb(): Database.Database | null {
   return sqlite;
 }
 
 export interface RawDbClient {
-  all<T = any>(query: string, params?: any[]): Promise<T[]>;
-  get<T = any>(query: string, params?: any[]): Promise<T | null>;
-  run(query: string, params?: any[]): Promise<{ changes: number }>;
+  all<T = Record<string, unknown>>(query: string, params?: unknown[]): Promise<T[]>;
+  get<T = Record<string, unknown>>(query: string, params?: unknown[]): Promise<T | null>;
+  run(query: string, params?: unknown[]): Promise<{ changes: number }>;
 }
 
-export function getRawDbClient(env?: any): RawDbClient | null {
+export function getRawDbClient(env?: AppBindings): RawDbClient | null {
   const d1 = env?.upi_easy_db || env?.DB || rawD1;
   if (d1) {
     return {
-      async all<T = any>(query: string, params: any[] = []): Promise<T[]> {
+      async all<T = Record<string, unknown>>(query: string, params: unknown[] = []): Promise<T[]> {
         const stmt = params.length > 0 ? d1.prepare(query).bind(...params) : d1.prepare(query);
         const res = await stmt.all();
         return (res.results || []) as T[];
       },
-      async get<T = any>(query: string, params: any[] = []): Promise<T | null> {
+      async get<T = Record<string, unknown>>(query: string, params: unknown[] = []): Promise<T | null> {
         const stmt = params.length > 0 ? d1.prepare(query).bind(...params) : d1.prepare(query);
         const res = await stmt.first();
         return (res ?? null) as T | null;
       },
-      async run(query: string, params: any[] = []): Promise<{ changes: number }> {
+      async run(query: string, params: unknown[] = []): Promise<{ changes: number }> {
         const stmt = params.length > 0 ? d1.prepare(query).bind(...params) : d1.prepare(query);
         const res = await stmt.run();
         return { changes: res.meta?.changes ?? (res.success ? 1 : 0) };
@@ -75,13 +79,13 @@ export function getRawDbClient(env?: any): RawDbClient | null {
 
   if (sqlite) {
     return {
-      async all<T = any>(query: string, params: any[] = []): Promise<T[]> {
+      async all<T = Record<string, unknown>>(query: string, params: unknown[] = []): Promise<T[]> {
         return sqlite.prepare(query).all(...params) as T[];
       },
-      async get<T = any>(query: string, params: any[] = []): Promise<T | null> {
+      async get<T = Record<string, unknown>>(query: string, params: unknown[] = []): Promise<T | null> {
         return (sqlite.prepare(query).get(...params) ?? null) as T | null;
       },
-      async run(query: string, params: any[] = []): Promise<{ changes: number }> {
+      async run(query: string, params: unknown[] = []): Promise<{ changes: number }> {
         const res = sqlite.prepare(query).run(...params);
         return { changes: res.changes };
       },
@@ -91,33 +95,34 @@ export function getRawDbClient(env?: any): RawDbClient | null {
   return null;
 }
 
-export const db = new Proxy({} as any, {
-  get(target, prop) {
+export const db: BetterDb = new Proxy({} as unknown as BetterDb, {
+  get(_target, prop) {
     if (!dbInstance) {
       throw new Error(
         `Database query attempted but neither local SQLite nor Cloudflare D1 binding (upi_easy_db / DB) is initialized.`
       );
     }
-    const val = dbInstance[prop];
+    const val = (dbInstance as unknown as Record<string | symbol, unknown>)[prop];
     if (typeof val === "function") {
-      return val.bind(dbInstance);
+      return (val as (...args: unknown[]) => unknown).bind(dbInstance);
     }
     return val;
   },
 });
 
 export function initDatabase() {
-  if (!sqlite) {
+  if (!sqlite || !dbInstance) {
     logger.warn("Skipping SQLite schema initialization (running in serverless isolate without local SQLite)");
     return;
   }
 
   // Execute migrations generated from Drizzle schema
   try {
-    migrate(dbInstance, { migrationsFolder: "./drizzle" });
-  } catch (err: any) {
+    migrate(dbInstance as BetterDb, { migrationsFolder: "./drizzle" });
+  } catch (err: unknown) {
     // If tables already exist or already migrated
-    logger.debug("Drizzle migration notice: " + (err?.message || err));
+    const msg = err instanceof Error ? err.message : String(err);
+    logger.debug("Drizzle migration notice: " + msg);
   }
 
   // Ensure organization_invites table exists
@@ -229,6 +234,7 @@ function seedPermissionsAndRoles() {
     { id: "perm_tx_export", name: "transactions.export", description: "Export transactions", category: "transactions" },
     { id: "perm_tx_create", name: "transactions.create", description: "Create transactions", category: "transactions" },
     { id: "perm_tx_refund", name: "transactions.refund", description: "Initiate refunds", category: "transactions" },
+    { id: "perm_tx_delete", name: "transactions.delete", description: "Delete transactions", category: "transactions" },
     { id: "perm_evt_ingest", name: "payment_events.ingest", description: "Ingest observed payment events", category: "transactions" },
     { id: "perm_acc_read", name: "accounts.read", description: "View bank accounts", category: "accounts" },
     { id: "perm_acc_manage", name: "accounts.manage", description: "Manage bank accounts", category: "accounts" },
@@ -263,6 +269,8 @@ function seedPermissionsAndRoles() {
       "perm_tx_read",
       "perm_tx_export",
       "perm_tx_create",
+      "perm_tx_refund",
+      "perm_tx_delete",
       "perm_evt_ingest",
       "perm_acc_read",
       "perm_upi_read",

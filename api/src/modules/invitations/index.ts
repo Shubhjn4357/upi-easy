@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { db } from "../../db/index.js";
 import * as schema from "../../db/schema/index.js";
 import { eq, and, or } from "drizzle-orm";
@@ -65,7 +65,7 @@ invitationsRouter.use("*", requireAuth);
  * GET /api/v1/invitations/me OR GET /api/v1/me/invitations
  * Returns pending invitations sent to the authenticated user (by userId or mobile).
  */
-export const getMyInvitationsHandler = async (c: any) => {
+export const getMyInvitationsHandler = async (c: Context<AppEnv>) => {
   const userId = c.get("userId");
   const user = await db.select().from(schema.users).where(eq(schema.users.id, userId)).get();
 
@@ -117,7 +117,7 @@ export const getMyInvitationsHandler = async (c: any) => {
 
   // Filter out expired invites in-memory and mark them if needed
   const now = new Date();
-  const validInvites = invites.filter((inv: any) => new Date(inv.expiresAt) > now);
+  const validInvites = invites.filter((inv) => inv.expiresAt && new Date(inv.expiresAt) > now);
 
   return c.json({
     success: true,

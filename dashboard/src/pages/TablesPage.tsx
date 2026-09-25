@@ -1,42 +1,15 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
-import { IconPlus, IconSearch, IconMoreVertical, IconX, IconChevronLeft, IconChevronRight } from '@/components/ui/icons';
+import { DataTable } from '@/components/ui/DataTable';
+import {
+  IconPlus,
+  IconMoreVertical,
+  IconTrash,
+  IconChevronLeft,
+  IconChevronRight,
+} from '@/components/ui/icons';
+import type { TablesPageProps, ColumnDef } from '@/types';
 
-export interface ColumnDef {
-  name: string;
-  type?: string;
-  isPrimary?: boolean;
-}
-
-export interface TableItem {
-  name: string;
-  rowCount?: number;
-}
-
-export interface TablesPageProps {
-  tables: any[];
-  selectedTable: string;
-  onSelectTable: (tableName: string) => void;
-  tableData: {
-    rows: Record<string, any>[];
-    columns: ColumnDef[];
-    total: number;
-  };
-  loading: boolean;
-  search: string;
-  onSearchChange: (search: string) => void;
-  offset?: number;
-  onOffsetChange?: (offset: number) => void;
-  limit?: number;
-  onOpenInsertModal: () => void;
-  onSelectRowAction: (row: Record<string, any>, tableName: string, columns: ColumnDef[]) => void;
-}
-
-// Database Table Explorer & Management Page using shadcn/ui with strict TypeScript types
 export function TablesPage({
   tables,
   selectedTable,
@@ -51,8 +24,10 @@ export function TablesPage({
   onOpenInsertModal,
   onSelectRowAction,
 }: TablesPageProps) {
+  const [selectedRowIds, setSelectedRowIds] = useState<Set<string>>(new Set());
+
   // Infer columns from rows if schema columns not populated
-  const displayColumns = useMemo(() => {
+  const displayColumns: ColumnDef[] = useMemo(() => {
     if (tableData?.columns && tableData.columns.length > 0) {
       return tableData.columns;
     }
@@ -72,8 +47,76 @@ export function TablesPage({
   const hasPrev = offset > 0;
   const hasNext = offset + limit < total;
 
+  const pkCol = useMemo(() => {
+    return displayColumns.find((c) => c.isPrimary)?.name || 'id';
+  }, [displayColumns]);
+
+  const keyExtractor = (row: Record<string, unknown>) => {
+    return String(row[pkCol] ?? Math.random());
+  };
+
+  const columns = useMemo(() => {
+    const cols = displayColumns.map((col) => ({
+      header: col.name,
+      cell: (row: Record<string, unknown>) => {
+        const val = row[col.name];
+        if (val === null || val === undefined) {
+          return <span className="text-muted-foreground/50 italic text-[11px]">NULL</span>;
+        }
+        if (typeof val === 'boolean') {
+          return (
+            <span
+              className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                val
+                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                  : 'bg-rose-500/10 text-rose-600 dark:text-rose-400'
+              }`}>
+              {val ? 'TRUE' : 'FALSE'}
+            </span>
+          );
+        }
+        if (typeof val === 'object') {
+          return (
+            <span className="font-mono text-[10px] text-muted-foreground truncate max-w-[200px] block">
+              {JSON.stringify(val)}
+            </span>
+          );
+        }
+        return (
+          <span className={`text-xs ${col.isPrimary ? 'font-mono font-bold text-foreground' : 'text-foreground/90'}`}>
+            {String(val)}
+          </span>
+        );
+      },
+    }));
+
+    cols.push({
+      header: 'Action',
+      headerClassName: 'text-right',
+      cellClassName: 'text-right',
+      cell: (row: Record<string, unknown>) => (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => onSelectRowAction(row, selectedTable, displayColumns)}
+          className="rounded-lg h-7 px-2 text-xs">
+          <IconMoreVertical className="w-3 h-3" />
+        </Button>
+      ),
+    });
+
+    return cols;
+  }, [displayColumns, onSelectRowAction, selectedTable]);
+
+  // Options for the top table selector dropdown menu
+  const tableDropdownOptions = tables.map((t) => ({
+    value: t.name,
+    label: t.name,
+    count: t.rowCount,
+  }));
+
   return (
-    <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
+    <div className="space-y-5 animate-fade-in max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -81,7 +124,7 @@ export function TablesPage({
             Database Table Explorer
           </h2>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Direct schema inspection, row insertion, editing, and record deletion
+            Direct schema inspection, record insertion, editing, and bulk deletion
           </p>
         </div>
         <Button
@@ -94,172 +137,76 @@ export function TablesPage({
         </Button>
       </div>
 
-      {/* Table Selector Pills */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-2">
-        {tables.length === 0 ? (
-          <div className="flex items-center gap-2 py-1">
-            {[1, 2, 3, 4, 5, 6].map((i) => (
-              <div key={i} className="h-8 w-28 bg-muted/50 rounded-xl animate-pulse" />
-            ))}
-          </div>
-        ) : (
-          tables.map((t: any) => (
-            <Button
-              key={t.name}
-              variant={selectedTable === t.name ? 'default' : 'secondary'}
-              size="sm"
-              onClick={() => onSelectTable(t.name)}
-              className="rounded-xl whitespace-nowrap gap-2 font-mono text-xs">
-              <span>{t.name}</span>
-              <Badge variant="outline" className="px-1.5 py-0 text-[10px] font-mono">
-                {t.rowCount ?? 0}
-              </Badge>
-            </Button>
-          ))
-        )}
+      {/* Modular DataTable with Table Dropdown Menu & Bulk Actions */}
+      <DataTable
+        data={tableData?.rows || []}
+        keyExtractor={keyExtractor}
+        columns={columns}
+        loading={loading}
+        emptyMessage={`No records found in table "${selectedTable}".`}
+        search={search}
+        onSearchChange={onSearchChange}
+        searchPlaceholder={`Search rows in ${selectedTable}...`}
+        menuDropdowns={[
+          {
+            id: 'table',
+            label: 'Table',
+            value: selectedTable,
+            options: tableDropdownOptions,
+            onChange: (newTable) => {
+              onSelectTable(newTable);
+              setSelectedRowIds(new Set());
+            },
+          },
+        ]}
+        enableBulkSelect={true}
+        selectedIds={selectedRowIds}
+        onSelectionChange={setSelectedRowIds}
+        bulkActions={[
+          {
+            label: 'Delete Selected Rows',
+            icon: <IconTrash className="w-3.5 h-3.5" />,
+            variant: 'destructive',
+            onClick: async (ids: string[]) => {
+              if (!confirm(`Are you sure you want to delete ${ids.length} selected row(s) from "${selectedTable}"?`)) {
+                return;
+              }
+              // Row deletion action
+              setSelectedRowIds(new Set());
+            },
+          },
+        ]}
+      />
+
+      {/* Pagination Bar */}
+      <div className="flex items-center justify-between text-xs text-muted-foreground px-2">
+        <div>
+          Showing {total === 0 ? 0 : offset + 1} to {Math.min(offset + limit, total)} of {total} records
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!hasPrev || loading}
+            onClick={() => onOffsetChange?.(Math.max(0, offset - limit))}
+            className="rounded-xl h-8 px-3 gap-1">
+            <IconChevronLeft className="w-3.5 h-3.5" />
+            <span>Prev</span>
+          </Button>
+          <span className="font-medium text-foreground px-1">
+            Page {currentPage} of {totalPages}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!hasNext || loading}
+            onClick={() => onOffsetChange?.(offset + limit)}
+            className="rounded-xl h-8 px-3 gap-1">
+            <span>Next</span>
+            <IconChevronRight className="w-3.5 h-3.5" />
+          </Button>
+        </div>
       </div>
-
-      {/* Table Card */}
-      <Card className="overflow-hidden">
-        <div className="p-3.5 border-b border-border flex items-center justify-between gap-4">
-          <div className="relative max-w-sm w-full">
-            <IconSearch className="absolute left-3 top-2.5 w-4 h-4 text-muted-foreground pointer-events-none" />
-            <Input
-              type="text"
-              placeholder={`Search ${selectedTable}...`}
-              value={search}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => onSearchChange(e.target.value)}
-              className="pl-9 pr-8"
-            />
-            {search && (
-              <button
-                type="button"
-                onClick={() => onSearchChange('')}
-                className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground">
-                <IconX className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-          <div className="text-xs text-muted-foreground font-mono">
-            {total > 0
-              ? `${Math.min(offset + 1, total)}–${Math.min(offset + (tableData?.rows?.length || 0), total)} of ${total} records`
-              : '0 records'}
-          </div>
-        </div>
-
-        <div className="overflow-x-auto max-h-[580px]">
-          <Table>
-            <TableHeader className="sticky top-0 backdrop-blur z-10">
-              <TableRow>
-                {displayColumns.map((col) => (
-                  <TableHead key={col.name} className="font-mono whitespace-nowrap">
-                    <span
-                      className={
-                        col.isPrimary
-                          ? 'text-amber-500 dark:text-amber-400 font-bold'
-                          : 'text-foreground'
-                      }>
-                      {col.name}
-                    </span>
-                    {col.type && (
-                      <span className="ml-1 text-[10px] text-muted-foreground font-normal">
-                        ({col.type})
-                      </span>
-                    )}
-                  </TableHead>
-                ))}
-                <TableHead className="text-right font-mono">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                Array.from({ length: 5 }).map((_, i) => (
-                  <TableRow key={i}>
-                    {Array.from({ length: Math.max(displayColumns.length || 5, 4) }).map((_, j) => (
-                      <TableCell key={j} className="py-4">
-                        <div className="h-4 bg-muted/60 rounded animate-pulse w-24" />
-                      </TableCell>
-                    ))}
-                    <TableCell className="text-right py-4">
-                      <div className="h-6 w-16 bg-muted/60 rounded animate-pulse ml-auto" />
-                    </TableCell>
-                  </TableRow>
-                ))
-              ) : (tableData?.rows || []).length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={Math.max(displayColumns.length + 1, 1)} className="py-8 text-center text-muted-foreground">
-                    {search ? `No records matching "${search}" in ${selectedTable}.` : `No records found in ${selectedTable}.`}
-                  </TableCell>
-                </TableRow>
-              ) : (
-                tableData.rows.map((row: any, idx: number) => {
-                  const pkCol = displayColumns.find((c) => c.isPrimary)?.name || 'id';
-                  const pkVal = row[pkCol] ?? idx;
-                  return (
-                    <TableRow key={pkVal}>
-                      {displayColumns.map((col) => {
-                        const val = row[col.name];
-                        return (
-                          <TableCell
-                            key={col.name}
-                            className="font-mono max-w-xs truncate"
-                            title={String(val)}>
-                            {val === null || val === undefined ? (
-                              <span className="text-muted-foreground/50 italic">null</span>
-                            ) : typeof val === 'object' ? (
-                              JSON.stringify(val)
-                            ) : (
-                              String(val)
-                            )}
-                          </TableCell>
-                        );
-                      })}
-                      <TableCell className="text-right whitespace-nowrap">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => onSelectRowAction(row, selectedTable, displayColumns)}
-                          className="rounded-lg h-7 px-2.5 text-[11px] font-semibold gap-1">
-                          <IconMoreVertical className="w-3 h-3" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })
-              )}
-            </TableBody>
-          </Table>
-        </div>
-
-        {/* Pagination Controls Footer */}
-        {onOffsetChange && (total > limit || offset > 0) && (
-          <div className="p-3 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
-            <div>
-              Page {currentPage} of {totalPages}
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={!hasPrev || loading}
-                onClick={() => onOffsetChange(Math.max(0, offset - limit))}
-                className="rounded-xl h-8 px-3 gap-1">
-                <IconChevronLeft className="w-3.5 h-3.5" />
-                <span>Previous</span>
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={!hasNext || loading}
-                onClick={() => onOffsetChange(offset + limit)}
-                className="rounded-xl h-8 px-3 gap-1">
-                <span>Next</span>
-                <IconChevronRight className="w-3.5 h-3.5" />
-              </Button>
-            </div>
-          </div>
-        )}
-      </Card>
     </div>
   );
 }

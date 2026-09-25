@@ -190,7 +190,7 @@ fun TransactionsScreen(
 
     Scaffold(
         topBar = {
-            // Header (Real Avatar, "Payment history" Title, Download Statement Icon)
+            // Header 
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -200,7 +200,7 @@ fun TransactionsScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    // Real Profile Avatar with Google profile picture fallback to vibrant initials
+                    // Profile Avatar with Google profile picture fallback to vibrant initials
                     UserAvatar(
                         avatarUrl = userAvatarUrl,
                         name = userName,
@@ -253,7 +253,7 @@ fun TransactionsScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            // Search Bar & Filter Controls Row (Matches Image 2)
+            // Search Bar & Filter Controls Row 
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -405,7 +405,7 @@ fun TransactionsScreen(
 
             Spacer(modifier = Modifier.height(4.dp))
 
-            // Main Grouped Transactions LazyColumn (Matches Image 2)
+            // Main Grouped Transactions LazyColumn 
             if (isInitialLoading && transactionsList.isEmpty()) {
                 TransactionsSkeleton()
             } else if (monthlyGroups.isEmpty()) {
@@ -454,7 +454,7 @@ fun TransactionsScreen(
                         contentPadding = PaddingValues(bottom = 110.dp)
                     ) {
                         monthlyGroups.forEach { monthGroup ->
-                            // Month Header Tile (Matches Image 2: "September '26" with [↗] arrow button and summary)
+                            // Month Header Tile
                             item(key = "header_${monthGroup.monthName}") {
                                 MonthHeaderSection(
                                     monthName = monthGroup.monthName,
@@ -466,7 +466,7 @@ fun TransactionsScreen(
                                 )
                             }
 
-                            // Transaction Items in Month (Matches Image 2 Card Layout with Swipe to Delete)
+                            // Transaction Items in Month 
                             items(
                                 items = monthGroup.transactions,
                                 key = { it.id }

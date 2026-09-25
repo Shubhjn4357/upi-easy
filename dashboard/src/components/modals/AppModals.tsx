@@ -21,7 +21,7 @@ export interface AppModalsProps {
   upiAccounts: UpiAccount[];
   selectedTable: string;
   tableData: TableData;
-  apiFetch: <T = any>(endpoint: string, options?: any) => Promise<T>;
+  apiFetch: <T = unknown>(endpoint: string, options?: RequestInit) => Promise<T>;
   showToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
 
   // Modal display states
@@ -227,7 +227,15 @@ export function AppModals({
               });
               showToast('Staff updated successfully!');
             } else {
-              const res = await apiFetch<any>(`/api/v1/organizations/${activeOrg.id}/invites`, {
+              interface CreateInviteResponse {
+                success: boolean;
+                invite?: {
+                  id: string;
+                  inviteUrl?: string;
+                };
+                message?: string;
+              }
+              const res = await apiFetch<CreateInviteResponse>(`/api/v1/organizations/${activeOrg.id}/invites`, {
                 method: 'POST',
                 body: JSON.stringify({
                   email: form.email.value.trim().toLowerCase(),

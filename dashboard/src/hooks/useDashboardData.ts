@@ -12,11 +12,50 @@ import type {
   HealthData,
 } from '../types';
 
+interface DashboardOverviewResponse {
+  success: boolean;
+  dashboard: DashboardStats;
+}
+
+interface TransactionsApiResponse {
+  success: boolean;
+  transactions?: Transaction[];
+  data?: Transaction[];
+}
+
+interface UpiApiResponse {
+  success: boolean;
+  upiAccounts?: UpiAccount[];
+}
+
+interface StaffApiResponse {
+  success: boolean;
+  staff?: StaffMember[];
+  invites?: StaffInvite[];
+}
+
+interface AccountsApiResponse {
+  success: boolean;
+  accounts?: BankAccount[];
+}
+
+interface AdminTablesApiResponse {
+  success: boolean;
+  tables?: TableSchemaItem[];
+}
+
+interface AdminTableDataApiResponse {
+  success: boolean;
+  rows?: Record<string, unknown>[];
+  columns?: TableData['columns'];
+  total?: number;
+}
+
 export interface UseDashboardDataProps {
   token: string;
   activeOrg: Organization | null;
   activeTab: string;
-  apiFetch: <T = any>(endpoint: string, options?: any) => Promise<T>;
+  apiFetch: <T = unknown>(endpoint: string, options?: RequestInit) => Promise<T>;
   showToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
   pingMs: number | null;
   setPingMs: (ms: number | null) => void;
@@ -74,7 +113,7 @@ export function useDashboardData({
       if (!activeOrg) return;
       if (!silent) setOverviewLoading(true);
       try {
-        const data = await apiFetch<any>(`/api/v1/organizations/${activeOrg.id}/dashboard`);
+        const data = await apiFetch<DashboardOverviewResponse>(`/api/v1/organizations/${activeOrg.id}/dashboard`);
         if (data.success) setDashboardStats(data.dashboard);
       } catch {
       } finally {
@@ -92,7 +131,7 @@ export function useDashboardData({
         let url = `/api/v1/organizations/${activeOrg.id}/transactions?limit=50`;
         if (txnStatus) url += `&status=${txnStatus}`;
         if (txnSearch) url += `&search=${encodeURIComponent(txnSearch)}`;
-        const data = await apiFetch<any>(url);
+        const data = await apiFetch<TransactionsApiResponse>(url);
         if (data.success) {
           const list = data.transactions || data.data || [];
           setTransactions(list);
@@ -112,7 +151,7 @@ export function useDashboardData({
       if (!activeOrg) return;
       if (!silent) setUpiLoading(true);
       try {
-        const data = await apiFetch<any>(`/api/v1/organizations/${activeOrg.id}/upi`);
+        const data = await apiFetch<UpiApiResponse>(`/api/v1/organizations/${activeOrg.id}/upi`);
         if (data.success) setUpiAccounts(data.upiAccounts || []);
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : 'Error loading UPI';
@@ -130,8 +169,8 @@ export function useDashboardData({
       if (!silent) setStaffLoading(true);
       try {
         const [staffRes, invitesRes] = await Promise.all([
-          apiFetch<any>(`/api/v1/organizations/${activeOrg.id}/staff`),
-          apiFetch<any>(`/api/v1/organizations/${activeOrg.id}/invites`),
+          apiFetch<StaffApiResponse>(`/api/v1/organizations/${activeOrg.id}/staff`),
+          apiFetch<StaffApiResponse>(`/api/v1/organizations/${activeOrg.id}/invites`),
         ]);
         if (staffRes.success) setStaffList(staffRes.staff || []);
         if (invitesRes.success) setInvitesList(invitesRes.invites || []);
@@ -150,7 +189,7 @@ export function useDashboardData({
       if (!activeOrg) return;
       if (!silent) setAccountsLoading(true);
       try {
-        const data = await apiFetch<any>(`/api/v1/organizations/${activeOrg.id}/accounts`);
+        const data = await apiFetch<AccountsApiResponse>(`/api/v1/organizations/${activeOrg.id}/accounts`);
         if (data.success) setBankAccounts(data.accounts || []);
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : 'Error loading accounts';
@@ -164,12 +203,12 @@ export function useDashboardData({
 
   const loadTables = useCallback(async () => {
     try {
-      const data = await apiFetch<any>('/api/v1/admin/tables');
+      const data = await apiFetch<AdminTablesApiResponse>('/api/v1/admin/tables');
       if (data.success) {
         const fetchedTables = data.tables || [];
         setAdminTables(fetchedTables);
         if (fetchedTables.length > 0) {
-          if (!selectedTable || !fetchedTables.some((t: any) => t.name === selectedTable)) {
+          if (!selectedTable || !fetchedTables.some((t: TableSchemaItem) => t.name === selectedTable)) {
             setSelectedTable(fetchedTables[0].name);
           }
         }
@@ -186,7 +225,7 @@ export function useDashboardData({
     try {
       let url = `/api/v1/admin/tables/${selectedTable}?limit=25&offset=${tableOffset}`;
       if (tableSearch) url += `&search=${encodeURIComponent(tableSearch)}`;
-      const data = await apiFetch<any>(url);
+      const data = await apiFetch<AdminTableDataApiResponse>(url);
       if (data.success) {
         setTableData({
           rows: data.rows || [],
@@ -204,8 +243,8 @@ export function useDashboardData({
 
   const loadHealth = useCallback(async () => {
     try {
-      const data = await apiFetch<any>('/api/v1/admin/health');
-      if (data.success) setHealthData(data);
+      const data = await apiFetch<HealthData>('/api/v1/admin/health');
+      setHealthData(data);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error loading health';
       showToast(msg, 'error');

@@ -8,6 +8,17 @@ class GooglePayNotificationParser : PaymentNotificationParser {
     companion object {
         const val PACKAGE_NAME = "com.google.android.apps.nbu.paisa.user"
 
+        private val PROMOTIONAL_KEYWORDS = listOf(
+            "cashback", "scratch card", "reward", "rewards", "offer", "offers",
+            "discount", "discounts", "sale", "win up to", "win upto", "won up to",
+            "get up to", "get upto", "flat rs", "flat ₹", "flat inr", "save up to",
+            "save upto", "save rs", "save ₹", "voucher", "coupon", "coupons",
+            "deal", "deals", "loan", "pre-approved", "preapproved", "insurance",
+            "mutual fund", "sip", "gold", "spin", "recharge offer", "bill offer",
+            "claim your", "claim now", "refer", "referral", "invite friends",
+            "bumper", "jackpot", "cashback of", "festive", "explore", "apply now"
+        )
+
         private val AMOUNT_PATTERN = Pattern.compile(
             "(?:Rs\\.?|INR|₹)\\s*([0-9,]+(?:\\.[0-9]{1,2})?)",
             Pattern.CASE_INSENSITIVE
@@ -32,6 +43,11 @@ class GooglePayNotificationParser : PaymentNotificationParser {
             "^([A-Za-z0-9\\s]{2,30})\\s+sent you",
             Pattern.CASE_INSENSITIVE
         )
+
+        private val TO_NAME_PATTERN = Pattern.compile(
+            "(?:to|towards)\\s+([A-Za-z0-9\\s]{2,40})(?:\\s+via|\\s+using|\\s+for|\\s+on|\\.|$)",
+            Pattern.CASE_INSENSITIVE
+        )
     }
 
     override fun supports(packageName: String): Boolean {
@@ -48,20 +64,31 @@ class GooglePayNotificationParser : PaymentNotificationParser {
 
         if (combined.isBlank()) return null
 
-        // Determine direction
+        // 1. Strict filter: Discard any promotional/marketing/offer notifications immediately
+        val isPromotional = PROMOTIONAL_KEYWORDS.any { keyword ->
+            combined.contains(keyword, ignoreCase = true)
+        }
+        if (isPromotional) {
+            return null
+        }
+
+        // 2. Strict positive payment direction matching
         val isCreditKeyword = combined.contains("received", ignoreCase = true) ||
                 combined.contains("credited", ignoreCase = true) ||
                 combined.contains("sent you", ignoreCase = true) ||
-                combined.contains("paid you", ignoreCase = true)
+                combined.contains("paid you", ignoreCase = true) ||
+                combined.contains("payment received", ignoreCase = true)
 
         val isDebitKeyword = combined.contains("paid to", ignoreCase = true) ||
                 combined.contains("you sent", ignoreCase = true) ||
-                combined.contains("debited", ignoreCase = true)
+                combined.contains("you paid", ignoreCase = true) ||
+                combined.contains("debited", ignoreCase = true) ||
+                combined.contains("payment sent", ignoreCase = true)
 
         val direction = when {
             isCreditKeyword && !isDebitKeyword -> PaymentDirection.RECEIVED
             isDebitKeyword && !isCreditKeyword -> PaymentDirection.SENT
-            else -> PaymentDirection.UNKNOWN
+            else -> return null // Reject unknown or ambiguous notifications
         }
 
         // Extract amount
@@ -69,7 +96,7 @@ class GooglePayNotificationParser : PaymentNotificationParser {
         val amount = if (amountMatcher.find()) {
             val amountStr = amountMatcher.group(1)?.replace(",", "")
             try {
-                amountStr?.let { BigDecimal(it) }
+                amountStr?.let { BigDecimal(it) }?.takeIf { it > BigDecimal.ZERO }
             } catch (_: Exception) {
                 null
             }
@@ -77,10 +104,8 @@ class GooglePayNotificationParser : PaymentNotificationParser {
             null
         }
 
-        val confidence = when {
-            amount != null && direction == PaymentDirection.RECEIVED -> ParseConfidence.HIGH
-            amount != null && direction != PaymentDirection.UNKNOWN -> ParseConfidence.MEDIUM
-            else -> ParseConfidence.LOW
+        if (amount == null) {
+            return null // Reject notifications without a valid transaction amount
         }
 
         // Extract reference (12-digit UTR/RRN)
@@ -91,14 +116,17 @@ class GooglePayNotificationParser : PaymentNotificationParser {
         val vpaMatcher = VPA_PATTERN.matcher(combined)
         val payerVpa = if (vpaMatcher.find()) vpaMatcher.group(1) else null
 
-        // Extract payer name
+        // Extract party name
         val fromMatcher = FROM_NAME_PATTERN.matcher(combined)
         val sentYouTextMatcher = SENT_YOU_NAME_PATTERN.matcher(text.trim())
         val sentYouBigTextMatcher = if (bigText.isNotBlank()) SENT_YOU_NAME_PATTERN.matcher(bigText.trim()) else null
-        val payerName = when {
-            fromMatcher.find() -> fromMatcher.group(1)?.trim()?.take(50)
-            sentYouTextMatcher.find() -> sentYouTextMatcher.group(1)?.trim()?.take(50)
-            sentYouBigTextMatcher != null && sentYouBigTextMatcher.find() -> sentYouBigTextMatcher.group(1)?.trim()?.take(50)
+        val toMatcher = TO_NAME_PATTERN.matcher(combined)
+
+        val partyName = when {
+            direction == PaymentDirection.RECEIVED && sentYouTextMatcher.find() -> sentYouTextMatcher.group(1)?.trim()?.take(50)
+            direction == PaymentDirection.RECEIVED && sentYouBigTextMatcher != null && sentYouBigTextMatcher.find() -> sentYouBigTextMatcher.group(1)?.trim()?.take(50)
+            direction == PaymentDirection.RECEIVED && fromMatcher.find() -> fromMatcher.group(1)?.trim()?.take(50)
+            direction == PaymentDirection.SENT && toMatcher.find() -> toMatcher.group(1)?.trim()?.take(50)
             title.isNotBlank() && !title.contains("Google Pay", ignoreCase = true) && !title.contains("Payment", ignoreCase = true) -> title.trim().take(50)
             else -> null
         }
@@ -108,13 +136,13 @@ class GooglePayNotificationParser : PaymentNotificationParser {
             sourceApp = "Google Pay",
             direction = direction,
             amount = amount,
-            payerName = payerName,
+            payerName = partyName,
             payerVpa = payerVpa,
             reference = reference,
             rawTitle = notification.title,
             rawText = notification.text ?: notification.bigText,
             observedAt = notification.postTime,
-            confidence = confidence
+            confidence = ParseConfidence.HIGH
         )
     }
 }

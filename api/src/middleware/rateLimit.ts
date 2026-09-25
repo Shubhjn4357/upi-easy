@@ -1,4 +1,4 @@
-import type { MiddlewareHandler } from "hono";
+import type { Context, MiddlewareHandler } from "hono";
 import { RateLimitError } from "../lib/errors.js";
 
 interface RateLimitStore {
@@ -11,7 +11,7 @@ const memoryStore = new Map<string, RateLimitStore>();
 export function rateLimit(options: {
   max: number;
   windowMs: number;
-  keyGenerator?: (c: any) => string;
+  keyGenerator?: (c: Context) => string;
 }): MiddlewareHandler {
   return async (c, next) => {
     const key = options.keyGenerator

@@ -1,3 +1,5 @@
+import type { D1Database } from "@cloudflare/workers-types";
+
 export interface AppVariables {
   userId: string;
   sessionId: string;
@@ -10,8 +12,8 @@ export interface AppVariables {
 }
 
 export interface AppBindings {
-  upi_easy_db?: any;
-  DB?: any;
+  upi_easy_db?: D1Database;
+  DB?: D1Database;
   GOOGLE_WEB_CLIENT_ID?: string;
   API_BASE_URL?: string;
   JWT_SECRET?: string;

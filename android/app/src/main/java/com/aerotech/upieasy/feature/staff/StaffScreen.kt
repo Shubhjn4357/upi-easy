@@ -39,6 +39,7 @@ import android.widget.Toast
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import com.aerotech.upieasy.core.database.AppDatabase
 import com.aerotech.upieasy.core.database.entity.OrganizationInviteEntity
+import com.aerotech.upieasy.core.network.BulkDeleteRequest
 import com.aerotech.upieasy.core.network.InvitationDto
 import com.aerotech.upieasy.core.network.InviteStaffRequest
 import com.aerotech.upieasy.core.network.NetworkClient
@@ -859,31 +860,15 @@ fun StaffScreen(
                                         role = selectedRole
                                     )
                                     if (sendRes.isSuccess) {
-                                        Toast.makeText(context, "Staff invitation sent successfully", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, "Staff invitation sent successfully. It is now pending until accepted.", Toast.LENGTH_SHORT).show()
                                         showInviteBottomSheet = false
                                         refresh()
                                     } else {
-                                        // Fallback to legacy invite endpoint if needed
-                                        val fallbackRes = apiService.inviteStaff(
-                                            orgId,
-                                            InviteStaffRequest(
-                                                mobileNumber = mobile,
-                                                email = email,
-                                                fullName = name,
-                                                role = selectedRole
-                                            )
-                                        )
-                                        if (fallbackRes.isSuccessful && fallbackRes.body()?.success == true) {
-                                            Toast.makeText(context, "Staff added successfully", Toast.LENGTH_SHORT).show()
-                                            showInviteBottomSheet = false
-                                            refresh()
-                                        } else {
-                                            val errBody = fallbackRes.errorBody()?.string()
-                                            val serverMsg = try {
-                                                org.json.JSONObject(errBody ?: "").optString("message", "").takeIf { it.isNotEmpty() }
-                                            } catch (_: Exception) { null }
-                                            errorMessage = serverMsg ?: sendRes.exceptionOrNull()?.message ?: "Failed to send invitation"
-                                        }
+                                        val errBody = sendRes.exceptionOrNull()?.message ?: "Failed to send invitation"
+                                        val serverMsg = try {
+                                            org.json.JSONObject(errBody).optString("message", "").takeIf { it.isNotEmpty() }
+                                        } catch (_: Exception) { null }
+                                        errorMessage = serverMsg ?: errBody
                                     }
                                 } catch (e: Exception) {
                                     errorMessage = e.localizedMessage ?: "Network error"
@@ -928,9 +913,16 @@ fun StaffScreen(
                     currentOrgId?.let { orgId ->
                         scope.launch {
                             try {
-                                apiService.deleteStaff(orgId, st.id)
+                                val res = apiService.deleteStaff(orgId, st.id)
+                                if (res.isSuccessful && res.body()?.success == true) {
+                                    Toast.makeText(context, "Staff member removed", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    Toast.makeText(context, "Failed to remove staff", Toast.LENGTH_SHORT).show()
+                                }
                                 refresh()
-                            } catch (_: Exception) {}
+                            } catch (e: Exception) {
+                                Toast.makeText(context, "Error: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+                            }
                         }
                     }
                 }
@@ -955,10 +947,15 @@ fun StaffScreen(
                         val idsToDelete = selectedIds.toList()
                         isSelectionMode = false
                         selectedIds = emptySet()
-                        idsToDelete.forEach { id ->
-                            try {
-                                apiService.deleteStaff(orgId, id)
-                            } catch (_: Exception) {}
+                        try {
+                            val res = apiService.bulkDeleteStaff(orgId, BulkDeleteRequest(idsToDelete))
+                            if (res.isSuccessful && res.body()?.success == true) {
+                                Toast.makeText(context, "Selected staff members removed", Toast.LENGTH_SHORT).show()
+                            } else {
+                                Toast.makeText(context, "Failed to remove some staff members", Toast.LENGTH_SHORT).show()
+                            }
+                        } catch (e: Exception) {
+                            Toast.makeText(context, "Error: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
                         }
                         refresh()
                     }

@@ -36,13 +36,13 @@ authRouter.post("/google", async (c) => {
   // 1. Cryptographically verify Google ID Token with Google JWKS (aud, iss, exp, nonce)
   let verified;
   try {
-    const googleClientId = (c.env as any)?.GOOGLE_WEB_CLIENT_ID || config.GOOGLE_WEB_CLIENT_ID;
+    const googleClientId = c.env?.GOOGLE_WEB_CLIENT_ID || config.GOOGLE_WEB_CLIENT_ID;
     verified = await verifyGoogleIdToken(data.idToken, {
       clientId: googleClientId,
       nonce: data.nonce,
       expectedEmail: data.email,
     });
-  } catch (err: any) {
+  } catch (_err: unknown) {
     // If in test environment and a mock email was provided
     if (process.env.NODE_ENV === "test" && data.email) {
       verified = {
@@ -53,7 +53,7 @@ authRouter.post("/google", async (c) => {
         picture: data.avatarUrl ?? null,
       };
     } else {
-      throw err;
+      throw _err;
     }
   }
 
@@ -324,9 +324,14 @@ authRouter.post("/refresh", async (c) => {
   });
   const { refreshToken } = schemaValidator.parse(body);
 
-  let payload: any;
+  interface RefreshPayload {
+    sub: string;
+    sessionId: string;
+    type?: string;
+  }
+  let payload: RefreshPayload;
   try {
-    payload = await verifyToken(refreshToken);
+    payload = await verifyToken<RefreshPayload>(refreshToken);
   } catch {
     throw new UnauthorizedError("Invalid or expired refresh token");
   }

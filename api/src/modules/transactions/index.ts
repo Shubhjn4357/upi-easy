@@ -34,10 +34,10 @@ transactionsRouter.get(
     const conditions = [eq(schema.transactions.organizationId, orgId)];
 
     if (status) {
-      conditions.push(eq(schema.transactions.status, status as any));
+      conditions.push(eq(schema.transactions.status, status as typeof schema.transactions.$inferSelect.status));
     }
     if (direction) {
-      conditions.push(eq(schema.transactions.direction, direction as any));
+      conditions.push(eq(schema.transactions.direction, direction as typeof schema.transactions.$inferSelect.direction));
     }
     if (upiAccountId) {
       conditions.push(eq(schema.transactions.upiAccountId, upiAccountId));
@@ -285,7 +285,7 @@ transactionsRouter.patch(
     const body = await c.req.json();
 
     const validator = z.object({
-      status: z.enum(["SUCCESS", "FAILED", "REFUNDED", "EXPIRED"]),
+      status: z.enum(["SUCCESS", "FAILED", "REFUNDED", "REVERSED", "PENDING"]),
       referenceNumber: z.string().optional(),
       note: z.string().optional(),
     });
@@ -359,6 +359,137 @@ transactionsRouter.patch(
         referenceNumber: data.referenceNumber ?? txn.referenceNumber,
       },
     });
+  }
+);
+
+// Delete single transaction record
+transactionsRouter.delete(
+  "/:orgId/transactions/:id",
+  requireTenant,
+  requirePermission("transactions.delete"),
+  async (c) => {
+    const orgId = c.get("organizationId");
+    const actorId = c.get("userId");
+    const txnId = c.req.param("id");
+
+    const txn = await db
+      .select()
+      .from(schema.transactions)
+      .where(and(eq(schema.transactions.id, txnId), eq(schema.transactions.organizationId, orgId)))
+      .get();
+
+    if (!txn) {
+      throw new NotFoundError("Transaction not found");
+    }
+
+    const now = new Date();
+
+    // Delete transaction events
+    await db.delete(schema.transactionEvents).where(eq(schema.transactionEvents.transactionId, txnId)).run();
+
+    // Delete transaction
+    await db.delete(schema.transactions).where(eq(schema.transactions.id, txnId)).run();
+
+    // Outbox event for mobile live sync
+    await db.insert(schema.outboxEvents)
+      .values({
+        id: generateId("evt"),
+        organizationId: orgId,
+        eventType: "transaction.deleted",
+        payloadJson: JSON.stringify({
+          id: txnId,
+          transactionId: txnId,
+          organizationId: orgId,
+          deletedAt: now.getTime(),
+        }),
+        status: "PENDING",
+        createdAt: now,
+      })
+      .run();
+
+    // Audit log
+    await db.insert(schema.auditLogs)
+      .values({
+        id: generateId("aud"),
+        organizationId: orgId,
+        actorId,
+        action: "transaction.deleted",
+        resourceType: "transaction",
+        resourceId: txnId,
+        metadataJson: JSON.stringify({
+          amount: txn.amount,
+          referenceNumber: txn.referenceNumber,
+        }),
+        createdAt: now,
+      })
+      .run();
+
+    return c.json({ success: true, message: "Transaction deleted successfully" });
+  }
+);
+
+// Bulk delete transaction records
+transactionsRouter.post(
+  "/:orgId/transactions/bulk-delete",
+  requireTenant,
+  requirePermission("transactions.delete"),
+  async (c) => {
+    const orgId = c.get("organizationId");
+    const actorId = c.get("userId");
+    const body = await c.req.json();
+
+    const validator = z.object({
+      ids: z.array(z.string()).min(1, "At least one ID is required"),
+    });
+
+    const { ids } = validator.parse(body);
+    let deletedCount = 0;
+    const now = new Date();
+
+    for (const txnId of ids) {
+      const txn = await db
+        .select()
+        .from(schema.transactions)
+        .where(and(eq(schema.transactions.id, txnId), eq(schema.transactions.organizationId, orgId)))
+        .get();
+
+      if (txn) {
+        await db.delete(schema.transactionEvents).where(eq(schema.transactionEvents.transactionId, txnId)).run();
+        await db.delete(schema.transactions).where(eq(schema.transactions.id, txnId)).run();
+        deletedCount++;
+
+        await db.insert(schema.outboxEvents)
+          .values({
+            id: generateId("evt"),
+            organizationId: orgId,
+            eventType: "transaction.deleted",
+            payloadJson: JSON.stringify({
+              id: txnId,
+              transactionId: txnId,
+              organizationId: orgId,
+              deletedAt: now.getTime(),
+            }),
+            status: "PENDING",
+            createdAt: now,
+          })
+          .run();
+      }
+    }
+
+    await db.insert(schema.auditLogs)
+      .values({
+        id: generateId("aud"),
+        organizationId: orgId,
+        actorId,
+        action: "transaction.bulk_deleted",
+        resourceType: "transaction",
+        resourceId: `${deletedCount}_transactions`,
+        metadataJson: JSON.stringify({ count: deletedCount, ids }),
+        createdAt: now,
+      })
+      .run();
+
+    return c.json({ success: true, count: deletedCount, message: `Deleted ${deletedCount} transaction(s)` });
   }
 );
 

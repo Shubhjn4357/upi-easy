@@ -92,13 +92,13 @@ export async function notifyOrganizationMembers(options: NotifyOrgMembersOptions
     );
 
   const members = await membersQuery.all();
-  const eligibleMembers = members.filter((m: any) => m.userId !== excludeUserId);
+  const eligibleMembers = members.filter((m) => m.userId !== excludeUserId);
 
   if (eligibleMembers.length === 0) {
     return { notifiedUsers: 0, notifiedDevices: 0 };
   }
 
-  const userIds = eligibleMembers.map((m: any) => m.userId);
+  const userIds = eligibleMembers.map((m) => m.userId);
 
   // 2. Fetch notification preferences for these members
   const preferences = await db
@@ -112,7 +112,7 @@ export async function notifyOrganizationMembers(options: NotifyOrgMembersOptions
     )
     .all();
 
-  const prefMap = new Map(preferences.map((p: any) => [p.userId, p]));
+  const prefMap = new Map(preferences.map((p) => [p.userId, p]));
 
   // Filter users based on preference type
   const isPaymentType = type.startsWith("payment.") || type.startsWith("PAYMENT_");

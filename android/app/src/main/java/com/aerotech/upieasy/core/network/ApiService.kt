@@ -55,6 +55,7 @@ data class OrganizationDto(
     val panNumber: String? = null,
     val gstin: String? = null,
     val role: String = "OWNER",
+    val permissions: List<String> = emptyList(),
     val status: String = "ACTIVE"
 )
 
@@ -297,6 +298,10 @@ data class AcceptInviteResponse(
     val organization: OrganizationDto? = null
 )
 
+data class BulkDeleteRequest(
+    val ids: List<String>
+)
+
 // Device Registration DTOs
 data class RegisterDeviceRequest(
     val deviceId: String,
@@ -467,6 +472,30 @@ interface ApiService {
     suspend fun deleteStaff(
         @Path("orgId") orgId: String,
         @Path("memberId") memberId: String
+    ): Response<ApiResponse<Any>>
+
+    @POST("api/v1/organizations/{orgId}/staff/bulk-delete")
+    suspend fun bulkDeleteStaff(
+        @Path("orgId") orgId: String,
+        @Body body: BulkDeleteRequest
+    ): Response<ApiResponse<Any>>
+
+    @DELETE("api/v1/organizations/{orgId}/transactions/{id}")
+    suspend fun deleteTransaction(
+        @Path("orgId") orgId: String,
+        @Path("id") id: String
+    ): Response<ApiResponse<Any>>
+
+    @POST("api/v1/organizations/{orgId}/transactions/bulk-delete")
+    suspend fun bulkDeleteTransactions(
+        @Path("orgId") orgId: String,
+        @Body body: BulkDeleteRequest
+    ): Response<ApiResponse<Any>>
+
+    @POST("api/v1/organizations/{orgId}/invites/bulk-delete")
+    suspend fun bulkDeleteInvites(
+        @Path("orgId") orgId: String,
+        @Body body: BulkDeleteRequest
     ): Response<ApiResponse<Any>>
 
     @GET("api/v1/organizations/{orgId}/sync")

@@ -6,7 +6,7 @@ export interface UseOrganizationsProps {
   token: string;
   onDeleted?: () => void;
   showToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
-  apiFetch: <T = any>(endpoint: string, options?: any) => Promise<T>;
+  apiFetch: <T = unknown>(endpoint: string, options?: RequestInit) => Promise<T>;
 }
 
 export function useOrganizations({ token, onDeleted, showToast, apiFetch }: UseOrganizationsProps) {

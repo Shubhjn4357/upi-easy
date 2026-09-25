@@ -68,6 +68,12 @@ fun DashboardScreen(
     val userName by sessionManager.userNameFlow.collectAsState(initial = null)
     val userAvatarUrl by sessionManager.userAvatarUrlFlow.collectAsState(initial = null)
     val themeMode by sessionManager.themeModeFlow.collectAsState(initial = "SYSTEM")
+    val userRole by sessionManager.userRoleFlow.collectAsState(initial = "OWNER")
+    val userPermissions by sessionManager.userPermissionsFlow.collectAsState(initial = emptySet())
+
+    val isOwner = userRole?.equals("OWNER", ignoreCase = true) == true || userPermissions.contains("*")
+    fun can(permission: String): Boolean = isOwner || userPermissions.contains(permission)
+    fun canModule(module: String): Boolean = isOwner || userPermissions.any { it.startsWith("$module.") }
 
     val alertHistory by PaymentAlertManager.alertHistory.collectAsState()
     var showNotificationsSheet by remember { mutableStateOf(false) }
@@ -103,7 +109,8 @@ fun DashboardScreen(
                                 legalName = firstOrg.legalBusinessName,
                                 category = firstOrg.category,
                                 panNumber = firstOrg.panNumber,
-                                gstin = firstOrg.gstin
+                                gstin = firstOrg.gstin,
+                                permissions = firstOrg.permissions
                             )
                             orgId = firstOrg.id
                         }
@@ -407,80 +414,61 @@ fun DashboardScreen(
                                     }
                                 }
 
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceAround
-                                ) {
-                                    UpieasyQuickActionButton(
-                                        icon = Icons.Default.QrCode2,
-                                        label = "Show QR",
-                                        backgroundColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
-                                        iconTint = MaterialTheme.colorScheme.primary,
-                                        onClick = onNavigateToQr,
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                    UpieasyQuickActionButton(
-                                        icon = Icons.Default.QrCodeScanner,
-                                        label = "Scan Pay",
-                                        backgroundColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f),
-                                        iconTint = MaterialTheme.colorScheme.tertiary,
-                                        onClick = onNavigateToScan,
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                    UpieasyQuickActionButton(
-                                        icon = Icons.Default.AccountBalanceWallet,
-                                        label = "Add UPI",
-                                        backgroundColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
-                                        iconTint = MaterialTheme.colorScheme.secondary,
-                                        onClick = onNavigateToUpi,
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                    UpieasyQuickActionButton(
-                                        icon = Icons.AutoMirrored.Filled.ReceiptLong,
-                                        label = "Ledger",
-                                        backgroundColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
-                                        iconTint = MaterialTheme.colorScheme.primary,
-                                        onClick = onNavigateToTransactions,
-                                        modifier = Modifier.weight(1f)
-                                    )
+                                val permittedQuickActions = remember(userRole, userPermissions) {
+                                    val list = mutableListOf<Triple<String, androidx.compose.ui.graphics.vector.ImageVector, () -> Unit>>()
+                                    if (can("qr.create") || can("upi.read")) {
+                                        list.add(Triple("Show QR", Icons.Default.QrCode2, onNavigateToQr))
+                                    }
+                                    if (can("transactions.create")) {
+                                        list.add(Triple("Scan Pay", Icons.Default.QrCodeScanner, onNavigateToScan))
+                                    }
+                                    if (can("upi.manage")) {
+                                        list.add(Triple("Add UPI", Icons.Default.AccountBalanceWallet, onNavigateToUpi))
+                                    }
+                                    if (can("transactions.read")) {
+                                        list.add(Triple("Ledger", Icons.AutoMirrored.Filled.ReceiptLong, onNavigateToTransactions))
+                                    }
+                                    if (can("staff.read") || can("staff.manage")) {
+                                        list.add(Triple("Staff", Icons.Default.Group, onNavigateToStaff))
+                                    }
+                                    list.add(Triple("Alerts", Icons.Default.NotificationsActive, { showNotificationsSheet = true }))
+                                    if (can("organization.manage")) {
+                                        list.add(Triple("Soundbox", Icons.Default.VolumeUp, onNavigateToSettings))
+                                    }
+                                    list.add(Triple("Settings", Icons.Default.Settings, onNavigateToSettings))
+                                    list
                                 }
 
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceAround
-                                ) {
-                                    UpieasyQuickActionButton(
-                                        icon = Icons.Default.Group,
-                                        label = "Staff",
-                                        backgroundColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.4f),
-                                        iconTint = MaterialTheme.colorScheme.tertiary,
-                                        onClick = onNavigateToStaff,
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                    UpieasyQuickActionButton(
-                                        icon = Icons.Default.NotificationsActive,
-                                        label = "Alerts",
-                                        backgroundColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
-                                        iconTint = MaterialTheme.colorScheme.primary,
-                                        onClick = { showNotificationsSheet = true },
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                    UpieasyQuickActionButton(
-                                        icon = Icons.Default.VolumeUp,
-                                        label = "Soundbox",
-                                        backgroundColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.55f),
-                                        iconTint = MaterialTheme.colorScheme.secondary,
-                                        onClick = onNavigateToSettings,
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                    UpieasyQuickActionButton(
-                                        icon = Icons.Default.Settings,
-                                        label = "Settings",
-                                        backgroundColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
-                                        iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        onClick = onNavigateToSettings,
-                                        modifier = Modifier.weight(1f)
-                                    )
+                                permittedQuickActions.chunked(4).forEach { rowItems ->
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        rowItems.forEach { (label, icon, onClick) ->
+                                            val (bgColor, iconTint) = when (label) {
+                                                "Show QR" -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f) to MaterialTheme.colorScheme.primary
+                                                "Scan Pay" -> MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f) to MaterialTheme.colorScheme.tertiary
+                                                "Add UPI" -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f) to MaterialTheme.colorScheme.secondary
+                                                "Ledger" -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f) to MaterialTheme.colorScheme.primary
+                                                "Staff" -> MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.4f) to MaterialTheme.colorScheme.tertiary
+                                                "Alerts" -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f) to MaterialTheme.colorScheme.primary
+                                                "Soundbox" -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.55f) to MaterialTheme.colorScheme.secondary
+                                                else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f) to MaterialTheme.colorScheme.onSurfaceVariant
+                                            }
+                                            UpieasyQuickActionButton(
+                                                icon = icon,
+                                                label = label,
+                                                backgroundColor = bgColor,
+                                                iconTint = iconTint,
+                                                onClick = onClick,
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                        }
+                                        // Fill remaining slots in row for alignment
+                                        repeat(4 - rowItems.size) {
+                                            Spacer(modifier = Modifier.weight(1f))
+                                        }
+                                    }
                                 }
                             }
                         }
