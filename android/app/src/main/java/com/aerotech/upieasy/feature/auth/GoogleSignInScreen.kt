@@ -136,9 +136,9 @@ fun GoogleSignInScreen(
                         Log.w("GoogleSignInScreen", "Credential Manager sign-in failed: ${error.message}", error)
                         val msg = when {
                             error is androidx.credentials.exceptions.GetCredentialCancellationException ->
-                                "Google Sign-In was cancelled."
+                                "Sign-in was cancelled. If you selected an account, Google closed the request because this Gmail is not registered in Google Cloud Console 'Test users' or the Android SHA-1 fingerprint is missing."
                             error is androidx.credentials.exceptions.NoCredentialException || error.message?.contains("no credential", ignoreCase = true) == true ->
-                                "No Google account or matching credentials found on this device. Please ensure a Google account is added in Android Settings > Accounts, and the app's SHA-1 fingerprint is registered in Google Cloud Console."
+                                "No Google account found on this device. Please ensure a Google account is added in Android Settings > Accounts."
                             else -> error.localizedMessage ?: "Google Sign-In was unavailable on this device."
                         }
                         errorMessage = msg

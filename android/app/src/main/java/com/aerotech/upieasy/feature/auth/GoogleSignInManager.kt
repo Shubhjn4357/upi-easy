@@ -3,7 +3,6 @@ package com.aerotech.upieasy.feature.auth
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
-import android.util.Base64
 import android.util.Log
 import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
@@ -13,19 +12,18 @@ import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.credentials.exceptions.GetCredentialException
 import androidx.credentials.exceptions.NoCredentialException
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
-import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.android.libraries.identity.googleid.GoogleIdTokenParsingException
-import java.security.SecureRandom
+import java.security.MessageDigest
+import java.util.UUID
 
 data class GoogleAuthResult(
     val idToken: String,
-    val nonce: String,
+    val nonce: String? = null,
     val profilePictureUri: String? = null
 )
 
 class GoogleSignInManager(private val context: Context) {
-    private val credentialManager = CredentialManager.create(context)
 
     private fun Context.findActivity(): Activity? {
         var ctx = this
@@ -37,126 +35,66 @@ class GoogleSignInManager(private val context: Context) {
     }
 
     /**
-     * Generates a cryptographically secure random nonce encoded as URL-safe Base64.
-     * Prevents token replay attacks as recommended by Google Identity documentation.
+     * Generates a cryptographically secure SHA-256 hashed nonce string.
      */
-    fun generateSecureRandomNonce(byteLength: Int = 32): String {
-        val randomBytes = ByteArray(byteLength)
-        SecureRandom().nextBytes(randomBytes)
-        return Base64.encodeToString(
-            randomBytes,
-            Base64.NO_WRAP or Base64.URL_SAFE or Base64.NO_PADDING
-        )
+    fun generateSecureRandomNonce(): Pair<String, String> {
+        val rawNonce = UUID.randomUUID().toString()
+        val md = MessageDigest.getInstance("SHA-256")
+        val hashedNonce = md.digest(rawNonce.toByteArray()).fold("") { str, it -> str + "%02x".format(it) }
+        return Pair(rawNonce, hashedNonce)
     }
 
     /**
      * Executes Credential Manager Sign in with Google flow.
-     * Follows official Google guidance:
-     * 1. First attempts filterByAuthorizedAccounts = true for seamless 1-tap sign-in.
-     * 2. On NoCredentialException or fallback, retries with GetGoogleIdOption (filterByAuthorizedAccounts = false).
-     * 3. If that still throws NoCredentialException, falls back to GetSignInWithGoogleOption (explicit button flow).
+     * Uses GetGoogleIdOption with filterByAuthorizedAccounts = false and autoSelectEnabled = false.
+     * This directly opens the native Google bottom drawer (bottom sheet) allowing the user
+     * to select their Gmail account.
      */
     suspend fun signIn(activityContext: Context, serverClientId: String): Result<GoogleAuthResult> {
-        val nonce = generateSecureRandomNonce()
-        val targetContext = activityContext.findActivity() ?: activityContext
+        val targetActivity = activityContext.findActivity()
+            ?: return Result.failure(IllegalStateException("Unable to resolve foreground Activity for Google Sign-In"))
+
+        val (rawNonce, hashedNonce) = generateSecureRandomNonce()
+        val cleanClientId = serverClientId.trim()
+        val credentialManager = CredentialManager.create(targetActivity)
 
         return try {
-            // Attempt 1: Filter by authorized accounts
-            val initialOption = GetGoogleIdOption.Builder()
-                .setFilterByAuthorizedAccounts(true)
-                .setServerClientId(serverClientId)
-                .setAutoSelectEnabled(true)
-                .setNonce(nonce)
-                .build()
-
-            val request = GetCredentialRequest.Builder()
-                .addCredentialOption(initialOption)
-                .build()
-
-            val result = credentialManager.getCredential(
-                context = targetContext,
-                request = request
-            )
-            extractIdToken(result, nonce)
-        } catch (e: NoCredentialException) {
-            Log.d("GoogleSignInManager", "No authorized accounts found, falling back to full account picker")
-            signInWithAnyGoogleAccount(targetContext, serverClientId, nonce)
-        } catch (e: GetCredentialCancellationException) {
-            Log.i("GoogleSignInManager", "User cancelled Google Sign-In")
-            Result.failure(e)
-        } catch (e: GetCredentialException) {
-            Log.w("GoogleSignInManager", "Authorized account fetch failed (${e.message}), attempting fallback", e)
-            signInWithAnyGoogleAccount(targetContext, serverClientId, nonce)
-        } catch (e: Exception) {
-            Log.e("GoogleSignInManager", "Unexpected sign-in exception", e)
-            Result.failure(e)
-        }
-    }
-
-    private suspend fun signInWithAnyGoogleAccount(
-        activityContext: Context,
-        serverClientId: String,
-        nonce: String
-    ): Result<GoogleAuthResult> {
-        val targetContext = activityContext.findActivity() ?: activityContext
-
-        // Step 2: Try GetGoogleIdOption with filterByAuthorizedAccounts = false
-        try {
-            val fallbackOption = GetGoogleIdOption.Builder()
+            val googleIdOption = GetGoogleIdOption.Builder()
+                .setServerClientId(cleanClientId)
                 .setFilterByAuthorizedAccounts(false)
-                .setServerClientId(serverClientId)
                 .setAutoSelectEnabled(false)
-                .setNonce(nonce)
+                .setNonce(hashedNonce)
                 .build()
 
             val request = GetCredentialRequest.Builder()
-                .addCredentialOption(fallbackOption)
+                .addCredentialOption(googleIdOption)
                 .build()
 
             val result = credentialManager.getCredential(
-                context = targetContext,
+                context = targetActivity,
                 request = request
             )
-            return extractIdToken(result, nonce)
+            extractIdToken(result, rawNonce)
         } catch (e: GetCredentialCancellationException) {
-            Log.i("GoogleSignInManager", "User cancelled Google Sign-In")
-            return Result.failure(e)
-        } catch (e: Exception) {
-            Log.w("GoogleSignInManager", "GetGoogleIdOption (unfiltered) failed: ${e.message}, falling back to GetSignInWithGoogleOption button flow", e)
-        }
-
-        // Step 3: Explicit Button Flow with GetSignInWithGoogleOption (allows adding / selecting any Google account)
-        return try {
-            val buttonOption = GetSignInWithGoogleOption.Builder(serverClientId)
-                .setNonce(nonce)
-                .build()
-
-            val request = GetCredentialRequest.Builder()
-                .addCredentialOption(buttonOption)
-                .build()
-
-            val result = credentialManager.getCredential(
-                context = targetContext,
-                request = request
-            )
-            extractIdToken(result, nonce)
-        } catch (e: GetCredentialCancellationException) {
-            Log.i("GoogleSignInManager", "User cancelled Google Sign-In")
+            Log.w("GoogleSignInManager", "Google Sign-In cancelled or rejected by Google Play Services: ${e.message}", e)
             Result.failure(e)
         } catch (e: NoCredentialException) {
-            Log.e("GoogleSignInManager", "No Google account found on device", e)
+            Log.w("GoogleSignInManager", "No Google account found on device", e)
             Result.failure(
-                IllegalStateException("No Google account found on this device. Please sign in to a Google account in Android Settings > Accounts or Google Play Store and ensure your app SHA-1 fingerprint is registered in Google Cloud Console.", e)
+                IllegalStateException("No Google account found on this device. Please sign in to a Google account under Android Settings > Accounts.", e)
             )
+        } catch (e: GetCredentialException) {
+            Log.e("GoogleSignInManager", "Credential Manager sign-in failed (${e.javaClass.simpleName}): ${e.message}", e)
+            Result.failure(e)
         } catch (e: Exception) {
-            Log.e("GoogleSignInManager", "Full Google Sign-In account picker failed", e)
+            Log.e("GoogleSignInManager", "Unexpected sign-in exception: ${e.message}", e)
             Result.failure(e)
         }
     }
 
     private fun extractIdToken(
         result: GetCredentialResponse,
-        nonce: String
+        nonce: String?
     ): Result<GoogleAuthResult> {
         val credential = result.credential
         if (credential is CustomCredential && credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
