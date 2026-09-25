@@ -134,12 +134,24 @@ fun GoogleSignInScreen(
                     },
                     onFailure = { error ->
                         Log.w("GoogleSignInScreen", "Credential Manager sign-in failed: ${error.message}", error)
-                        errorMessage = error.localizedMessage ?: "Google Sign-In was cancelled or unavailable on this device."
+                        val msg = when {
+                            error is androidx.credentials.exceptions.GetCredentialCancellationException ->
+                                "Google Sign-In was cancelled."
+                            error is androidx.credentials.exceptions.NoCredentialException || error.message?.contains("no credential", ignoreCase = true) == true ->
+                                "No Google account or matching credentials found on this device. Please ensure a Google account is added in Android Settings > Accounts, and the app's SHA-1 fingerprint is registered in Google Cloud Console."
+                            else -> error.localizedMessage ?: "Google Sign-In was unavailable on this device."
+                        }
+                        errorMessage = msg
                     }
                 )
             } catch (e: Exception) {
                 Log.e("GoogleSignInScreen", "Unexpected error during Google Sign-In", e)
-                errorMessage = e.localizedMessage ?: "Unable to connect to UPI-Easy authentication service"
+                val msg = when {
+                    e is androidx.credentials.exceptions.NoCredentialException || e.message?.contains("no credential", ignoreCase = true) == true ->
+                        "No Google account or matching credentials found on this device. Please check Settings > Accounts."
+                    else -> e.localizedMessage ?: "Unable to connect to UPI-Easy authentication service"
+                }
+                errorMessage = msg
             } finally {
                 isLoading = false
             }

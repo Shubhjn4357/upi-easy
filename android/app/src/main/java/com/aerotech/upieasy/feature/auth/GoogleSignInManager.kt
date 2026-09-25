@@ -1,6 +1,8 @@
 package com.aerotech.upieasy.feature.auth
 
+import android.app.Activity
 import android.content.Context
+import android.content.ContextWrapper
 import android.util.Base64
 import android.util.Log
 import androidx.credentials.CredentialManager
@@ -11,6 +13,7 @@ import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.credentials.exceptions.GetCredentialException
 import androidx.credentials.exceptions.NoCredentialException
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
+import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.android.libraries.identity.googleid.GoogleIdTokenParsingException
 import java.security.SecureRandom
@@ -23,6 +26,15 @@ data class GoogleAuthResult(
 
 class GoogleSignInManager(private val context: Context) {
     private val credentialManager = CredentialManager.create(context)
+
+    private fun Context.findActivity(): Activity? {
+        var ctx = this
+        while (ctx is ContextWrapper) {
+            if (ctx is Activity) return ctx
+            ctx = ctx.baseContext
+        }
+        return null
+    }
 
     /**
      * Generates a cryptographically secure random nonce encoded as URL-safe Base64.
@@ -41,11 +53,12 @@ class GoogleSignInManager(private val context: Context) {
      * Executes Credential Manager Sign in with Google flow.
      * Follows official Google guidance:
      * 1. First attempts filterByAuthorizedAccounts = true for seamless 1-tap sign-in.
-     * 2. On NoCredentialException or fallback, retries with filterByAuthorizedAccounts = false
-     *    to show the standard Google account selection dialog.
+     * 2. On NoCredentialException or fallback, retries with GetGoogleIdOption (filterByAuthorizedAccounts = false).
+     * 3. If that still throws NoCredentialException, falls back to GetSignInWithGoogleOption (explicit button flow).
      */
     suspend fun signIn(activityContext: Context, serverClientId: String): Result<GoogleAuthResult> {
         val nonce = generateSecureRandomNonce()
+        val targetContext = activityContext.findActivity() ?: activityContext
 
         return try {
             // Attempt 1: Filter by authorized accounts
@@ -61,19 +74,19 @@ class GoogleSignInManager(private val context: Context) {
                 .build()
 
             val result = credentialManager.getCredential(
-                context = activityContext,
+                context = targetContext,
                 request = request
             )
             extractIdToken(result, nonce)
         } catch (e: NoCredentialException) {
             Log.d("GoogleSignInManager", "No authorized accounts found, falling back to full account picker")
-            signInWithAnyGoogleAccount(activityContext, serverClientId, nonce)
+            signInWithAnyGoogleAccount(targetContext, serverClientId, nonce)
         } catch (e: GetCredentialCancellationException) {
             Log.i("GoogleSignInManager", "User cancelled Google Sign-In")
             Result.failure(e)
         } catch (e: GetCredentialException) {
             Log.w("GoogleSignInManager", "Authorized account fetch failed (${e.message}), attempting fallback", e)
-            signInWithAnyGoogleAccount(activityContext, serverClientId, nonce)
+            signInWithAnyGoogleAccount(targetContext, serverClientId, nonce)
         } catch (e: Exception) {
             Log.e("GoogleSignInManager", "Unexpected sign-in exception", e)
             Result.failure(e)
@@ -85,7 +98,10 @@ class GoogleSignInManager(private val context: Context) {
         serverClientId: String,
         nonce: String
     ): Result<GoogleAuthResult> {
-        return try {
+        val targetContext = activityContext.findActivity() ?: activityContext
+
+        // Step 2: Try GetGoogleIdOption with filterByAuthorizedAccounts = false
+        try {
             val fallbackOption = GetGoogleIdOption.Builder()
                 .setFilterByAuthorizedAccounts(false)
                 .setServerClientId(serverClientId)
@@ -98,10 +114,40 @@ class GoogleSignInManager(private val context: Context) {
                 .build()
 
             val result = credentialManager.getCredential(
-                context = activityContext,
+                context = targetContext,
+                request = request
+            )
+            return extractIdToken(result, nonce)
+        } catch (e: GetCredentialCancellationException) {
+            Log.i("GoogleSignInManager", "User cancelled Google Sign-In")
+            return Result.failure(e)
+        } catch (e: Exception) {
+            Log.w("GoogleSignInManager", "GetGoogleIdOption (unfiltered) failed: ${e.message}, falling back to GetSignInWithGoogleOption button flow", e)
+        }
+
+        // Step 3: Explicit Button Flow with GetSignInWithGoogleOption (allows adding / selecting any Google account)
+        return try {
+            val buttonOption = GetSignInWithGoogleOption.Builder(serverClientId)
+                .setNonce(nonce)
+                .build()
+
+            val request = GetCredentialRequest.Builder()
+                .addCredentialOption(buttonOption)
+                .build()
+
+            val result = credentialManager.getCredential(
+                context = targetContext,
                 request = request
             )
             extractIdToken(result, nonce)
+        } catch (e: GetCredentialCancellationException) {
+            Log.i("GoogleSignInManager", "User cancelled Google Sign-In")
+            Result.failure(e)
+        } catch (e: NoCredentialException) {
+            Log.e("GoogleSignInManager", "No Google account found on device", e)
+            Result.failure(
+                IllegalStateException("No Google account found on this device. Please sign in to a Google account in Android Settings > Accounts or Google Play Store and ensure your app SHA-1 fingerprint is registered in Google Cloud Console.", e)
+            )
         } catch (e: Exception) {
             Log.e("GoogleSignInManager", "Full Google Sign-In account picker failed", e)
             Result.failure(e)
