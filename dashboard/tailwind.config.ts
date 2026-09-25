@@ -74,14 +74,39 @@ const config: Config = {
           from: { opacity: '0' },
           to: { opacity: '1' },
         },
+        'fade-out': {
+          from: { opacity: '1' },
+          to: { opacity: '0' },
+        },
+        'modal-in': {
+          from: { transform: 'scale(0.95) translateY(8px)', opacity: '0' },
+          to: { transform: 'scale(1) translateY(0)', opacity: '1' },
+        },
         'bottom-sheet-up': {
-          from: { transform: 'translateY(100%)', opacity: '0.5' },
+          from: { transform: 'translateY(100%)', opacity: '0.4' },
           to: { transform: 'translateY(0)', opacity: '1' },
+        },
+        'drawer-right': {
+          from: { transform: 'translateX(100%)', opacity: '0.4' },
+          to: { transform: 'translateX(0)', opacity: '1' },
+        },
+        'drawer-left': {
+          from: { transform: 'translateX(-100%)', opacity: '0.4' },
+          to: { transform: 'translateX(0)', opacity: '1' },
+        },
+        'dropdown-in': {
+          from: { transform: 'scale(0.96) translateY(-6px)', opacity: '0' },
+          to: { transform: 'scale(1) translateY(0)', opacity: '1' },
         },
       },
       animation: {
-        'fade-in': 'fade-in 0.2s ease-out forwards',
-        'bottom-sheet-up': 'bottom-sheet-up 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+        'fade-in': 'fade-in 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+        'fade-out': 'fade-out 0.15s ease-in forwards',
+        'modal-in': 'modal-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+        'bottom-sheet-up': 'bottom-sheet-up 0.32s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+        'drawer-right': 'drawer-right 0.32s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+        'drawer-left': 'drawer-left 0.32s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+        'dropdown-in': 'dropdown-in 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards',
       },
     },
   },

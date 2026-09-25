@@ -27,25 +27,27 @@ export function PendingInviteModal({
   onAccept,
   onDecline,
 }: PendingInviteModalProps) {
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [accepting, setAccepting] = useState(false);
+  const [declining, setDeclining] = useState(false);
+  const isProcessing = accepting || declining;
 
   if (!invite) return null;
 
   const handleAccept = async () => {
-    setIsProcessing(true);
+    setAccepting(true);
     try {
       await onAccept(invite);
     } finally {
-      setIsProcessing(false);
+      setAccepting(false);
     }
   };
 
   const handleDecline = async () => {
-    setIsProcessing(true);
+    setDeclining(true);
     try {
       await onDecline(invite);
     } finally {
-      setIsProcessing(false);
+      setDeclining(false);
     }
   };
 
@@ -54,19 +56,20 @@ export function PendingInviteModal({
       isOpen={Boolean(invite)}
       onClose={() => {}}
       title="Team Invitation"
-      subtitle="You have been invited to join an organization">
+      subtitle="You have been invited to join an organization"
+      icon={<IconUsers className="w-4 h-4" />}>
       <div className="space-y-4 text-xs">
-        <div className="flex items-center gap-3 p-3.5 rounded-2xl bg-brand-500/10 border border-brand-500/20 text-foreground">
-          <div className="w-10 h-10 rounded-xl bg-brand-500/20 flex items-center justify-center shrink-0 text-brand-600 dark:text-cyan-400">
+        <div className="flex items-center gap-3.5 p-4 rounded-2xl bg-brand-500/10 border border-brand-500/20 text-foreground">
+          <div className="w-11 h-11 rounded-2xl bg-brand-500/20 flex items-center justify-center shrink-0 text-brand-600 dark:text-cyan-400">
             <IconUsers className="w-5 h-5" />
           </div>
           <div>
-            <div className="font-bold text-sm text-foreground">
+            <div className="font-bold text-sm text-foreground tracking-tight">
               {invite.organizationName || 'Store Organization'}
             </div>
-            <div className="text-muted-foreground mt-0.5">
-              Assigned Role:{' '}
-              <Badge variant="secondary" className="font-bold text-[10px] ml-1 uppercase">
+            <div className="text-muted-foreground mt-1 flex items-center gap-1.5">
+              <span>Assigned Role:</span>
+              <Badge variant="brand" size="sm" className="font-bold uppercase tracking-wider">
                 {invite.role}
               </Badge>
             </div>
@@ -78,32 +81,33 @@ export function PendingInviteModal({
         </p>
 
         {invite.inviterName && (
-          <div className="text-[11px] text-muted-foreground">
+          <div className="text-[11px] text-muted-foreground bg-muted/20 p-2.5 rounded-xl border border-border/60">
             Invited by: <span className="font-semibold text-foreground">{invite.inviterName}</span>
           </div>
         )}
 
-        <div className="flex items-center justify-end gap-2 pt-2">
+        <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-border/50">
           <Button
             type="button"
             variant="outline"
-            size="sm"
+            size="default"
             onClick={handleDecline}
+            loading={declining}
             disabled={isProcessing}
-            className="rounded-xl gap-1">
-            <IconX className="w-3.5 h-3.5" />
-            <span>Decline</span>
+            leftIcon={<IconX className="w-3.5 h-3.5" />}>
+            Decline
           </Button>
 
           <Button
             type="button"
             variant="brand"
-            size="sm"
+            size="default"
             onClick={handleAccept}
+            loading={accepting}
+            loadingText="Joining..."
             disabled={isProcessing}
-            className="rounded-xl gap-1 font-bold">
-            <IconCheck className="w-3.5 h-3.5" />
-            <span>{isProcessing ? 'Accepting...' : 'Accept & Join'}</span>
+            leftIcon={<IconCheck className="w-3.5 h-3.5" />}>
+            Accept & Join Store
           </Button>
         </div>
       </div>

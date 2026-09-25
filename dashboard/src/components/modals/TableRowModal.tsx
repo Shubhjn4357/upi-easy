@@ -1,7 +1,8 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
-import { Input, Label } from '@/components/ui/input';
+import { Input } from '@/components/ui/input';
 import Modal from '@/components/Modal';
+import { IconDatabase } from '@/components/ui/icons';
 import type { TableColumnDef } from '@/types';
 
 export interface TableRowModalProps {
@@ -29,25 +30,23 @@ export function TableRowModal({
       isOpen={isOpen}
       onClose={onClose}
       title={isEditing ? `Edit ${selectedTable} Row` : `Insert in ${selectedTable}`}
-      subtitle={isEditing ? 'Update column values' : 'New row entry'}>
-      <form onSubmit={onSubmitRow} className="space-y-3 text-xs max-h-[60vh] overflow-y-auto pr-1">
+      subtitle={isEditing ? 'Update column values' : 'New database record entry'}
+      icon={<IconDatabase className="w-4 h-4" />}>
+      <form onSubmit={onSubmitRow} className="space-y-3.5 text-xs max-h-[60vh] overflow-y-auto pr-1">
         {columns.map((col) => (
-          <div key={col.name} className="space-y-1">
-            <Label className="font-mono">
-              {col.name} {col.isPrimary && <span className="text-amber-500 font-bold">(PRIMARY)</span>}
-              {!col.isPrimary && <span className="text-muted-foreground font-normal"> ({col.type})</span>}
-            </Label>
-            <Input
-              type="text"
-              name={col.name}
-              defaultValue={initialRow ? String(initialRow[col.name] ?? '') : ''}
-              disabled={isEditing && col.isPrimary}
-              placeholder={!isEditing && col.isPrimary ? 'Auto-generated if empty' : ''}
-              className={`font-mono ${isEditing && col.isPrimary ? 'opacity-60 cursor-not-allowed' : ''}`}
-            />
-          </div>
+          <Input
+            key={col.name}
+            label={`${col.name}${col.isPrimary ? ' (PRIMARY)' : ` (${col.type})`}`}
+            type="text"
+            name={col.name}
+            defaultValue={initialRow ? String(initialRow[col.name] ?? '') : ''}
+            disabled={isEditing && col.isPrimary}
+            placeholder={!isEditing && col.isPrimary ? 'Auto-generated ID' : ''}
+            className={`font-mono text-xs ${isEditing && col.isPrimary ? 'opacity-60 cursor-not-allowed bg-muted/30' : ''}`}
+          />
         ))}
-        <div className="pt-3 flex justify-end gap-2">
+
+        <div className="pt-3 flex items-center justify-end gap-2.5 border-t border-border/50">
           <Button
             variant="outline"
             type="button"
@@ -56,9 +55,8 @@ export function TableRowModal({
           </Button>
           <Button
             variant="brand"
-            type="submit"
-            className={!isEditing ? 'bg-amber-600 hover:bg-amber-500 shadow-amber-500/20' : ''}>
-            {isEditing ? 'Save Changes' : 'Insert'}
+            type="submit">
+            {isEditing ? 'Save Changes' : 'Insert Record'}
           </Button>
         </div>
       </form>

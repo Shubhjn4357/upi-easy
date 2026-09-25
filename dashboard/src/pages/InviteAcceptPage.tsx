@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from '../lib/router';
 import { Button } from '../components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
+import { Card, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Alert, AlertDescription } from '../components/ui/components';
 import { IconGoogle, IconUsers, IconShield, IconCheck, IconSun, IconMoon } from '../components/ui/icons';
@@ -50,8 +50,10 @@ export function InviteAcceptPage({
     return match ? match[1] : '';
   })();
 
-  const [loading, setLoading] = useState<boolean>(true);
-  const [verifyingError, setVerifyingError] = useState<string | null>(null);
+  const [loading, setLoading] = useState<boolean>(Boolean(inviteToken));
+  const [verifyingError, setVerifyingError] = useState<string | null>(
+    inviteToken ? null : 'No invitation token provided in URL.'
+  );
   const [invite, setInvite] = useState<VerifiedInvite | null>(null);
   const [isAccepting, setIsAccepting] = useState<boolean>(false);
 
@@ -71,44 +73,44 @@ export function InviteAcceptPage({
   });
 
   // Verify invitation on mount
-  const verifyToken = useCallback(async () => {
-    if (!inviteToken) {
-      setVerifyingError('No invitation token provided in URL.');
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
-    setVerifyingError(null);
-
-    try {
-      const res = await apiFetch<{
-        success: boolean;
-        isValid: boolean;
-        invite: VerifiedInvite;
-        message?: string;
-      }>(`/api/v1/invitations/verify/${encodeURIComponent(inviteToken)}`);
-
-      if (res.success && res.invite) {
-        if (!res.isValid) {
-          setVerifyingError('This invitation has expired or has already been used.');
-        } else {
-          setInvite(res.invite);
-        }
-      } else {
-        setVerifyingError(res.message || 'Invalid or unknown invitation.');
-      }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to verify invitation link.';
-      setVerifyingError(msg);
-    } finally {
-      setLoading(false);
-    }
-  }, [inviteToken, apiFetch]);
-
   useEffect(() => {
-    verifyToken();
-  }, [verifyToken]);
+    if (!inviteToken) return;
+    let isCancelled = false;
+
+    (async () => {
+      try {
+        const res = await apiFetch<{
+          success: boolean;
+          isValid: boolean;
+          invite: VerifiedInvite;
+          message?: string;
+        }>(`/api/v1/invitations/verify/${encodeURIComponent(inviteToken)}`);
+
+        if (isCancelled) return;
+        if (res.success && res.invite) {
+          if (!res.isValid) {
+            setVerifyingError('This invitation has expired or has already been used.');
+          } else {
+            setInvite(res.invite);
+          }
+        } else {
+          setVerifyingError(res.message || 'Invalid or unknown invitation.');
+        }
+      } catch (err: unknown) {
+        if (isCancelled) return;
+        const msg = err instanceof Error ? err.message : 'Failed to verify invitation link.';
+        setVerifyingError(msg);
+      } finally {
+        if (!isCancelled) {
+          setLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [inviteToken, apiFetch]);
 
   // Handle accepting when authenticated
   const handleAcceptInvite = async () => {

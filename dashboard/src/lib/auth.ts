@@ -1,5 +1,5 @@
 // Security & Authentication Utilities with strict TypeScript types
-import type { User, AuthState, UserRole } from '../types';
+import type { User, AuthState } from '../types';
 
 export interface JwtPayload {
   sub?: string;

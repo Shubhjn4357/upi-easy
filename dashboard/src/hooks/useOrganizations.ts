@@ -60,13 +60,6 @@ export function useOrganizations({ token, onDeleted, showToast, apiFetch }: UseO
 
   const handleDeleteOrg = useCallback(async () => {
     if (!activeOrg) return;
-    if (
-      !confirm(
-        `Are you absolutely sure you want to permanently delete "${activeOrg.name}"? This action cannot be undone.`
-      )
-    ) {
-      return;
-    }
     setIsDeletingOrg(true);
     try {
       await apiFetch(`/api/v1/organizations/${activeOrg.id}`, { method: 'DELETE' });

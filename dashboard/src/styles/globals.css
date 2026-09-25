@@ -79,3 +79,25 @@ html.light body {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 9999px; }
 ::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground)); }
+
+/* Glassmorphism & Micro-interaction Utilities */
+.glass-panel {
+  background-color: hsl(var(--card) / 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid hsl(var(--border) / 0.7);
+}
+
+.glass-modal {
+  background-color: hsl(var(--card) / 0.96);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.45);
+}
+
+.glass-dropdown {
+  background-color: hsl(var(--popover) / 0.96);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 16px 36px -8px rgba(0, 0, 0, 0.35);
+}

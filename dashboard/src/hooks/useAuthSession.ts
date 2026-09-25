@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   getStoredAuth,
   saveAuth,
@@ -25,19 +25,25 @@ export function useAuthSession({ onSessionRestored, onSessionExpired }: UseAuthS
     return Boolean(rToken && (!stored.token || isTokenExpired(stored.token)));
   });
 
+  const onSessionRestoredRef = useRef(onSessionRestored);
+  useEffect(() => {
+    onSessionRestoredRef.current = onSessionRestored;
+  }, [onSessionRestored]);
+
   // Auto-Authorization & Persistent Session Recovery on mount
   useEffect(() => {
     let isMounted = true;
     const checkAutoAuth = async () => {
       const rToken = getRefreshToken();
-      if (rToken && (!token || isTokenExpired(token))) {
+      const currentToken = getStoredAuth().token;
+      if (rToken && (!currentToken || isTokenExpired(currentToken))) {
         try {
           const freshToken = await refreshAuthSession();
           if (freshToken && isMounted) {
             const updated = getStoredAuth();
             setAuth({ token: freshToken, user: updated.user });
-            if (onSessionRestored) {
-              await onSessionRestored(freshToken);
+            if (onSessionRestoredRef.current) {
+              await onSessionRestoredRef.current(freshToken);
             }
           }
         } catch (err) {

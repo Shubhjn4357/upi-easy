@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Select } from '@/components/ui/select';
 import { Avatar, AvatarFallback, AvatarImage, Separator } from '@/components/ui/components';
 import { IconSun, IconMoon, IconLogOut, IconMenu, IconX } from '@/components/ui/icons';
 import type { NavbarProps } from '@/types';
@@ -37,23 +38,20 @@ export function Navbar({
 
           {/* Desktop Multi-Tenant Organization Switcher */}
           {organizations && organizations.length > 0 && (
-            <div className="relative hidden md:block">
-              <select
+            <div className="hidden md:block w-56">
+              <Select
                 value={activeOrg?.id || ''}
-                onChange={(e) => {
-                  const selected = organizations.find((o) => o.id === e.target.value);
+                onChange={(val) => {
+                  const selected = organizations.find((o) => o.id === val);
                   if (selected) onSelectOrg(selected);
                 }}
-                className="bg-secondary text-secondary-foreground hover:bg-secondary/80 border border-input rounded-xl px-3 py-1.5 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-ring transition cursor-pointer appearance-none pr-8">
-                {organizations.map((org) => (
-                  <option key={org.id} value={org.id} className="bg-card text-card-foreground">
-                    🏢 {org.name} ({org.role || 'OWNER'})
-                  </option>
-                ))}
-              </select>
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-muted-foreground text-xs">
-                ▼
-              </div>
+                triggerClassName="bg-secondary/70 h-8 text-xs font-semibold rounded-xl"
+                options={organizations.map((org) => ({
+                  value: org.id,
+                  label: org.name,
+                  description: `Role: ${org.role || 'OWNER'}`,
+                }))}
+              />
             </div>
           )}
 
@@ -192,24 +190,22 @@ export function Navbar({
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block">
                 Active Organization
               </label>
-              <div className="relative">
-                <select
-                  value={activeOrg?.id || ''}
-                  onChange={(e) => {
-                    const selected = organizations.find((o) => o.id === e.target.value);
-                    if (selected) {
-                      onSelectOrg(selected);
-                      setMobileMenuOpen(false);
-                    }
-                  }}
-                  className="w-full bg-secondary text-secondary-foreground hover:bg-secondary/80 border border-input rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-ring transition cursor-pointer appearance-none pr-8">
-                  {organizations.map((org) => (
-                    <option key={org.id} value={org.id} className="bg-card text-card-foreground">
-                      🏢 {org.name} ({org.role || 'OWNER'})
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <Select
+                value={activeOrg?.id || ''}
+                onChange={(val) => {
+                  const selected = organizations.find((o) => o.id === val);
+                  if (selected) {
+                    onSelectOrg(selected);
+                    setMobileMenuOpen(false);
+                  }
+                }}
+                triggerClassName="bg-secondary/70 h-10 text-xs font-semibold rounded-xl"
+                options={organizations.map((org) => ({
+                  value: org.id,
+                  label: org.name,
+                  description: `Role: ${org.role || 'OWNER'}`,
+                }))}
+              />
             </div>
           )}
 

@@ -1,7 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Input, Label } from '@/components/ui/input';
+import { Input } from '@/components/ui/input';
+import { Select } from '@/components/ui/select';
 import Modal from '@/components/Modal';
+import { IconCreditCard } from '@/components/ui/icons';
 import type { Organization } from '@/types';
 
 export interface RecordPaymentModalProps {
@@ -13,7 +15,7 @@ export interface RecordPaymentModalProps {
   onSubmitPayment: (e: React.FormEvent<HTMLFormElement>) => void | Promise<void>;
 }
 
-// Record Counter Payment Modal with strict TypeScript types
+// Record Counter Payment Modal with smooth custom components
 export function RecordPaymentModal({
   isOpen,
   onClose,
@@ -22,83 +24,92 @@ export function RecordPaymentModal({
   isSaving = false,
   onSubmitPayment,
 }: RecordPaymentModalProps) {
+  const [status, setStatus] = useState('SUCCESS');
+
   return (
     <Modal
       isOpen={isOpen}
       onClose={isSaving ? () => {} : onClose}
       title="Record Counter Payment"
-      subtitle="Simulate verified incoming UPI collection">
+      subtitle={`Simulate verified incoming UPI collection for ${activeOrg?.name || 'Organization'}${defaultVpa ? ` • ${defaultVpa}` : ''}`}
+      icon={<IconCreditCard className="w-4 h-4" />}>
       <form onSubmit={onSubmitPayment} className="space-y-4 text-xs">
-        <div className="space-y-1.5">
-          <Label>Amount (INR)</Label>
-          <div className="relative">
-            <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-muted-foreground font-bold">₹</span>
-            <Input
-              type="number"
-              step="0.01"
-              name="amount"
-              defaultValue="250.00"
-              required
-              disabled={isSaving}
-              className="pl-8 text-base font-bold"
-            />
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1.5">
-            <Label>Customer Name</Label>
-            <Input
-              type="text"
-              name="payerName"
-              defaultValue="Karan Patel"
-              disabled={isSaving}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Customer UPI VPA</Label>
-            <Input
-              type="text"
-              name="payerVpa"
-              defaultValue="karan@okhdfcbank"
-              disabled={isSaving}
-              className="font-mono"
-            />
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1.5">
-            <Label>UTR / Reference (Optional)</Label>
-            <Input
-              type="text"
-              name="referenceNumber"
-              placeholder="Auto-generated if empty"
-              disabled={isSaving}
-              className="font-mono text-[11px]"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Status</Label>
-            <select
-              name="status"
-              defaultValue="SUCCESS"
-              disabled={isSaving}
-              className="w-full h-9 bg-background border border-input rounded-xl px-2.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring">
-              <option value="SUCCESS">SUCCESS (Received)</option>
-              <option value="PENDING">PENDING (Awaiting)</option>
-              <option value="FAILED">FAILED</option>
-            </select>
-          </div>
-        </div>
-        <div className="space-y-1.5">
-          <Label>Reference Note</Label>
+        <Input
+          label="Amount (INR)"
+          type="number"
+          step="0.01"
+          name="amount"
+          defaultValue="250.00"
+          required
+          disabled={isSaving}
+          leftIcon={<span className="font-bold text-sm text-foreground">₹</span>}
+          className="text-base font-bold"
+        />
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Input
+            label="Customer Name"
             type="text"
-            name="note"
-            defaultValue="Counter Bill #409"
+            name="payerName"
+            defaultValue="Karan Patel"
             disabled={isSaving}
           />
+
+          <Input
+            label="Customer UPI VPA"
+            type="text"
+            name="payerVpa"
+            defaultValue="karan@okhdfcbank"
+            disabled={isSaving}
+            className="font-mono"
+          />
         </div>
-        <div className="pt-2 flex justify-end gap-2">
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <Input
+            label="UTR / Reference (Optional)"
+            type="text"
+            name="referenceNumber"
+            placeholder="Auto-generated if empty"
+            disabled={isSaving}
+            className="font-mono text-[11px]"
+          />
+
+          <Select
+            label="Status"
+            name="status"
+            value={status}
+            onChange={setStatus}
+            disabled={isSaving}
+            options={[
+              {
+                value: 'SUCCESS',
+                label: 'SUCCESS (Received)',
+                description: 'Payment verified and confirmed',
+              },
+              {
+                value: 'PENDING',
+                label: 'PENDING (Awaiting)',
+                description: 'Awaiting customer transfer',
+              },
+              {
+                value: 'FAILED',
+                label: 'FAILED',
+                description: 'Declined or timed out',
+              },
+            ]}
+          />
+        </div>
+
+        <Input
+          label="Reference Note"
+          type="text"
+          name="note"
+          defaultValue="Counter Bill #409"
+          disabled={isSaving}
+        />
+
+        <div className="pt-3 flex items-center justify-end gap-2.5 border-t border-border/50">
           <Button
             variant="outline"
             type="button"
@@ -109,16 +120,10 @@ export function RecordPaymentModal({
           <Button
             variant="brand"
             type="submit"
-            disabled={isSaving}
-            className="gap-2 min-w-[140px]">
-            {isSaving ? (
-              <>
-                <div className="w-3.5 h-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" />
-                <span>Recording...</span>
-              </>
-            ) : (
-              'Record Payment'
-            )}
+            loading={isSaving}
+            loadingText="Recording..."
+            className="min-w-[140px]">
+            Record Payment
           </Button>
         </div>
       </form>

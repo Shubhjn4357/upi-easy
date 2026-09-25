@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Select } from '@/components/ui/select';
 import {
   Table,
   TableHeader,
@@ -14,7 +15,6 @@ import {
   IconSearch,
   IconX,
   IconTrash,
-  IconChevronDown,
 } from '@/components/ui/icons';
 
 export interface DropdownOption {
@@ -133,20 +133,18 @@ export function DataTable<T>({
             </div>
           )}
 
-          {/* Menu-style dropdowns (Clean modern alternative to raw horizontal pills) */}
+          {/* Menu-style dropdowns */}
           {menuDropdowns.map((menu) => (
-            <div key={menu.id} className="relative inline-flex items-center">
-              <select
+            <div key={menu.id} className="min-w-[140px]">
+              <Select
                 value={menu.value}
-                onChange={(e) => menu.onChange(e.target.value)}
-                className="appearance-none h-9 pl-3 pr-8 bg-background border border-input rounded-xl text-xs font-medium text-foreground hover:border-primary/50 focus:outline-none focus:ring-1 focus:ring-ring transition shadow-sm cursor-pointer">
-                {menu.options.map((opt) => (
-                  <option key={opt.value} value={opt.value} className="bg-card text-foreground">
-                    {opt.label} {opt.count !== undefined ? `(${opt.count})` : ''}
-                  </option>
-                ))}
-              </select>
-              <IconChevronDown className="absolute right-2.5 pointer-events-none w-3.5 h-3.5 text-muted-foreground" />
+                onChange={menu.onChange}
+                triggerClassName="h-9 text-xs font-medium"
+                options={menu.options.map((opt) => ({
+                  value: opt.value,
+                  label: opt.count !== undefined ? `${opt.label} (${opt.count})` : opt.label,
+                }))}
+              />
             </div>
           ))}
         </div>

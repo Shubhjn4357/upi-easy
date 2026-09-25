@@ -1,5 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import useConfirmDialog from '@/hooks/useConfirmDialog';
 import { DataTable, type DataTableColumn } from '@/components/ui/DataTable';
 import {
   IconPlus,
@@ -25,6 +27,7 @@ export function TablesPage({
   onSelectRowAction,
 }: TablesPageProps) {
   const [selectedRowIds, setSelectedRowIds] = useState<Set<string>>(new Set());
+  const { confirm, dialogState, handleConfirm, handleCancel } = useConfirmDialog();
 
   // Infer columns from rows if schema columns not populated
   const displayColumns: TableColumnDef[] = useMemo(() => {
@@ -168,9 +171,13 @@ export function TablesPage({
             icon: <IconTrash className="w-3.5 h-3.5" />,
             variant: 'destructive',
             onClick: async (ids: string[]) => {
-              if (!confirm(`Are you sure you want to delete ${ids.length} selected row(s) from "${selectedTable}"?`)) {
-                return;
-              }
+              const ok = await confirm({
+                title: 'Delete Selected Database Rows',
+                description: `Are you sure you want to delete ${ids.length} selected row(s) from "${selectedTable}"? This action directly removes records from the database table.`,
+                variant: 'danger',
+                confirmText: `Delete (${ids.length})`,
+              });
+              if (!ok) return;
               // Row deletion action
               setSelectedRowIds(new Set());
             },
@@ -207,6 +214,21 @@ export function TablesPage({
           </Button>
         </div>
       </div>
+
+      {/* Custom Confirm Dialog */}
+      {dialogState && (
+        <ConfirmDialog
+          open={dialogState.open}
+          onOpenChange={(open) => !open && handleCancel()}
+          title={dialogState.title}
+          description={dialogState.description}
+          variant={dialogState.variant}
+          confirmText={dialogState.confirmText}
+          cancelText={dialogState.cancelText}
+          onConfirm={handleConfirm}
+          onCancel={handleCancel}
+        />
+      )}
     </div>
   );
 }

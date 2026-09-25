@@ -8,7 +8,7 @@ import { useGoogleAuth } from '@/hooks/useGoogleAuth';
 import type { LoginPageProps } from '@/types';
 
 // Authentication Page: Official Google Sign-In using services & hooks architecture
-export function LoginPage({ onLoginSuccess, theme, onToggleTheme, pingMs }: LoginPageProps) {
+export function LoginPage({ onLoginSuccess, theme, onToggleTheme, pingMs: _pingMs }: LoginPageProps) {
   const [showManualToken, setShowManualToken] = useState<boolean>(false);
   const [manualTokenInput, setManualTokenInput] = useState<string>('');
 

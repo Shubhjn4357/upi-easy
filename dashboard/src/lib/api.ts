@@ -5,7 +5,7 @@ export type TokenProvider = string | null | (() => string | null);
 export type OrgIdProvider = string | null | (() => string | null);
 
 export interface ApiFetchOptions extends RequestInit {
-  headers?: Record<string, string>;
+  headers?: HeadersInit;
 }
 
 export type ApiClient = <T = unknown>(endpoint: string, options?: ApiFetchOptions) => Promise<T>;
@@ -32,13 +32,19 @@ export function createApiClient(
       }
     }
 
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(orgId ? { 'X-Organization-Id': orgId } : {}),
-      ...(options.headers || {}),
-    };
+    const headers = new Headers(options.headers);
+    if (!headers.has('Content-Type')) {
+      headers.set('Content-Type', 'application/json');
+    }
+    if (!headers.has('Accept')) {
+      headers.set('Accept', 'application/json');
+    }
+    if (token && !headers.has('Authorization')) {
+      headers.set('Authorization', `Bearer ${token}`);
+    }
+    if (orgId && !headers.has('X-Organization-Id')) {
+      headers.set('X-Organization-Id', orgId);
+    }
 
     const baseUrl = ENV.API_BASE_URL || (typeof window !== 'undefined' ? window.location.origin : '');
     const url = endpoint.startsWith('http') ? endpoint : `${baseUrl}${endpoint}`;
@@ -58,7 +64,7 @@ export function createApiClient(
         const freshToken = await refreshAuthSession();
         if (freshToken) {
           // Retry the request with the refreshed token
-          headers.Authorization = `Bearer ${freshToken}`;
+          headers.set('Authorization', `Bearer ${freshToken}`);
           res = await fetch(url, {
             ...options,
             headers,

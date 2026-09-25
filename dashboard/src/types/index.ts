@@ -21,6 +21,7 @@ export interface Organization {
   category?: string;
   gstin?: string | null;
   panNumber?: string | null;
+  address?: string | null;
   role?: UserRole | string;
   permissions?: string[];
   createdAt?: string;

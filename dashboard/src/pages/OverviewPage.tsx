@@ -5,8 +5,6 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table';
 import {
   IconPlus,
-  IconTrendingUp,
-  IconRefreshCw,
   IconArrowUpRight,
   IconCheck,
   IconQrCode,

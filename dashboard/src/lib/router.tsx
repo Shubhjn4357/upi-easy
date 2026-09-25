@@ -1,3 +1,4 @@
+/* eslint-disable react/only-export-components */
 // Lightweight Declarative React Router with Security Guards
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { hasRole } from './auth';
@@ -52,13 +53,13 @@ export function useLocation() {
   return { pathname: context.path };
 }
 
-export const ParamsContext = createContext<Record<string, string>>({});
+const ParamsContext = createContext<Record<string, string>>({});
 
 export function useParams<T extends Record<string, string> = Record<string, string>>(): T {
   return useContext(ParamsContext) as T;
 }
 
-export function matchPath(pattern: string, pathname: string): { matched: boolean; params: Record<string, string> } {
+function matchPath(pattern: string, pathname: string): { matched: boolean; params: Record<string, string> } {
   if (pattern === pathname) return { matched: true, params: {} };
   if (pattern === '*') return { matched: true, params: {} };
 

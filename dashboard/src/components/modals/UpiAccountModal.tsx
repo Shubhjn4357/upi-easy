@@ -1,7 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Input, Label } from '@/components/ui/input';
+import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
 import Modal from '@/components/Modal';
+import { IconZap } from '@/components/ui/icons';
 import type { UpiAccount, Organization } from '@/types';
 
 export interface UpiAccountModalProps {
@@ -13,7 +15,7 @@ export interface UpiAccountModalProps {
   onSubmitUpi: (e: React.FormEvent<HTMLFormElement>) => void | Promise<void>;
 }
 
-// Add / Edit UPI Account Modal with strict TypeScript types
+// Add / Edit UPI Account Modal with smooth custom inputs & switch
 export function UpiAccountModal({
   isOpen,
   onClose,
@@ -23,61 +25,62 @@ export function UpiAccountModal({
   onSubmitUpi,
 }: UpiAccountModalProps) {
   const isEditing = Boolean(initialData);
+  const [isDefault, setIsDefault] = useState<boolean>(
+    isEditing ? Boolean(initialData?.isDefault || initialData?.isPrimary) : true
+  );
 
   return (
     <Modal
       isOpen={isOpen}
       onClose={isSaving ? () => {} : onClose}
       title={isEditing ? 'Edit UPI Account' : 'Add UPI Account'}
-      subtitle={isEditing ? `Updating ${initialData?.vpa || initialData?.upiId}` : 'Connect a new VPA to this merchant organization'}>
+      subtitle={isEditing ? `Updating ${initialData?.vpa || initialData?.upiId}` : 'Connect a new VPA to this merchant organization'}
+      icon={<IconZap className="w-4 h-4" />}>
       <form onSubmit={onSubmitUpi} className="space-y-4 text-xs">
-        <div className="space-y-1.5">
-          <Label>UPI VPA</Label>
-          <Input
-            type="text"
-            name="vpa"
-            defaultValue={initialData?.vpa || initialData?.upiId || ''}
-            placeholder="e.g. storename@okhdfcbank"
-            required
+        <Input
+          label="UPI VPA"
+          type="text"
+          name="vpa"
+          defaultValue={initialData?.vpa || initialData?.upiId || ''}
+          placeholder="e.g. storename@okhdfcbank"
+          required
+          disabled={isSaving}
+          className="font-mono"
+        />
+
+        <Input
+          label="Payee Name"
+          type="text"
+          name="payeeName"
+          defaultValue={initialData?.payeeName || initialData?.accountHolderName || activeOrg?.name || ''}
+          required
+          disabled={isSaving}
+        />
+
+        <Input
+          label="Merchant Category Code (MCC)"
+          type="text"
+          name="mcc"
+          defaultValue={initialData?.merchantCategoryCode || '5411'}
+          disabled={isSaving}
+          className="font-mono"
+          helperText="Standard retail grocery code is 5411"
+        />
+
+        {/* Hidden input for form submission */}
+        <input type="hidden" name="isDefault" value={isDefault ? 'on' : 'off'} />
+
+        <div className="p-3 rounded-2xl bg-muted/20 border border-border/70">
+          <Switch
+            checked={isDefault}
+            onCheckedChange={setIsDefault}
             disabled={isSaving}
-            className="font-mono"
+            label={isEditing ? 'Set as Default UPI' : 'Set as Primary Default'}
+            description="Default account used for counter QR code generation and quick collection"
           />
         </div>
-        <div className="space-y-1.5">
-          <Label>Payee Name</Label>
-          <Input
-            type="text"
-            name="payeeName"
-            defaultValue={initialData?.payeeName || initialData?.accountHolderName || activeOrg?.name || ''}
-            required
-            disabled={isSaving}
-          />
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1.5">
-            <Label>MCC Code</Label>
-            <Input
-              type="text"
-              name="mcc"
-              defaultValue={initialData?.merchantCategoryCode || '5411'}
-              disabled={isSaving}
-              className="font-mono"
-            />
-          </div>
-          <div className="flex items-center pt-5">
-            <label className="flex items-center gap-2 text-foreground font-semibold cursor-pointer">
-              <input
-                type="checkbox"
-                name="isDefault"
-                defaultChecked={isEditing ? initialData?.isDefault || initialData?.isPrimary : true}
-                disabled={isSaving}
-                className="rounded text-primary"
-              />
-              <span>{isEditing ? 'Set as Default' : 'Primary Default'}</span>
-            </label>
-          </div>
-        </div>
-        <div className="pt-2 flex justify-end gap-2">
+
+        <div className="pt-3 flex items-center justify-end gap-2.5 border-t border-border/50">
           <Button
             variant="outline"
             type="button"
@@ -88,18 +91,10 @@ export function UpiAccountModal({
           <Button
             variant="brand"
             type="submit"
-            disabled={isSaving}
-            className="gap-2 min-w-[120px]">
-            {isSaving ? (
-              <>
-                <div className="w-3.5 h-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" />
-                <span>Saving...</span>
-              </>
-            ) : isEditing ? (
-              'Update Account'
-            ) : (
-              'Save Account'
-            )}
+            loading={isSaving}
+            loadingText="Saving..."
+            className="min-w-[120px]">
+            {isEditing ? 'Update Account' : 'Save Account'}
           </Button>
         </div>
       </form>

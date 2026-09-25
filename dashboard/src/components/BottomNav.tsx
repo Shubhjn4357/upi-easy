@@ -20,7 +20,6 @@ export function BottomNav({ activeTab, onSelectTab, onOpenMoreSheet, activeOrg }
   const permissions = activeOrg?.permissions || (role === 'OWNER' ? ['*'] : []);
   const isOwner = role === 'OWNER' || permissions.includes('*');
   const canReadStaff = isOwner || permissions.includes('staff.read') || role === 'MANAGER';
-  const canReadAccounts = isOwner || permissions.includes('accounts.read') || role === 'MANAGER' || role === 'ACCOUNTANT';
 
   const primaryTabs: (BottomTabItem & { visible: boolean })[] = [
     { id: 'overview', label: 'Overview', icon: <IconActivity className="w-5 h-5" />, visible: true },

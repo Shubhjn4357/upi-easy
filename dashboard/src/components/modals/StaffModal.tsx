@@ -1,17 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input, Label } from '@/components/ui/input';
+import { Select } from '@/components/ui/select';
 import Modal from '@/components/Modal';
 import type { StaffMember } from '@/types';
 
-export interface ModulePermissionOption {
+interface ModulePermissionOption {
   id: string;
   name: string;
   description: string;
   icon: string;
 }
 
-export const MODULE_OPTIONS: ModulePermissionOption[] = [
+const MODULE_OPTIONS: ModulePermissionOption[] = [
   {
     id: 'transactions',
     name: 'Transactions & Ledger',
@@ -44,7 +45,7 @@ export const MODULE_OPTIONS: ModulePermissionOption[] = [
   },
 ];
 
-export const ROLE_DEFAULT_MODULES: Record<string, string[]> = {
+const ROLE_DEFAULT_MODULES: Record<string, string[]> = {
   OWNER: ['transactions', 'upi', 'accounts', 'staff', 'reports'],
   MANAGER: ['transactions', 'upi', 'accounts', 'staff', 'reports'],
   CASHIER: ['transactions', 'upi'],
@@ -72,26 +73,33 @@ export function StaffModal({
   const [selectedRole, setSelectedRole] = useState<string>(
     initialData?.role || 'CASHIER'
   );
+  const [selectedStatus, setSelectedStatus] = useState<string>(
+    initialData?.status || 'ACTIVE'
+  );
 
   const [selectedModules, setSelectedModules] = useState<string[]>(() => {
     const role = initialData?.role || 'CASHIER';
     return ROLE_DEFAULT_MODULES[role] || ['transactions', 'upi'];
   });
 
-  // When initialData changes (or modal opens)
-  useEffect(() => {
+  const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
+  const [prevInitialData, setPrevInitialData] = useState(initialData);
+
+  if (isOpen !== prevIsOpen || initialData !== prevInitialData) {
+    setPrevIsOpen(isOpen);
+    setPrevInitialData(initialData);
     if (initialData?.role) {
       setSelectedRole(initialData.role);
       setSelectedModules(ROLE_DEFAULT_MODULES[initialData.role] || ['transactions', 'upi']);
+      setSelectedStatus(initialData.status || 'ACTIVE');
     } else {
       setSelectedRole('CASHIER');
       setSelectedModules(ROLE_DEFAULT_MODULES['CASHIER']);
+      setSelectedStatus('ACTIVE');
     }
-  }, [initialData, isOpen]);
+  }
 
-  // When role changes, automatically pre-select default modules for that role
-  const handleRoleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const newRole = e.target.value;
+  const handleRoleSelect = (newRole: string) => {
     setSelectedRole(newRole);
     if (ROLE_DEFAULT_MODULES[newRole]) {
       setSelectedModules(ROLE_DEFAULT_MODULES[newRole]);
@@ -117,60 +125,59 @@ export function StaffModal({
       <form onSubmit={onSubmitStaff} className="space-y-4 text-xs">
         {!isEditing ? (
           <>
-            <div className="space-y-1.5">
-              <Label>Email Address *</Label>
+            <Input
+              label="Email Address"
+              type="email"
+              name="email"
+              placeholder="colleague@example.com"
+              required
+              disabled={isSaving}
+            />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Input
-                type="email"
-                name="email"
-                placeholder="colleague@example.com"
-                required
+                label="Full Name"
+                type="text"
+                name="name"
+                placeholder="e.g. Sunil Verma"
                 disabled={isSaving}
               />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Full Name</Label>
-                <Input
-                  type="text"
-                  name="name"
-                  placeholder="e.g. Sunil Verma"
-                  disabled={isSaving}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Mobile Number (Optional)</Label>
-                <Input
-                  type="tel"
-                  name="mobile"
-                  placeholder="9876543210"
-                  disabled={isSaving}
-                  className="font-mono"
-                />
-              </div>
+              <Input
+                label="Mobile Number (Optional)"
+                type="tel"
+                name="mobile"
+                placeholder="9876543210"
+                disabled={isSaving}
+                className="font-mono"
+              />
             </div>
           </>
         ) : null}
 
-        {/* Role Preset Selector */}
-        <div className="space-y-1.5">
-          <Label>Assigned Role Preset</Label>
-          <select
-            name="role"
-            value={selectedRole}
-            onChange={handleRoleChange}
-            disabled={isSaving}
-            className="w-full h-9 bg-background border border-input rounded-xl px-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring">
-            <option value="CASHIER" className="bg-card text-card-foreground">
-              💳 CASHIER — Collect payments, static/dynamic QR & transactions
-            </option>
-            <option value="MANAGER" className="bg-card text-card-foreground">
-              💼 MANAGER — Manage operations, staff, UPI IDs & bank accounts
-            </option>
-            <option value="ACCOUNTANT" className="bg-card text-card-foreground">
-              📊 ACCOUNTANT — Financial reconciliation, ledger export & reports
-            </option>
-          </select>
-        </div>
+        {/* Custom Role Preset Selector */}
+        <Select
+          label="Assigned Role Preset"
+          name="role"
+          value={selectedRole}
+          onChange={handleRoleSelect}
+          disabled={isSaving}
+          options={[
+            {
+              value: 'CASHIER',
+              label: 'CASHIER',
+              description: 'Collect payments, static/dynamic QR & transactions',
+            },
+            {
+              value: 'MANAGER',
+              label: 'MANAGER',
+              description: 'Manage operations, staff, UPI IDs & bank accounts',
+            },
+            {
+              value: 'ACCOUNTANT',
+              label: 'ACCOUNTANT',
+              description: 'Financial reconciliation, ledger export & reports',
+            },
+          ]}
+        />
 
         {/* Module Permissions Picker */}
         <div className="space-y-2 pt-1">
@@ -187,9 +194,9 @@ export function StaffModal({
               return (
                 <label
                   key={mod.id}
-                  className={`flex items-start gap-2.5 p-2 rounded-xl border transition cursor-pointer select-none ${
+                  className={`flex items-start gap-2.5 p-2 rounded-xl border transition-all duration-150 cursor-pointer select-none ${
                     isChecked
-                      ? 'bg-brand-500/10 border-brand-500/30 text-foreground'
+                      ? 'bg-brand-500/10 border-brand-500/30 text-foreground shadow-sm'
                       : 'bg-background/60 border-border/60 text-muted-foreground hover:bg-muted/40'
                   }`}>
                   <input
@@ -217,21 +224,21 @@ export function StaffModal({
         </div>
 
         {isEditing && (
-          <div className="space-y-1.5">
-            <Label>Access Status</Label>
-            <select
-              name="status"
-              defaultValue={initialData?.status || 'ACTIVE'}
-              disabled={isSaving}
-              className="w-full h-9 bg-background border border-input rounded-xl px-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring">
-              <option value="ACTIVE" className="bg-card text-card-foreground">ACTIVE</option>
-              <option value="SUSPENDED" className="bg-card text-card-foreground">SUSPENDED</option>
-            </select>
-          </div>
+          <Select
+            label="Access Status"
+            name="status"
+            value={selectedStatus}
+            onChange={setSelectedStatus}
+            disabled={isSaving}
+            options={[
+              { value: 'ACTIVE', label: 'ACTIVE', description: 'Active and authorized for business operations' },
+              { value: 'SUSPENDED', label: 'SUSPENDED', description: 'Temporarily disabled account access' },
+            ]}
+          />
         )}
 
         {/* Action Buttons with Loading Spinner */}
-        <div className="pt-2 flex justify-end gap-2">
+        <div className="pt-3 flex items-center justify-end gap-2.5 border-t border-border/50">
           <Button
             variant="outline"
             type="button"
@@ -242,18 +249,10 @@ export function StaffModal({
           <Button
             variant="brand"
             type="submit"
-            disabled={isSaving}
-            className="gap-2 min-w-[120px]">
-            {isSaving ? (
-              <>
-                <div className="w-3.5 h-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" />
-                <span>Saving...</span>
-              </>
-            ) : isEditing ? (
-              'Update Staff'
-            ) : (
-              'Add Member'
-            )}
+            loading={isSaving}
+            loadingText="Saving..."
+            className="min-w-[120px]">
+            {isEditing ? 'Update Staff' : 'Add Member'}
           </Button>
         </div>
       </form>

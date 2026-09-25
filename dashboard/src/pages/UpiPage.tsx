@@ -7,7 +7,6 @@ import {
   IconQrCode,
   IconMoreVertical,
   IconTrash,
-  IconCheckCircle,
 } from '@/components/ui/icons';
 import { UpiPageSkeleton } from '@/components/ui/Skeleton';
 import { DataTable } from '@/components/ui/DataTable';

@@ -1,5 +1,5 @@
 // React Hook for Google Identity Services (GSI) Authentication
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { ENV } from '../services/env.service';
 import { AuthService } from '../services/auth.service';
 import type { User, Organization, Theme } from '../types';
@@ -14,7 +14,7 @@ export function useGoogleAuth({ theme, onSuccess }: UseGoogleAuthOptions) {
   const [error, setError] = useState<string | null>(null);
   const buttonRef = useRef<HTMLDivElement | null>(null);
 
-  const submitIdToken = async (idToken: string) => {
+  const submitIdToken = useCallback(async (idToken: string) => {
     setLoading(true);
     setError(null);
     try {
@@ -26,7 +26,7 @@ export function useGoogleAuth({ theme, onSuccess }: UseGoogleAuthOptions) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [onSuccess]);
 
   useEffect(() => {
     let attempts = 0;
@@ -81,7 +81,7 @@ export function useGoogleAuth({ theme, onSuccess }: UseGoogleAuthOptions) {
     return () => {
       if (intervalId) clearInterval(intervalId);
     };
-  }, [theme]);
+  }, [theme, submitIdToken]);
 
   interface GooglePromptMomentNotification {
     isNotDisplayed: () => boolean;

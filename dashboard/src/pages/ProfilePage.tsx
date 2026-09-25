@@ -1,8 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardTitle, CardDescription } from '@/components/ui/card';
-import { Input, Label } from '@/components/ui/input';
-import { IconTrash2, IconShield } from '@/components/ui/icons';
+import { Input } from '@/components/ui/input';
+import { Select } from '@/components/ui/select';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { IconTrash2, IconShield, IconBuilding } from '@/components/ui/icons';
 import type { Organization } from '@/types';
 
 export interface ProfilePageProps {
@@ -23,6 +25,9 @@ export function ProfilePage({
   onSaveProfile,
   onDeleteOrg,
 }: ProfilePageProps) {
+  const [category, setCategory] = useState(activeOrg?.category || 'RETAIL');
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
   return (
     <div className="space-y-6 animate-fade-in max-w-4xl mx-auto pb-12">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -42,85 +47,84 @@ export function ProfilePage({
         </div>
       </div>
 
-      <Card className="p-6 space-y-5">
-        <form onSubmit={onSaveProfile} className="space-y-4 text-xs">
+      <Card className="p-6">
+        <form onSubmit={onSaveProfile} className="space-y-5 text-xs">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label>Trading Store Name</Label>
-              <Input
-                type="text"
-                name="name"
-                defaultValue={activeOrg?.name || ''}
-                required
-                disabled={!canManageOrg || isSaving}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Legal Registered Entity</Label>
-              <Input
-                type="text"
-                name="legalBusinessName"
-                defaultValue={activeOrg?.legalBusinessName || ''}
-                disabled={!canManageOrg || isSaving}
-              />
-            </div>
+            <Input
+              label="Store / Business Display Name"
+              type="text"
+              name="name"
+              defaultValue={activeOrg?.name || ''}
+              required
+              disabled={!canManageOrg || isSaving}
+              leftIcon={<IconBuilding className="w-3.5 h-3.5 text-muted-foreground" />}
+            />
+            <Input
+              label="Legal Registered Entity"
+              type="text"
+              name="legalBusinessName"
+              defaultValue={activeOrg?.legalBusinessName || ''}
+              disabled={!canManageOrg || isSaving}
+            />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="space-y-1.5">
-              <Label>Category</Label>
-              <select
-                name="category"
-                defaultValue={activeOrg?.category || 'RETAIL'}
-                disabled={!canManageOrg || isSaving}
-                className="w-full h-9 bg-background border border-input rounded-xl px-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-60">
-                <option value="RETAIL" className="bg-card text-card-foreground">Retail / Kirana</option>
-                <option value="FOOD" className="bg-card text-card-foreground">Restaurant / Food</option>
-                <option value="SERVICES" className="bg-card text-card-foreground">Services</option>
-                <option value="TECH" className="bg-card text-card-foreground">Tech / SaaS</option>
-                <option value="HEALTHCARE" className="bg-card text-card-foreground">Healthcare</option>
-              </select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>GSTIN (Optional)</Label>
-              <Input
-                type="text"
-                name="gstin"
-                defaultValue={activeOrg?.gstin || ''}
-                placeholder="22AAAAA0000A1Z5"
-                disabled={!canManageOrg || isSaving}
-                className="uppercase font-mono"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>PAN (Optional)</Label>
-              <Input
-                type="text"
-                name="panNumber"
-                defaultValue={activeOrg?.panNumber || ''}
-                placeholder="ABCDE1234F"
-                disabled={!canManageOrg || isSaving}
-                className="uppercase font-mono"
-              />
-            </div>
+            <Select
+              label="Business Category"
+              name="category"
+              value={category}
+              onChange={setCategory}
+              disabled={!canManageOrg || isSaving}
+              options={[
+                { value: 'RETAIL', label: 'Retail / Kirana', description: 'General stores and supermarkets' },
+                { value: 'FOOD', label: 'Restaurant / Food', description: 'Cafes, dining, and bakeries' },
+                { value: 'SERVICES', label: 'Services', description: 'Consulting, salon, repair' },
+                { value: 'TECH', label: 'Tech / SaaS', description: 'Software and digital services' },
+                { value: 'HEALTHCARE', label: 'Healthcare', description: 'Clinics, pharmacies, and labs' },
+              ]}
+            />
+
+            <Input
+              label="GSTIN (Optional)"
+              type="text"
+              name="gstin"
+              defaultValue={activeOrg?.gstin || ''}
+              placeholder="22AAAAA0000A1Z5"
+              disabled={!canManageOrg || isSaving}
+              className="uppercase font-mono"
+            />
+
+            <Input
+              label="PAN (Optional)"
+              type="text"
+              name="panNumber"
+              defaultValue={activeOrg?.panNumber || ''}
+              placeholder="ABCDE1234F"
+              disabled={!canManageOrg || isSaving}
+              className="uppercase font-mono"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Input
+              label="Physical Business Address"
+              type="text"
+              name="address"
+              defaultValue={activeOrg?.address || ''}
+              placeholder="Shop #12, Market Complex, MG Road"
+              disabled={!canManageOrg || isSaving}
+            />
           </div>
 
           {canManageOrg && (
-            <div className="pt-4 border-t border-border flex justify-end">
+            <div className="pt-3 flex justify-end border-t border-border/50">
               <Button
-                type="submit"
                 variant="brand"
-                size="lg"
-                disabled={isSaving}
-                className="rounded-xl font-bold gap-2 min-w-[140px]">
-                {isSaving ? (
-                  <>
-                    <div className="w-3.5 h-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" />
-                    <span>Saving...</span>
-                  </>
-                ) : (
-                  'Save Profile'
-                )}
+                type="submit"
+                loading={isSaving}
+                loadingText="Saving Profile..."
+                className="min-w-[130px]">
+                Save Profile
               </Button>
             </div>
           )}
@@ -130,7 +134,7 @@ export function ProfilePage({
       {/* Role-Gated Danger Zone: Only OWNER can delete company / organization */}
       {isOwner ? (
         <Card className="p-6 border-red-500/20 bg-red-500/5 space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <CardTitle className="text-sm font-bold text-red-600 dark:text-red-400 flex items-center gap-1.5">
                 <IconTrash2 className="w-4 h-4" />
@@ -143,21 +147,38 @@ export function ProfilePage({
             <Button
               variant="destructive"
               size="sm"
-              onClick={onDeleteOrg}
-              className="rounded-xl font-semibold gap-1.5">
-              <IconTrash2 className="w-3.5 h-3.5" />
-              <span>Delete Business</span>
+              onClick={() => setShowDeleteConfirm(true)}
+              leftIcon={<IconTrash2 className="w-3.5 h-3.5" />}
+              className="shrink-0 font-semibold">
+              Delete Business
             </Button>
           </div>
         </Card>
       ) : (
-        <div className="p-4 rounded-xl border border-border/60 bg-muted/20 text-muted-foreground flex items-center gap-2.5 text-xs">
+        <div className="p-4 rounded-2xl border border-border/60 bg-muted/20 text-muted-foreground flex items-center gap-2.5 text-xs">
           <IconShield className="w-4 h-4 text-brand-500 flex-shrink-0" />
           <span>
             Critical business controls like deleting this organization or transferring ownership are restricted to the <strong>OWNER</strong>.
           </span>
         </div>
       )}
+
+      {/* Confirm Delete Dialog */}
+      <ConfirmDialog
+        open={showDeleteConfirm}
+        onOpenChange={setShowDeleteConfirm}
+        title="Delete Organization"
+        description={
+          <span>
+            Are you sure you want to delete <strong>{activeOrg?.name}</strong>? This action cannot be undone and all associated ledger records and settlement accounts will be permanently erased.
+          </span>
+        }
+        confirmText="Delete Permanently"
+        variant="danger"
+        onConfirm={async () => {
+          if (onDeleteOrg) await onDeleteOrg();
+        }}
+      />
     </div>
   );
 }

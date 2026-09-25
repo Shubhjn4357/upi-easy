@@ -1,5 +1,5 @@
 // Main Application: Clean, Secure, Modular React Router Architecture
-import React, { useState, useMemo, Suspense } from 'react';
+import React, { useState, Suspense } from 'react';
 import { Router, Routes, Route, ProtectedRoute, useNavigate, useLocation } from './lib/router';
 import { createApiClient } from './lib/api';
 
@@ -9,6 +9,8 @@ import Sidebar from './components/Sidebar';
 import BottomNav from './components/BottomNav';
 import BottomSheet from './components/BottomSheet';
 import Toast from './components/Toast';
+import ConfirmDialog from './components/ui/confirm-dialog';
+import useConfirmDialog from './hooks/useConfirmDialog';
 import AppModals from './components/modals/AppModals';
 import PendingInviteModal, { type PendingInvite } from './components/modals/PendingInviteModal';
 
@@ -38,6 +40,7 @@ import type {
   TableColumnDef,
   BottomSheetConfig,
   BankAccount,
+  Organization,
 } from './types';
 
 function AppContent() {
@@ -47,9 +50,10 @@ function AppContent() {
   // Active route tab derived cleanly from router pathname
   const activeTab = location.pathname.replace(/^\//, '') || 'overview';
 
-  // Global Theme & Toast Hooks
+  // Global Theme, Toast & Custom Confirm Dialog Hooks
   const { theme, toggleTheme } = useTheme();
   const { toast, showToast, hideToast } = useToast();
+  const { confirm, dialogState, handleConfirm, handleCancel } = useConfirmDialog();
 
   // Real-Time Telemetry Latency State
   const [pingMs, setPingMs] = useState<number | null>(null);
@@ -96,17 +100,21 @@ function AppContent() {
   const orgRef = React.useRef<{ activeOrgId: string | null }>({ activeOrgId: null });
 
   // Secure API Client with auto 401 retry, latency tracking & tenant header injection
-  const apiFetch = useMemo(() => {
-    return createApiClient(
-      () => authSessionRef.current?.token || null,
-      () => {
-        authSessionRef.current?.handleUnauthorized();
-        showToast('Session expired. Please sign in again.', 'error');
-      },
-      setPingMs,
-      () => orgRef.current.activeOrgId
-    );
-  }, [showToast]);
+  const apiFetch = React.useCallback(
+    <T = unknown>(endpoint: string, options?: RequestInit): Promise<T> => {
+      const client = createApiClient(
+        () => authSessionRef.current?.token || null,
+        () => {
+          authSessionRef.current?.handleUnauthorized();
+          showToast('Session expired. Please sign in again.', 'error');
+        },
+        setPingMs,
+        () => orgRef.current.activeOrgId
+      );
+      return client<T>(endpoint, options);
+    },
+    [showToast]
+  );
 
   // Multi-Tenant Organizations
   const {
@@ -114,7 +122,6 @@ function AppContent() {
     setOrganizations,
     activeOrg,
     setActiveOrg,
-    activeOrgRef,
     isDeletingOrg,
     loadOrganizations,
     handleSelectOrg,
@@ -244,7 +251,13 @@ function AppContent() {
           variant: 'destructive',
           onClick: async () => {
             if (!activeOrg) return;
-            if (!confirm(`Permanently delete transaction ${txn.referenceNumber || txn.id}?`)) return;
+            const ok = await confirm({
+              title: 'Delete Transaction',
+              description: `Permanently delete transaction ${txn.referenceNumber || txn.id}? This will remove it from the store ledger.`,
+              variant: 'danger',
+              confirmText: 'Delete Record',
+            });
+            if (!ok) return;
             try {
               await apiFetch(`/api/v1/organizations/${activeOrg.id}/transactions/${txn.id}`, {
                 method: 'DELETE',
@@ -268,7 +281,7 @@ function AppContent() {
       return;
     }
     setBottomSheetConfig({
-      title: upi.payeeName || upi.accountHolderName,
+      title: upi.payeeName || upi.accountHolderName || 'UPI Account',
       subtitle: upi.vpa || upi.upiId,
       actions: [
         {
@@ -301,7 +314,13 @@ function AppContent() {
           variant: 'destructive',
           onClick: async () => {
             if (!activeOrg) return;
-            if (!confirm(`Delete UPI VPA ${upi.vpa || upi.upiId}?`)) return;
+            const ok = await confirm({
+              title: 'Delete UPI Account',
+              description: `Delete UPI VPA ${upi.vpa || upi.upiId}? Customers will no longer be able to make payments to this VPA.`,
+              variant: 'danger',
+              confirmText: 'Delete VPA',
+            });
+            if (!ok) return;
             try {
               await apiFetch(`/api/v1/organizations/${activeOrg.id}/upi/${upi.id}`, {
                 method: 'DELETE',
@@ -348,7 +367,13 @@ function AppContent() {
           variant: 'destructive',
           onClick: async () => {
             if (!activeOrg) return;
-            if (!confirm(`Delete bank account ${account.bankName} (${account.accountNumberMasked || '••••'})?`)) return;
+            const ok = await confirm({
+              title: 'Delete Bank Account',
+              description: `Delete bank account ${account.bankName} (${account.accountNumberMasked || '••••'})?`,
+              variant: 'danger',
+              confirmText: 'Delete Account',
+            });
+            if (!ok) return;
             try {
               await apiFetch(`/api/v1/organizations/${activeOrg.id}/accounts/${account.id}`, {
                 method: 'DELETE',
@@ -365,11 +390,17 @@ function AppContent() {
     });
   };
 
-  const handleSelectStaffAction = (_action: string, member: StaffMember | StaffInvite) => {
+  const handleSelectStaffAction = async (_action: string, member: StaffMember | StaffInvite) => {
     if (_action === 'revoke_invite') {
       const invite = member as StaffInvite;
       const target = invite.invitedEmail || invite.email || 'this recipient';
-      if (!confirm(`Cancel and revoke invitation for ${target}?`)) return;
+      const ok = await confirm({
+        title: 'Revoke Invitation',
+        description: `Cancel and revoke invitation for ${target}?`,
+        variant: 'warning',
+        confirmText: 'Revoke',
+      });
+      if (!ok) return;
       if (!activeOrg) return;
       apiFetch(`/api/v1/organizations/${activeOrg.id}/invites/${invite.id}`, { method: 'DELETE' })
         .then(() => {
@@ -416,15 +447,15 @@ function AppContent() {
           variant: 'destructive',
           onClick: async () => {
             if (!activeOrg) return;
-            if (
-              !confirm(
-                `Remove ${
-                  staffMember.fullName || staffMember.name || staffMember.mobileNumber
-                } from organization?`
-              )
-            ) {
-              return;
-            }
+            const ok = await confirm({
+              title: 'Remove Staff Member',
+              description: `Remove ${
+                staffMember.fullName || staffMember.name || staffMember.mobileNumber
+              } from organization?`,
+              variant: 'danger',
+              confirmText: 'Remove Member',
+            });
+            if (!ok) return;
             try {
               await apiFetch(`/api/v1/organizations/${activeOrg.id}/staff/${staffMember.id}`, {
                 method: 'DELETE',
@@ -467,7 +498,13 @@ function AppContent() {
           label: 'Delete Record Permanently',
           variant: 'destructive',
           onClick: async () => {
-            if (!confirm(`Delete record with ${pkCol}=${pkVal} from ${table}?`)) return;
+            const ok = await confirm({
+              title: 'Delete Database Record',
+              description: `Permanently delete record with ${pkCol} = "${pkVal}" from table "${table}"?`,
+              variant: 'danger',
+              confirmText: 'Delete Record',
+            });
+            if (!ok) return;
             try {
               await apiFetch(`/api/v1/admin/tables/${table}/${pkVal}`, { method: 'DELETE' });
               showToast('Record deleted successfully!');
@@ -612,7 +649,13 @@ function AppContent() {
                     onSelectTxnAction={handleSelectTxnAction}
                     onBulkDelete={async (ids) => {
                       if (!activeOrg) return;
-                      if (!confirm(`Delete ${ids.length} selected transaction(s)?`)) return;
+                      const ok = await confirm({
+                        title: 'Bulk Delete Transactions',
+                        description: `Delete ${ids.length} selected transaction(s)? This will update the immutable store ledger.`,
+                        variant: 'danger',
+                        confirmText: `Delete (${ids.length})`,
+                      });
+                      if (!ok) return;
                       try {
                         await apiFetch(`/api/v1/organizations/${activeOrg.id}/transactions/bulk-delete`, {
                           method: 'POST',
@@ -641,7 +684,13 @@ function AppContent() {
                     onSelectUpiAction={handleSelectUpiAction}
                     onBulkDelete={async (ids) => {
                       if (!activeOrg) return;
-                      if (!confirm(`Delete ${ids.length} selected UPI account(s)?`)) return;
+                      const ok = await confirm({
+                        title: 'Bulk Delete UPI Accounts',
+                        description: `Delete ${ids.length} selected UPI account(s)?`,
+                        variant: 'danger',
+                        confirmText: `Delete (${ids.length})`,
+                      });
+                      if (!ok) return;
                       try {
                         await apiFetch(`/api/v1/organizations/${activeOrg.id}/upi/bulk-delete`, {
                           method: 'POST',
@@ -670,7 +719,13 @@ function AppContent() {
                     onSelectStaffAction={handleSelectStaffAction}
                     onBulkDeleteStaff={async (ids) => {
                       if (!activeOrg) return;
-                      if (!confirm(`Remove ${ids.length} selected staff member(s)?`)) return;
+                      const ok = await confirm({
+                        title: 'Remove Staff Members',
+                        description: `Remove ${ids.length} selected staff member(s)?`,
+                        variant: 'danger',
+                        confirmText: `Remove (${ids.length})`,
+                      });
+                      if (!ok) return;
                       try {
                         await apiFetch(`/api/v1/organizations/${activeOrg.id}/staff/bulk-delete`, {
                           method: 'POST',
@@ -685,7 +740,13 @@ function AppContent() {
                     }}
                     onBulkDeleteInvites={async (ids) => {
                       if (!activeOrg) return;
-                      if (!confirm(`Revoke ${ids.length} selected invitation(s)?`)) return;
+                      const ok = await confirm({
+                        title: 'Revoke Invitations',
+                        description: `Revoke ${ids.length} selected invitation(s)?`,
+                        variant: 'warning',
+                        confirmText: `Revoke (${ids.length})`,
+                      });
+                      if (!ok) return;
                       try {
                         await apiFetch(`/api/v1/organizations/${activeOrg.id}/invites/bulk-delete`, {
                           method: 'POST',
@@ -713,7 +774,13 @@ function AppContent() {
                     onSelectAccountAction={handleSelectAccountAction}
                     onBulkDelete={async (ids) => {
                       if (!activeOrg) return;
-                      if (!confirm(`Delete ${ids.length} selected bank account(s)?`)) return;
+                      const ok = await confirm({
+                        title: 'Delete Bank Accounts',
+                        description: `Delete ${ids.length} selected bank account(s)?`,
+                        variant: 'danger',
+                        confirmText: `Delete (${ids.length})`,
+                      });
+                      if (!ok) return;
                       try {
                         await apiFetch(`/api/v1/organizations/${activeOrg.id}/accounts/bulk-delete`, {
                           method: 'POST',
@@ -922,6 +989,21 @@ function AppContent() {
 
       {/* Global Notification Toast */}
       <Toast toast={toast} onClose={hideToast} />
+
+      {/* Global Custom Confirm / Alert Dialog */}
+      {dialogState && (
+        <ConfirmDialog
+          open={dialogState.open}
+          onOpenChange={(open) => !open && handleCancel()}
+          title={dialogState.title}
+          description={dialogState.description}
+          variant={dialogState.variant}
+          confirmText={dialogState.confirmText}
+          cancelText={dialogState.cancelText}
+          onConfirm={handleConfirm}
+          onCancel={handleCancel}
+        />
+      )}
 
       {/* Pending Organization Invitation Popup Modal */}
       <PendingInviteModal

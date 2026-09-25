@@ -1,8 +1,8 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardTitle, CardDescription } from '@/components/ui/card';
-import { IconHeartPulse, IconActivity, IconRefreshCw } from '@/components/ui/icons';
-import type { HealthData, HealthPageProps } from '@/types';
+import { IconRefreshCw } from '@/components/ui/icons';
+import type { HealthPageProps } from '@/types';
 
 // System Telemetry & Health Page using shadcn/ui with strict TypeScript types
 export function HealthPage({ healthData, pingMs, onRefresh, onResetSeed }: HealthPageProps) {
