@@ -8,15 +8,52 @@ class PhonePeNotificationParser : PaymentNotificationParser {
     companion object {
         const val PACKAGE_NAME = "com.phonepe.app"
 
-        private val PROMOTIONAL_KEYWORDS = listOf(
-            "cashback", "scratch card", "reward", "rewards", "offer", "offers",
-            "discount", "discounts", "sale", "win up to", "win upto", "won up to",
-            "get up to", "get upto", "flat rs", "flat ₹", "flat inr", "save up to",
-            "save upto", "save rs", "save ₹", "voucher", "coupon", "coupons",
-            "deal", "deals", "loan", "pre-approved", "preapproved", "insurance",
-            "mutual fund", "sip", "gold", "spin", "recharge offer", "bill offer",
-            "claim your", "claim now", "refer", "referral", "invite friends",
-            "bumper", "jackpot", "cashback of", "festive", "explore", "apply now"
+        private val NON_PAYMENT_KEYWORDS = listOf(
+            // Offers & Promotions
+            "offer", "offers", "deal", "deals", "discount", "discounts", "sale", "special",
+            "cashback", "scratch card", "scratchcard", "reward", "rewards", "coupon", "coupons",
+            "voucher", "vouchers", "voucher code", "promo", "promotional", "exclusive",
+            "win up to", "win upto", "won up to", "won upto", "get up to", "get upto",
+            "flat rs", "flat ₹", "flat inr", "save up to", "save upto", "save rs", "save ₹",
+            "bumper", "jackpot", "festive", "explore", "claim your", "claim now",
+            "refer", "referral", "invite friends", "invite your", "spin & win", "spin and win",
+            "spin to win", "spin the wheel", "contest", "play now", "earn up to", "earn upto",
+            "points", "point", "coins", "coin", "supercoin", "supercoins", "token", "tokens",
+            "gift card", "gift voucher", "congratulations",
+
+            // Financial Products & Upselling
+            "loan", "pre-approved", "preapproved", "personal loan", "business loan",
+            "insurance", "policy", "premium", "mutual fund", "mutual funds", "sip", "gold",
+            "digital gold", "credit card", "credit score", "cibil score", "cibil",
+
+            // Bills, Recharges & Reminders (Not completed payments!)
+            "recharge offer", "bill offer", "recharge now", "bill due", "bill generated",
+            "due on", "due date", "upcoming bill", "bill payment due", "payment due",
+            "electricity bill", "water bill", "gas bill", "broadband", "dth",
+            "payment request", "requested money", "requested rs", "requested ₹",
+            "has requested", "requested you", "remind", "reminder", "pay request",
+            "autopay scheduled", "autopay due", "mandate created", "mandate approved",
+            "e-mandate", "standing instruction",
+
+            // Commerce & Delivery Status
+            "order placed", "order confirmed", "order delivered", "swiggy", "zomato",
+            "flipkart", "amazon", "myntra", "blinkit", "zepto", "instamart", "uber", "ola",
+
+            // System, Security & General Notifications
+            "kyc", "update kyc", "kyc pending", "rate us", "feedback", "survey",
+            "security alert", "login alert", "otp", "verification code", "update available",
+            "new feature", "don't miss", "hurry up", "limited time", "limited period",
+            "failed", "declined", "rejected", "reversed", "refunded", "cancelled", "canceled"
+        )
+
+        private val CREDIT_PATTERN = Pattern.compile(
+            "(?:(?:money\\s+)?received\\s*(?:of\\s*)?(?:Rs\\.?|INR|₹)|(?:Rs\\.?|INR|₹)\\s*[0-9,.]+\\s*(?:credited|received)|paid\\s+(?:to\\s+you|you)\\s*(?:Rs\\.?|INR|₹))",
+            Pattern.CASE_INSENSITIVE
+        )
+
+        private val DEBIT_PATTERN = Pattern.compile(
+            "(?:paid\\s+(?:Rs\\.?|INR|₹)|(?:Rs\\.?|INR|₹)\\s*[0-9,.]+\\s*(?:debited|paid)|payment\\s+of\\s*(?:Rs\\.?|INR|₹)\\s*[0-9,.]+\\s*(?:to|successful))",
+            Pattern.CASE_INSENSITIVE
         )
 
         private val AMOUNT_PATTERN = Pattern.compile(
@@ -59,30 +96,22 @@ class PhonePeNotificationParser : PaymentNotificationParser {
 
         if (combined.isBlank()) return null
 
-        // 1. Strict filter: Discard any promotional/marketing/offer notifications immediately
-        val isPromotional = PROMOTIONAL_KEYWORDS.any { keyword ->
+        // 1. Strict filter: Discard any promotional/marketing/offer/bill notifications immediately
+        val isNonPayment = NON_PAYMENT_KEYWORDS.any { keyword ->
             combined.contains(keyword, ignoreCase = true)
         }
-        if (isPromotional) {
+        if (isNonPayment) {
             return null
         }
 
-        // 2. Strict positive payment direction matching
-        val isCreditKeyword = combined.contains("received", ignoreCase = true) ||
-                combined.contains("credited", ignoreCase = true) ||
-                combined.contains("paid to you", ignoreCase = true) ||
-                combined.contains("money received", ignoreCase = true)
-
-        val isDebitKeyword = combined.contains("paid to", ignoreCase = true) ||
-                combined.contains("debited", ignoreCase = true) ||
-                combined.contains("payment sent", ignoreCase = true) ||
-                combined.contains("you paid", ignoreCase = true) ||
-                combined.contains("payment to", ignoreCase = true)
+        // 2. Strict positive payment direction matching using contextual regex patterns
+        val isCredit = CREDIT_PATTERN.matcher(combined).find()
+        val isDebit = DEBIT_PATTERN.matcher(combined).find()
 
         val direction = when {
-            isCreditKeyword && !isDebitKeyword -> PaymentDirection.RECEIVED
-            isDebitKeyword && !isCreditKeyword -> PaymentDirection.SENT
-            else -> return null // Reject unknown or ambiguous notifications
+            isCredit && !isDebit -> PaymentDirection.RECEIVED
+            isDebit && !isCredit -> PaymentDirection.SENT
+            else -> return null // Strictly reject unknown, ambiguous, or non-matching notifications
         }
 
         // Extract amount using BigDecimal

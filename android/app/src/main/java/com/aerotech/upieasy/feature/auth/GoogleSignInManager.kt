@@ -35,13 +35,10 @@ class GoogleSignInManager(private val context: Context) {
     }
 
     /**
-     * Generates a cryptographically secure SHA-256 hashed nonce string.
+     * Generates a cryptographically secure random nonce string.
      */
-    fun generateSecureRandomNonce(): Pair<String, String> {
-        val rawNonce = UUID.randomUUID().toString()
-        val md = MessageDigest.getInstance("SHA-256")
-        val hashedNonce = md.digest(rawNonce.toByteArray()).fold("") { str, it -> str + "%02x".format(it) }
-        return Pair(rawNonce, hashedNonce)
+    fun generateSecureRandomNonce(): String {
+        return UUID.randomUUID().toString().replace("-", "")
     }
 
     /**
@@ -54,7 +51,7 @@ class GoogleSignInManager(private val context: Context) {
         val targetActivity = activityContext.findActivity()
             ?: return Result.failure(IllegalStateException("Unable to resolve foreground Activity for Google Sign-In"))
 
-        val (rawNonce, hashedNonce) = generateSecureRandomNonce()
+        val nonce = generateSecureRandomNonce()
         val cleanClientId = serverClientId.trim()
         val credentialManager = CredentialManager.create(targetActivity)
 
@@ -63,7 +60,7 @@ class GoogleSignInManager(private val context: Context) {
                 .setServerClientId(cleanClientId)
                 .setFilterByAuthorizedAccounts(false)
                 .setAutoSelectEnabled(false)
-                .setNonce(hashedNonce)
+                .setNonce(nonce)
                 .build()
 
             val request = GetCredentialRequest.Builder()
@@ -74,7 +71,7 @@ class GoogleSignInManager(private val context: Context) {
                 context = targetActivity,
                 request = request
             )
-            extractIdToken(result, rawNonce)
+            extractIdToken(result, nonce)
         } catch (e: GetCredentialCancellationException) {
             Log.w("GoogleSignInManager", "Google Sign-In cancelled or rejected by Google Play Services: ${e.message}", e)
             Result.failure(e)

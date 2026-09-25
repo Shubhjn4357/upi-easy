@@ -71,7 +71,8 @@ fun GoogleSignInScreen(
                                 nonce = googleAuth.nonce,
                                 deviceId = "android_${android.os.Build.MODEL}",
                                 deviceModel = android.os.Build.MODEL,
-                                osVersion = "Android ${android.os.Build.VERSION.RELEASE}"
+                                osVersion = "Android ${android.os.Build.VERSION.RELEASE}",
+                                avatarUrl = googleAuth.profilePictureUri
                             )
                         )
 

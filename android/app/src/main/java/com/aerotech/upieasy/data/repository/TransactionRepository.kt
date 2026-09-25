@@ -59,6 +59,27 @@ class TransactionRepository(
         }
     }
 
+    suspend fun deleteTransaction(orgId: String, txnId: String): Result<Unit> {
+        return try {
+            // 1. Delete locally from SQLite Room database immediately (instant UI feedback)
+            transactionDao.deleteTransaction(txnId)
+
+            // 2. Call remote API to delete from backend ledger
+            if (orgId.isNotBlank()) {
+                val response = apiService.deleteTransaction(orgId = orgId, id = txnId)
+                if (response.isSuccessful && response.body()?.success == true) {
+                    Result.success(Unit)
+                } else {
+                    Result.failure(Exception(response.errorBody()?.string() ?: "Failed to delete transaction on server"))
+                }
+            } else {
+                Result.success(Unit)
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun recordPayment(
         orgId: String,
         amount: Double,

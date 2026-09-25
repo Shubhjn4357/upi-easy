@@ -93,9 +93,24 @@ export async function verifyGoogleIdToken(
     }
 
     // Verify cryptographic nonce if specified by caller
-    if (options.nonce && payload.nonce && payload.nonce !== options.nonce) {
-      logger.warn({ expected: options.nonce, received: payload.nonce }, "Google ID token nonce mismatch");
-      throw new UnauthorizedError("Google ID token nonce verification failed");
+    if (options.nonce && payload.nonce) {
+      const matchDirect = payload.nonce === options.nonce;
+      let matchHash = false;
+      try {
+        if (typeof crypto !== "undefined" && crypto.subtle) {
+          const enc = new TextEncoder();
+          const hashBuf = await crypto.subtle.digest("SHA-256", enc.encode(options.nonce));
+          const hex = Array.from(new Uint8Array(hashBuf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+          matchHash = payload.nonce === hex;
+        }
+      } catch {
+        // Ignore hash computation failure
+      }
+
+      if (!matchDirect && !matchHash) {
+        logger.warn({ expected: options.nonce, received: payload.nonce }, "Google ID token nonce mismatch");
+        throw new UnauthorizedError("Google ID token nonce verification failed");
+      }
     }
 
     return {

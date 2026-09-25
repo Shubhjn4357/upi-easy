@@ -1040,6 +1040,26 @@ fun TransactionsScreen(
                     Text("Copy Receipt Details", fontWeight = FontWeight.Bold)
                 }
 
+                Spacer(modifier = Modifier.height(6.dp))
+
+                OutlinedButton(
+                    onClick = {
+                        val toDelete = txn
+                        selectedTransaction = null
+                        txnToDelete = toDelete
+                    },
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error
+                    ),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f))
+                ) {
+                    Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.error)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Delete from Ledger", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
+                }
+
                 Spacer(modifier = Modifier.height(12.dp))
             }
         }
@@ -1056,9 +1076,15 @@ fun TransactionsScreen(
             isDestructive = true,
             onConfirm = {
                 val idToDelete = txn.id
+                val orgId = currentOrgId ?: txn.organizationId ?: ""
                 txnToDelete = null
                 scope.launch {
-                    database.transactionDao().deleteTransaction(idToDelete)
+                    val result = repository.deleteTransaction(orgId, idToDelete)
+                    if (result.isSuccess) {
+                        Toast.makeText(context, "Transaction deleted from ledger", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(context, "Deleted locally: ${result.exceptionOrNull()?.message ?: ""}", Toast.LENGTH_SHORT).show()
+                    }
                 }
             },
             onDismiss = {

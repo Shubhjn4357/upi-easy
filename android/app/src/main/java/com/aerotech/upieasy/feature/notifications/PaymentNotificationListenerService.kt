@@ -201,7 +201,7 @@ class PaymentNotificationListenerService : NotificationListenerService() {
                         direction = directionStr,
                         amount = amountDouble,
                         currency = "INR",
-                        status = "UNKNOWN", // UNKNOWN / PENDING per Section 2 & 25
+                        status = "SUCCESS", // Detected genuine payment notification
                         paymentMethod = "UPI",
                         referenceNumber = event.reference,
                         payerName = payerName,

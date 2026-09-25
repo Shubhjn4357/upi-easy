@@ -71,6 +71,24 @@ authRouter.post("/google", async (c) => {
     .where(eq(schema.users.googleId, googleSub))
     .get();
 
+  if (user) {
+    // Proactively update avatarUrl and name from Google profile if changed or newly provided
+    const newAvatar = displayAvatar || user.avatarUrl;
+    const newName = user.fullName || displayName;
+    if ((displayAvatar && user.avatarUrl !== displayAvatar) || (!user.fullName && displayName)) {
+      await db.update(schema.users)
+        .set({
+          fullName: newName,
+          avatarUrl: newAvatar,
+          updatedAt: now,
+        })
+        .where(eq(schema.users.id, user.id))
+        .run();
+      user.avatarUrl = newAvatar;
+      user.fullName = newName;
+    }
+  }
+
   // Second, look up by verified email if not already linked to a Google ID
   if (!user) {
     user = await db
@@ -80,16 +98,21 @@ authRouter.post("/google", async (c) => {
       .get();
 
     if (user) {
-      // Link verified Google identity to existing user
+      // Link verified Google identity to existing user and save avatar
+      const newAvatar = displayAvatar || user.avatarUrl;
+      const newName = user.fullName || displayName;
       await db.update(schema.users)
         .set({
           googleId: googleSub,
-          fullName: user.fullName || displayName,
-          avatarUrl: user.avatarUrl || displayAvatar,
+          fullName: newName,
+          avatarUrl: newAvatar,
           updatedAt: now,
         })
         .where(eq(schema.users.id, user.id))
         .run();
+      user.googleId = googleSub;
+      user.avatarUrl = newAvatar;
+      user.fullName = newName;
     }
   }
 
