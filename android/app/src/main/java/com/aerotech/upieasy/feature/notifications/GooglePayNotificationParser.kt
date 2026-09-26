@@ -18,7 +18,7 @@ class GooglePayNotificationParser : PaymentNotificationParser {
             "bumper", "jackpot", "festive", "explore", "claim your", "claim now",
             "refer", "referral", "invite friends", "invite your", "spin & win", "spin and win",
             "spin to win", "spin the wheel", "contest", "play now", "earn up to", "earn upto",
-            "points", "point", "coins", "coin", "supercoin", "supercoins", "token", "tokens",
+            "reward points", "reward point", "loyalty points", "coins", "coin", "supercoin", "supercoins", "token", "tokens",
             "gift card", "gift voucher", "congratulations",
 
             // Financial Products & Upselling

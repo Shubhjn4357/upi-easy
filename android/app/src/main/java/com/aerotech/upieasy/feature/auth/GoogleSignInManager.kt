@@ -12,9 +12,9 @@ import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.credentials.exceptions.GetCredentialException
 import androidx.credentials.exceptions.NoCredentialException
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
+import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.android.libraries.identity.googleid.GoogleIdTokenParsingException
-import java.security.MessageDigest
 import java.util.UUID
 
 data class GoogleAuthResult(
@@ -43,19 +43,24 @@ class GoogleSignInManager(private val context: Context) {
 
     /**
      * Executes Credential Manager Sign in with Google flow.
-     * Uses GetGoogleIdOption with filterByAuthorizedAccounts = false and autoSelectEnabled = false.
-     * This directly opens the native Google bottom drawer (bottom sheet) allowing the user
-     * to select their Gmail account.
+     * 1. Attempts GetGoogleIdOption (filterByAuthorizedAccounts = false) for seamless 1-tap sheet.
+     * 2. If NoCredentialException or custom credential error occurs (e.g. account not previously authorized),
+     *    falls back to GetSignInWithGoogleOption explicit account picker.
      */
     suspend fun signIn(activityContext: Context, serverClientId: String): Result<GoogleAuthResult> {
         val targetActivity = activityContext.findActivity()
             ?: return Result.failure(IllegalStateException("Unable to resolve foreground Activity for Google Sign-In"))
 
+        val cleanClientId = serverClientId.trim().replace("\"", "").replace("'", "")
+        if (cleanClientId.isBlank()) {
+            return Result.failure(IllegalStateException("Google Web Client ID is not configured. Please ensure GOOGLE_WEB_CLIENT_ID is set in your build or environment."))
+        }
+
         val nonce = generateSecureRandomNonce()
-        val cleanClientId = serverClientId.trim()
         val credentialManager = CredentialManager.create(targetActivity)
 
-        return try {
+        // Attempt 1: GetGoogleIdOption
+        try {
             val googleIdOption = GetGoogleIdOption.Builder()
                 .setServerClientId(cleanClientId)
                 .setFilterByAuthorizedAccounts(false)
@@ -71,9 +76,31 @@ class GoogleSignInManager(private val context: Context) {
                 context = targetActivity,
                 request = request
             )
-            extractIdToken(result, nonce)
+            return extractIdToken(result, nonce)
         } catch (e: GetCredentialCancellationException) {
-            Log.w("GoogleSignInManager", "Google Sign-In cancelled or rejected by Google Play Services: ${e.message}", e)
+            Log.i("GoogleSignInManager", "Google Sign-In cancelled by user")
+            return Result.failure(e)
+        } catch (e: Exception) {
+            Log.w("GoogleSignInManager", "GetGoogleIdOption failed (${e.javaClass.simpleName}): ${e.message}. Attempting GetSignInWithGoogleOption fallback...", e)
+        }
+
+        // Attempt 2: Fallback to GetSignInWithGoogleOption (standard button flow)
+        return try {
+            val buttonOption = GetSignInWithGoogleOption.Builder(cleanClientId)
+                .setNonce(nonce)
+                .build()
+
+            val fallbackRequest = GetCredentialRequest.Builder()
+                .addCredentialOption(buttonOption)
+                .build()
+
+            val fallbackResult = credentialManager.getCredential(
+                context = targetActivity,
+                request = fallbackRequest
+            )
+            extractIdToken(fallbackResult, nonce)
+        } catch (e: GetCredentialCancellationException) {
+            Log.i("GoogleSignInManager", "Google Sign-In cancelled by user during fallback")
             Result.failure(e)
         } catch (e: NoCredentialException) {
             Log.w("GoogleSignInManager", "No Google account found on device", e)

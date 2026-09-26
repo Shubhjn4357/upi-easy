@@ -94,14 +94,30 @@ export async function verifyGoogleIdToken(
 
     // Verify cryptographic nonce if specified by caller
     if (options.nonce && payload.nonce) {
-      const matchDirect = payload.nonce === options.nonce;
+      const trimmedExpected = options.nonce.trim();
+      const trimmedReceived = String(payload.nonce).trim();
+      const matchDirect = trimmedReceived === trimmedExpected;
       let matchHash = false;
       try {
         if (typeof crypto !== "undefined" && crypto.subtle) {
           const enc = new TextEncoder();
-          const hashBuf = await crypto.subtle.digest("SHA-256", enc.encode(options.nonce));
-          const hex = Array.from(new Uint8Array(hashBuf)).map((b) => b.toString(16).padStart(2, "0")).join("");
-          matchHash = payload.nonce === hex;
+          const hashBuf = await crypto.subtle.digest("SHA-256", enc.encode(trimmedExpected));
+          const u8 = new Uint8Array(hashBuf);
+          
+          // Hex representation
+          const hex = Array.from(u8).map((b) => b.toString(16).padStart(2, "0")).join("");
+          
+          // Base64 and Base64URL representation
+          let binary = "";
+          for (let i = 0; i < u8.length; i++) binary += String.fromCharCode(u8[i]);
+          const b64 = typeof btoa !== "undefined" ? btoa(binary) : Buffer.from(hashBuf).toString("base64");
+          const b64url = b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+
+          matchHash = (
+            trimmedReceived.toLowerCase() === hex.toLowerCase() ||
+            trimmedReceived === b64 ||
+            trimmedReceived === b64url
+          );
         }
       } catch {
         // Ignore hash computation failure

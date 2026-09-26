@@ -113,38 +113,73 @@ class TokenAuthenticator(
 }
 
 object NetworkClient {
-    // 10.0.2.2 points to host machine from Android Emulator.
-    // For physical devices on local Wi-Fi, change to machine's LAN IP.
-    private const val DEFAULT_BASE_URL = "https://upi-easy-api.aerotech.workers.dev/"
+    val DEFAULT_BASE_URL: String = try {
+        val url = com.aerotech.upieasy.BuildConfig.API_BASE_URL
+        if (!url.isNullOrBlank()) {
+            if (!url.endsWith("/")) "$url/" else url
+        } else {
+            ""
+        }
+    } catch (_: Throwable) {
+        ""
+    }
 
     @Volatile
     private var apiService: ApiService? = null
+    @Volatile
+    private var currentBaseUrl: String? = null
 
     fun getApiService(sessionManager: SessionManager, baseUrl: String = DEFAULT_BASE_URL): ApiService {
-        return apiService ?: synchronized(this) {
+        val resolvedUrl = if (baseUrl.isNotBlank()) {
+            baseUrl
+        } else {
+            try {
+                sessionManager.context.getString(com.aerotech.upieasy.R.string.api_base_url)
+            } catch (_: Exception) {
+                ""
+            }
+        }
+        val normalizedBaseUrl = if (!resolvedUrl.endsWith("/")) "$resolvedUrl/" else resolvedUrl
+        if (apiService != null && currentBaseUrl == normalizedBaseUrl) {
+            return apiService!!
+        }
+
+        return synchronized(this) {
+            if (apiService != null && currentBaseUrl == normalizedBaseUrl) {
+                return apiService!!
+            }
+
             val logging = HttpLoggingInterceptor().apply {
-                level = HttpLoggingInterceptor.Level.BODY
+                level = if (com.aerotech.upieasy.BuildConfig.DEBUG) {
+                    HttpLoggingInterceptor.Level.BODY
+                } else {
+                    HttpLoggingInterceptor.Level.NONE
+                }
                 // Redact sensitive headers
                 redactHeader("Authorization")
                 redactHeader("X-Webhook-Signature")
             }
 
             val okHttpClient = OkHttpClient.Builder()
+                .connectionPool(okhttp3.ConnectionPool(5, 5, TimeUnit.MINUTES))
                 .addInterceptor(AuthInterceptor(sessionManager))
-                .authenticator(TokenAuthenticator(sessionManager, baseUrl))
+                .authenticator(TokenAuthenticator(sessionManager, normalizedBaseUrl))
                 .addInterceptor(logging)
                 .connectTimeout(15, TimeUnit.SECONDS)
                 .readTimeout(15, TimeUnit.SECONDS)
+                .writeTimeout(15, TimeUnit.SECONDS)
+                .retryOnConnectionFailure(true)
                 .build()
 
             val retrofit = Retrofit.Builder()
-                .baseUrl(baseUrl)
+                .baseUrl(normalizedBaseUrl)
                 .client(okHttpClient)
                 .addConverterFactory(GsonConverterFactory.create())
                 .build()
 
             val instance = retrofit.create(ApiService::class.java)
             apiService = instance
+            currentBaseUrl = normalizedBaseUrl
             instance
         }
     }

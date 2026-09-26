@@ -1,3 +1,6 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -5,6 +8,23 @@ plugins {
     id("com.google.devtools.ksp")
     id("com.google.gms.google-services")
 }
+
+val localProperties = Properties().apply {
+    val localFile = rootProject.file("local.properties")
+    if (localFile.exists()) {
+        FileInputStream(localFile).use { load(it) }
+    }
+}
+
+val googleWebClientId: String = providers.environmentVariable("GOOGLE_WEB_CLIENT_ID")
+    .orElse(providers.gradleProperty("GOOGLE_WEB_CLIENT_ID"))
+    .getOrElse(localProperties.getProperty("GOOGLE_WEB_CLIENT_ID", ""))
+    .trim().replace("\"", "").replace("'", "")
+
+val apiBaseUrl: String = providers.environmentVariable("API_BASE_URL")
+    .orElse(providers.gradleProperty("API_BASE_URL"))
+    .getOrElse(localProperties.getProperty("API_BASE_URL", ""))
+    .trim().replace("\"", "").replace("'", "")
 
 android {
     namespace = "com.aerotech.upieasy"
@@ -21,12 +41,27 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
-        buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"332345540842-ks8bq4csr4lklkvv3tesgkig2b221m23.apps.googleusercontent.com\"")
+        buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"$googleWebClientId\"")
+        buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
+        resValue("string", "default_web_client_id", googleWebClientId)
+        resValue("string", "api_base_url", apiBaseUrl)
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            isCrunchPngs = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+            signingConfig = signingConfigs.getByName("debug")
+        }
+        debug {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            isCrunchPngs = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

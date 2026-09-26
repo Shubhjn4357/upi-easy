@@ -56,11 +56,23 @@ fun GoogleSignInScreen(
 
         scope.launch {
             try {
-                val webClientId = if (BuildConfig.GOOGLE_WEB_CLIENT_ID.isNotBlank()) {
+                val resolvedId = if (BuildConfig.GOOGLE_WEB_CLIENT_ID.isNotBlank()) {
                     BuildConfig.GOOGLE_WEB_CLIENT_ID
                 } else {
-                    context.getString(com.aerotech.upieasy.R.string.default_web_client_id)
+                    try {
+                        context.getString(com.aerotech.upieasy.R.string.default_web_client_id)
+                    } catch (_: Exception) {
+                        ""
+                    }
                 }
+                val webClientId = resolvedId.trim().replace("\"", "").replace("'", "")
+
+                if (webClientId.isBlank()) {
+                    errorMessage = "Google Web Client ID is not configured. Please ensure GOOGLE_WEB_CLIENT_ID is set in .env"
+                    isLoading = false
+                    return@launch
+                }
+
                 val authResult = googleSignInManager.signIn(context, webClientId)
 
                 authResult.fold(
@@ -129,8 +141,16 @@ fun GoogleSignInScreen(
                                 onNavigateToSetup()
                             }
                         } else {
-                            val errorText = res.errorBody()?.string() ?: "Google authentication failed on server."
-                            errorMessage = errorText
+                            val rawError = res.errorBody()?.string().orEmpty()
+                            val parsedMessage = try {
+                                val json = org.json.JSONObject(rawError)
+                                json.optString("message").takeIf { it.isNotBlank() }
+                                    ?: json.optString("error").takeIf { it.isNotBlank() }
+                                    ?: rawError
+                            } catch (_: Exception) {
+                                rawError.ifBlank { "Authentication failed on server (HTTP ${res.code()})" }
+                            }
+                            errorMessage = parsedMessage
                         }
                     },
                     onFailure = { error ->
