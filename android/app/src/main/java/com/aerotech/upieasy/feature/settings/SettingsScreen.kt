@@ -62,7 +62,11 @@ fun SettingsScreen(
     val currentOrgPan by sessionManager.currentOrgPanFlow.collectAsState(initial = null)
     val currentOrgGstin by sessionManager.currentOrgGstinFlow.collectAsState(initial = null)
     val userRole by sessionManager.userRoleFlow.collectAsState(initial = null)
+    val userPermissions by sessionManager.userPermissionsFlow.collectAsState(initial = emptySet())
     val isOwner = userRole?.equals("OWNER", ignoreCase = true) == true
+    val canViewAccounts = isOwner || userRole?.uppercase() in listOf("MANAGER", "ACCOUNTANT") || userPermissions.contains("accounts.read") || userPermissions.contains("accounts.manage") || userPermissions.contains("*")
+    val canManageOrg = isOwner || userRole?.uppercase() == "MANAGER" || userPermissions.contains("organization.manage") || userPermissions.contains("*")
+    val canIngestPayments = isOwner || userRole?.uppercase() in listOf("MANAGER", "CASHIER") || userPermissions.contains("payment_events.ingest") || userPermissions.contains("*")
     val userEmail by sessionManager.userEmailFlow.collectAsState(initial = null)
     val userName by sessionManager.userNameFlow.collectAsState(initial = null)
     val userAvatarUrl by sessionManager.userAvatarUrlFlow.collectAsState(initial = null)
@@ -234,54 +238,56 @@ fun SettingsScreen(
                 DataSyncCard()
 
                 // Bento Tile 5: Payment Detection & Listener Access
-                Surface(
-                    shape = RoundedCornerShape(24.dp),
-                    color = MaterialTheme.colorScheme.surface,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onNavigateToPaymentDetection() }
-                ) {
-                    Row(
-                        modifier = Modifier.padding(20.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                if (canIngestPayments) {
+                    Surface(
+                        shape = RoundedCornerShape(24.dp),
+                        color = MaterialTheme.colorScheme.surface,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onNavigateToPaymentDetection() }
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(44.dp)
-                                .clip(CircleShape)
-                                .background(BrandPrimary.copy(alpha = 0.1f)),
-                            contentAlignment = Alignment.Center
+                        Row(
+                            modifier = Modifier.padding(20.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(44.dp)
+                                    .clip(CircleShape)
+                                    .background(BrandPrimary.copy(alpha = 0.1f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.NotificationsActive,
+                                    contentDescription = null,
+                                    tint = BrandPrimary
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Payment Detection",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "PhonePe & Google Pay notification listener access and app detection status",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                             Icon(
-                                imageVector = Icons.Default.NotificationsActive,
+                                imageVector = Icons.Default.ChevronRight,
                                 contentDescription = null,
-                                tint = BrandPrimary
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
-                        Spacer(modifier = Modifier.width(16.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Payment Detection",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = "PhonePe & Google Pay notification listener access and app detection status",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Icon(
-                            imageVector = Icons.Default.ChevronRight,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
                     }
                 }
 
-                // Bento Tile: Settlement Bank Accounts (Owner only)
-                if (isOwner) {
+                // Bento Tile: Settlement Bank Accounts
+                if (canViewAccounts) {
                     Surface(
                         shape = RoundedCornerShape(24.dp),
                         color = MaterialTheme.colorScheme.surface,
@@ -327,8 +333,10 @@ fun SettingsScreen(
                             )
                         }
                     }
+                }
 
-                    // Bento Tile: Roles & Permissions (Owner only)
+                // Bento Tile: Roles & Permissions
+                if (canManageOrg) {
                     Surface(
                         shape = RoundedCornerShape(24.dp),
                         color = MaterialTheme.colorScheme.surface,
@@ -412,8 +420,8 @@ fun SettingsScreen(
                 Spacer(modifier = Modifier.height(96.dp))
             }
         }
-        }
     }
+}
 
     // Modal Bottom Sheet: Edit Profile & Business Details (Strictly OWNER only)
     if (showEditProfileBottomSheet && isOwner) {

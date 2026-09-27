@@ -107,6 +107,10 @@ fun TransactionsScreen(
     val userName by sessionManager.userNameFlow.collectAsState(initial = null)
     val userEmail by sessionManager.userEmailFlow.collectAsState(initial = null)
     val userRole by sessionManager.userRoleFlow.collectAsState(initial = null)
+    val userPermissions by sessionManager.userPermissionsFlow.collectAsState(initial = emptySet())
+    val isOwner = userRole?.equals("OWNER", ignoreCase = true) == true
+    val canExport = isOwner || userRole?.uppercase() in listOf("MANAGER", "ACCOUNTANT") || userPermissions.contains("transactions.export") || userPermissions.contains("*")
+    val canDelete = isOwner || userPermissions.contains("transactions.delete") || userPermissions.contains("*")
     val userAvatarUrl by sessionManager.userAvatarUrlFlow.collectAsState(initial = null)
 
     var searchQuery by remember { mutableStateOf("") }
@@ -222,26 +226,28 @@ fun TransactionsScreen(
                 }
 
                 // Download Statement Button
-                Surface(
-                    shape = RoundedCornerShape(14.dp),
-                    color = MaterialTheme.colorScheme.surface,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
-                    shadowElevation = 1.dp,
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(RoundedCornerShape(14.dp))
-                        .clickable {
-                            HapticHelper.performHaptic(context, HapticHelper.FeedbackType.LIGHT)
-                            showExportSheet = true
+                if (canExport) {
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = MaterialTheme.colorScheme.surface,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
+                        shadowElevation = 1.dp,
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .clickable {
+                                HapticHelper.performHaptic(context, HapticHelper.FeedbackType.LIGHT)
+                                showExportSheet = true
+                            }
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.FileDownload,
+                                contentDescription = "Download Statement",
+                                tint = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.size(20.dp)
+                            )
                         }
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.Default.FileDownload,
-                            contentDescription = "Download Statement",
-                            tint = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.size(20.dp)
-                        )
                     }
                 }
             }
@@ -471,11 +477,21 @@ fun TransactionsScreen(
                                 items = monthGroup.transactions,
                                 key = { it.id }
                             ) { txn ->
-                                SwipeToDeleteContainer(
-                                    itemKey = txn.id,
-                                    isSwipedOpen = (txnToDelete?.id == txn.id),
-                                    onDeleteRequest = { txnToDelete = txn }
-                                ) {
+                                if (canDelete) {
+                                    SwipeToDeleteContainer(
+                                        itemKey = txn.id,
+                                        isSwipedOpen = (txnToDelete?.id == txn.id),
+                                        onDeleteRequest = { txnToDelete = txn }
+                                    ) {
+                                        TransactionCardItem(
+                                            transaction = txn,
+                                            onClick = {
+                                                HapticHelper.performHaptic(context, HapticHelper.FeedbackType.LIGHT)
+                                                selectedTransaction = txn
+                                            }
+                                        )
+                                    }
+                                } else {
                                     TransactionCardItem(
                                         transaction = txn,
                                         onClick = {
@@ -1042,25 +1058,27 @@ fun TransactionsScreen(
 
                 Spacer(modifier = Modifier.height(6.dp))
 
-                OutlinedButton(
-                    onClick = {
-                        val toDelete = txn
-                        selectedTransaction = null
-                        txnToDelete = toDelete
-                    },
-                    modifier = Modifier.fillMaxWidth().height(48.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error
-                    ),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f))
-                ) {
-                    Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.error)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Delete from Ledger", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
-                }
+                if (canDelete) {
+                    OutlinedButton(
+                        onClick = {
+                            val toDelete = txn
+                            selectedTransaction = null
+                            txnToDelete = toDelete
+                        },
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = MaterialTheme.colorScheme.error
+                        ),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f))
+                    ) {
+                        Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.error)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Delete from Ledger", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
+                    }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
             }
         }
     }

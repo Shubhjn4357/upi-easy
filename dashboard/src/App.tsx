@@ -131,6 +131,10 @@ function AppContent() {
     canManageStaff,
     canManageUpi,
     canManageAccounts,
+    canCreateTransactions,
+    canExportTransactions,
+    canRefundTransactions,
+    canDeleteTransactions,
   } = useOrganizations({
     token: '',
     onDeleted: () => navigate('/overview'),
@@ -647,6 +651,10 @@ function AppContent() {
                     onStatusChange={setTxnStatus}
                     onOpenNewTxn={() => setShowNewTxnModal(true)}
                     onSelectTxnAction={handleSelectTxnAction}
+                    canCreateTransactions={canCreateTransactions}
+                    canExportTransactions={canExportTransactions}
+                    canRefundTransactions={canRefundTransactions}
+                    canDeleteTransactions={canDeleteTransactions}
                     onBulkDelete={async (ids) => {
                       if (!activeOrg) return;
                       const ok = await confirm({
@@ -759,6 +767,10 @@ function AppContent() {
                         showToast(msg, 'error');
                       }
                     }}
+                    activeOrg={activeOrg}
+                    isOwner={isOwner}
+                    apiFetch={apiFetch}
+                    showToast={showToast}
                   />
                 }
               />

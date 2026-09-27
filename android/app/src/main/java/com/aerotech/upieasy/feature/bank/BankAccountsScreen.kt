@@ -51,7 +51,9 @@ fun BankAccountsScreen(
 
     val orgId by sessionManager.currentOrgIdFlow.collectAsState(initial = null)
     val userRole by sessionManager.userRoleFlow.collectAsState(initial = null)
+    val userPerms by sessionManager.userPermissionsFlow.collectAsState(initial = emptySet())
     val isOwner = userRole?.equals("OWNER", ignoreCase = true) == true
+    val canManageAccounts = isOwner || userRole?.uppercase() == "MANAGER" || userPerms.contains("accounts.manage") || userPerms.contains("*")
 
     var bankAccounts by remember { mutableStateOf<List<BankAccountDto>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
@@ -91,7 +93,7 @@ fun BankAccountsScreen(
                     }
                 },
                 actions = {
-                    if (isOwner) {
+                    if (canManageAccounts) {
                         IconButton(onClick = { showAddDialog = true }) {
                             Icon(Icons.Default.Add, contentDescription = "Add bank account")
                         }
@@ -166,7 +168,7 @@ fun BankAccountsScreen(
                         items(bankAccounts) { account ->
                             BankAccountCard(
                                 account = account,
-                                isOwner = isOwner,
+                                isOwner = canManageAccounts,
                                 isDeleting = deletingId == account.id,
                                 onEdit = { editingAccount = account },
                                 onSetDefault = {
@@ -202,7 +204,7 @@ fun BankAccountsScreen(
     }
 
     // Edit Bank Account Bottom Sheet (Drawer)
-    if (editingAccount != null && isOwner) {
+    if (editingAccount != null && canManageAccounts) {
         EditBankAccountBottomSheet(
             account = editingAccount!!,
             isSaving = isUpdating,

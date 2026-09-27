@@ -86,6 +86,10 @@ export function useOrganizations({ token, onDeleted, showToast, apiFetch }: UseO
   const canManageStaff = isOwner || permissions.includes('staff.manage') || role === 'MANAGER';
   const canManageUpi = isOwner || permissions.includes('upi.manage') || role === 'MANAGER';
   const canManageAccounts = isOwner || permissions.includes('accounts.manage') || role === 'MANAGER';
+  const canCreateTransactions = isOwner || permissions.includes('transactions.create') || role === 'MANAGER' || role === 'CASHIER';
+  const canExportTransactions = isOwner || permissions.includes('transactions.export') || role === 'MANAGER' || role === 'ACCOUNTANT';
+  const canRefundTransactions = isOwner || permissions.includes('transactions.refund') || role === 'MANAGER';
+  const canDeleteTransactions = isOwner || permissions.includes('transactions.delete');
 
   return {
     organizations,
@@ -104,6 +108,10 @@ export function useOrganizations({ token, onDeleted, showToast, apiFetch }: UseO
     canManageStaff,
     canManageUpi,
     canManageAccounts,
+    canCreateTransactions,
+    canExportTransactions,
+    canRefundTransactions,
+    canDeleteTransactions,
   };
 }
 

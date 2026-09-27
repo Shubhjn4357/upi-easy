@@ -200,6 +200,21 @@ export interface OverviewPageProps {
   onInspectTxn: (action: string, txn: Transaction) => void;
 }
 
+export interface PermissionDefinition {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+}
+
+export interface RoleDefinition {
+  id: string;
+  name: string;
+  description?: string;
+  isSystem?: boolean;
+  permissions: string[];
+}
+
 export interface TransactionsPageProps {
   transactions: Transaction[];
   loading: boolean;
@@ -211,6 +226,10 @@ export interface TransactionsPageProps {
   onOpenNewTxn: () => void;
   onSelectTxnAction: (action: string, txn: Transaction) => void;
   onBulkDelete?: (ids: string[]) => Promise<void> | void;
+  canCreateTransactions?: boolean;
+  canExportTransactions?: boolean;
+  canRefundTransactions?: boolean;
+  canDeleteTransactions?: boolean;
 }
 
 export interface UpiPageProps {
@@ -231,6 +250,10 @@ export interface StaffPageProps {
   onSelectStaffAction: (action: string, staff: StaffMember | StaffInvite) => void;
   onBulkDeleteStaff?: (ids: string[]) => Promise<void> | void;
   onBulkDeleteInvites?: (ids: string[]) => Promise<void> | void;
+  activeOrg?: Organization | null;
+  isOwner?: boolean;
+  apiFetch?: <T = unknown>(endpoint: string, options?: RequestInit) => Promise<T>;
+  showToast?: (message: string, type?: 'success' | 'error' | 'info') => void;
 }
 
 export interface AccountsPageProps {

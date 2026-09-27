@@ -79,6 +79,7 @@ class OrganizationRepository(
                 }
 
                 if (targetOrg != null) {
+                    val matchingOrg = orgsRes.body()?.organizations?.find { it.id == targetOrg.id }
                     sessionManager.setOrganization(
                         orgId = targetOrg.id,
                         orgName = targetOrg.name,
@@ -86,7 +87,8 @@ class OrganizationRepository(
                         legalName = targetOrg.legalBusinessName,
                         category = targetOrg.category,
                         panNumber = targetOrg.panNumber,
-                        gstin = targetOrg.gstin
+                        gstin = targetOrg.gstin,
+                        permissions = matchingOrg?.permissions ?: emptyList()
                     )
                 }
             }
@@ -172,6 +174,13 @@ class OrganizationRepository(
             if (allOrgs.isNotEmpty()) {
                 organizationDao.insertOrganizations(allOrgs.map { it.copy(isCurrent = it.id == organizationId) })
             }
+            val perms = try {
+                val res = apiService.getOrganizations()
+                if (res.isSuccessful) {
+                    res.body()?.organizations?.find { it.id == organizationId }?.permissions ?: emptyList()
+                } else emptyList()
+            } catch (_: Exception) { emptyList() }
+
             sessionManager.setOrganization(
                 orgId = org.id,
                 orgName = org.name,
@@ -179,7 +188,8 @@ class OrganizationRepository(
                 legalName = org.legalBusinessName,
                 category = org.category,
                 panNumber = org.panNumber,
-                gstin = org.gstin
+                gstin = org.gstin,
+                permissions = perms
             )
             // Trigger background sync for newly active organization
             SyncScheduler.triggerImmediateSync(context, organizationId)

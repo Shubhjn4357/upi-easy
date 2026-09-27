@@ -31,6 +31,8 @@ import com.aerotech.upieasy.BuildConfig
 import com.aerotech.upieasy.core.network.GoogleLoginRequest
 import com.aerotech.upieasy.core.network.UpdateProfileRequest
 import com.aerotech.upieasy.core.network.NetworkClient
+import com.aerotech.upieasy.core.network.OrganizationDto
+import android.widget.Toast
 import com.aerotech.upieasy.core.security.SessionManager
 import com.aerotech.upieasy.ui.theme.*
 import kotlinx.coroutines.launch
@@ -51,6 +53,7 @@ fun GoogleSignInScreen(
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var pendingInvite by remember { mutableStateOf<com.aerotech.upieasy.core.network.InvitationDto?>(null) }
+    var userExistingOrgs by remember { mutableStateOf<List<OrganizationDto>>(emptyList()) }
     var isAcceptingInvite by remember { mutableStateOf(false) }
 
     fun handleGoogleAuth() {
@@ -126,42 +129,55 @@ fun GoogleSignInScreen(
 
                             sessionManager.setSetupComplete(body.isSetupComplete)
 
-                            // If invited via deep-link token, auto-accept immediately
-                            if (!invitedToken.isNullOrBlank()) {
-                                try {
-                                    val acceptRes = apiService.acceptInvitation(invitedToken)
-                                    if (acceptRes.isSuccessful && acceptRes.body()?.success == true) {
-                                        val acceptedOrg = acceptRes.body()?.organization
-                                        if (acceptedOrg != null && !acceptedOrg.id.isNullOrBlank()) {
-                                            sessionManager.setOrganization(
-                                                orgId = acceptedOrg.id,
-                                                orgName = acceptedOrg.name ?: "Organization",
-                                                role = acceptedOrg.role ?: "MEMBER"
-                                            )
-                                            sessionManager.setSetupComplete(true)
-                                            android.widget.Toast.makeText(context, "Joined ${acceptedOrg.name ?: "workspace"}!", android.widget.Toast.LENGTH_LONG).show()
-                                            onNavigateToMain()
-                                            return@launch
-                                        }
+                            // Fetch user's existing organizations
+                            var existingOrgs: List<OrganizationDto> = emptyList()
+                            try {
+                                val orgRes = apiService.getOrganizations()
+                                if (orgRes.isSuccessful && orgRes.body()?.success == true) {
+                                    existingOrgs = orgRes.body()?.organizations ?: emptyList()
+                                    userExistingOrgs = existingOrgs
+                                }
+                            } catch (_: Exception) {}
+
+                            // Always check if there are pending invitations for this user (do not skip even if setup was complete)
+                            var pendingToOffer: com.aerotech.upieasy.core.network.InvitationDto? = null
+                            try {
+                                val inviteRes = apiService.getMyInvitations()
+                                if (inviteRes.isSuccessful && inviteRes.body()?.success == true) {
+                                    val invites = inviteRes.body()?.invitations ?: inviteRes.body()?.invites ?: emptyList()
+                                    pendingToOffer = if (!invitedToken.isNullOrBlank()) {
+                                        invites.firstOrNull { it.id == invitedToken || it.token == invitedToken }
+                                            ?: invites.firstOrNull { it.status.equals("PENDING", ignoreCase = true) }
+                                    } else {
+                                        invites.firstOrNull { it.status.equals("PENDING", ignoreCase = true) }
                                     }
-                                } catch (_: Exception) {}
+                                }
+                            } catch (_: Exception) {}
+
+                            if (pendingToOffer != null) {
+                                // Prompt user with the Invitation Drawer: Accept, Reject, continue to existing store, or create new store
+                                pendingInvite = pendingToOffer
+                                return@launch
                             }
 
-                            if (body.isSetupComplete) {
+                            // No pending invitation
+                            if (existingOrgs.isNotEmpty()) {
+                                val active = existingOrgs[0]
+                                sessionManager.setOrganization(
+                                    orgId = active.id,
+                                    orgName = active.name,
+                                    role = active.role,
+                                    legalName = active.legalBusinessName,
+                                    category = active.category,
+                                    panNumber = active.panNumber,
+                                    gstin = active.gstin,
+                                    permissions = active.permissions
+                                )
+                                sessionManager.setSetupComplete(true)
+                                onNavigateToMain()
+                            } else if (body.isSetupComplete) {
                                 onNavigateToMain()
                             } else {
-                                // Check if user has any pending invites
-                                try {
-                                    val inviteRes = apiService.getMyInvitations()
-                                    if (inviteRes.isSuccessful && inviteRes.body()?.success == true) {
-                                        val invites = inviteRes.body()?.invitations ?: inviteRes.body()?.invites ?: emptyList()
-                                        val pending = invites.firstOrNull { it.status.equals("PENDING", ignoreCase = true) }
-                                        if (pending != null) {
-                                            pendingInvite = pending
-                                            return@launch
-                                        }
-                                    }
-                                } catch (_: Exception) {}
                                 onNavigateToSetup()
                             }
                         } else {
@@ -203,7 +219,7 @@ fun GoogleSignInScreen(
         }
     }
 
-    // Pending Invitation Popup Modal
+    // Pending Invitation Popup Drawer (Accept, Reject, Select existing store, Create new store)
     pendingInvite?.let { invite ->
         com.aerotech.upieasy.ui.components.UpieasyPendingInviteModal(
             visible = true,
@@ -211,6 +227,7 @@ fun GoogleSignInScreen(
             role = invite.role,
             invitedBy = invite.inviterName,
             isProcessing = isAcceptingInvite,
+            existingOrganizations = userExistingOrgs,
             onAccept = {
                 scope.launch {
                     isAcceptingInvite = true
@@ -229,9 +246,11 @@ fun GoogleSignInScreen(
                                         legalName = target.legalBusinessName,
                                         category = target.category,
                                         panNumber = target.panNumber,
-                                        gstin = target.gstin
+                                        gstin = target.gstin,
+                                        permissions = target.permissions
                                     )
                                     sessionManager.setSetupComplete(true)
+                                    Toast.makeText(context, "Welcome to ${target.name}!", Toast.LENGTH_SHORT).show()
                                     pendingInvite = null
                                     onNavigateToMain()
                                     return@launch
@@ -247,14 +266,52 @@ fun GoogleSignInScreen(
                     }
                 }
             },
-            onDecline = {
+            onReject = {
                 scope.launch {
                     try {
                         apiService.rejectInvitation(invite.id)
+                        Toast.makeText(context, "Invitation declined", Toast.LENGTH_SHORT).show()
                     } catch (_: Exception) {}
                     pendingInvite = null
-                    onNavigateToSetup()
+                    if (userExistingOrgs.isNotEmpty()) {
+                        val firstOrg = userExistingOrgs[0]
+                        sessionManager.setOrganization(
+                            orgId = firstOrg.id,
+                            orgName = firstOrg.name,
+                            role = firstOrg.role,
+                            legalName = firstOrg.legalBusinessName,
+                            category = firstOrg.category,
+                            panNumber = firstOrg.panNumber,
+                            gstin = firstOrg.gstin,
+                            permissions = firstOrg.permissions
+                        )
+                        sessionManager.setSetupComplete(true)
+                        onNavigateToMain()
+                    } else {
+                        onNavigateToSetup()
+                    }
                 }
+            },
+            onSelectExistingOrg = { selectedOrg ->
+                scope.launch {
+                    sessionManager.setOrganization(
+                        orgId = selectedOrg.id,
+                        orgName = selectedOrg.name,
+                        role = selectedOrg.role,
+                        legalName = selectedOrg.legalBusinessName,
+                        category = selectedOrg.category,
+                        panNumber = selectedOrg.panNumber,
+                        gstin = selectedOrg.gstin,
+                        permissions = selectedOrg.permissions
+                    )
+                    sessionManager.setSetupComplete(true)
+                    pendingInvite = null
+                    onNavigateToMain()
+                }
+            },
+            onCreateNewStore = {
+                pendingInvite = null
+                onNavigateToSetup()
             }
         )
     }

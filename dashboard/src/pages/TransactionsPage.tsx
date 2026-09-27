@@ -23,6 +23,10 @@ export function TransactionsPage({
   onOpenNewTxn,
   onSelectTxnAction,
   onBulkDelete,
+  canCreateTransactions = true,
+  canExportTransactions = true,
+  canRefundTransactions = true,
+  canDeleteTransactions = true,
 }: TransactionsPageProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -143,16 +147,18 @@ export function TransactionsPage({
             Immutable audit trail of all UPI collections, intents, and settlements
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="brand"
-            size="sm"
-            onClick={onOpenNewTxn}
-            className="rounded-xl gap-1.5 font-bold">
-            <IconPlus className="w-3.5 h-3.5" />
-            <span>Record Payment</span>
-          </Button>
-        </div>
+        {canCreateTransactions && (
+          <div className="flex items-center gap-2">
+            <Button
+              variant="brand"
+              size="sm"
+              onClick={onOpenNewTxn}
+              className="rounded-xl gap-1.5 font-bold">
+              <IconPlus className="w-3.5 h-3.5" />
+              <span>Record Payment</span>
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Modular DataTable with Menu-style dropdown and bulk actions */}
@@ -179,17 +185,21 @@ export function TransactionsPage({
             onChange: onStatusChange,
           },
         ]}
-        enableBulkSelect={true}
+        enableBulkSelect={canExportTransactions || (canDeleteTransactions && Boolean(onBulkDelete))}
         selectedIds={selectedIds}
         onSelectionChange={setSelectedIds}
         bulkActions={[
-          {
-            label: 'Export Selected',
-            icon: <IconDownload className="w-3.5 h-3.5" />,
-            variant: 'outline',
-            onClick: handleExportCsv,
-          },
-          ...(onBulkDelete
+          ...(canExportTransactions
+            ? [
+                {
+                  label: 'Export Selected',
+                  icon: <IconDownload className="w-3.5 h-3.5" />,
+                  variant: 'outline' as const,
+                  onClick: handleExportCsv,
+                },
+              ]
+            : []),
+          ...(onBulkDelete && canDeleteTransactions
             ? [
                 {
                   label: 'Delete Selected',
@@ -205,14 +215,16 @@ export function TransactionsPage({
         ]}
         headerActions={
           <>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleExportCsv}
-              className="rounded-xl h-9 gap-1.5 text-xs">
-              <IconDownload className="w-3.5 h-3.5" />
-              <span>Export CSV</span>
-            </Button>
+            {canExportTransactions && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExportCsv}
+                className="rounded-xl h-9 gap-1.5 text-xs">
+                <IconDownload className="w-3.5 h-3.5" />
+                <span>Export CSV</span>
+              </Button>
+            )}
             <Button
               variant="secondary"
               size="sm"

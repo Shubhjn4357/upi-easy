@@ -1376,13 +1376,17 @@ fun UpieasyPendingInviteModal(
     role: String,
     invitedBy: String? = null,
     isProcessing: Boolean = false,
+    existingOrganizations: List<com.aerotech.upieasy.core.network.OrganizationDto> = emptyList(),
     onAccept: () -> Unit,
-    onDecline: () -> Unit
+    onDecline: () -> Unit = {},
+    onReject: () -> Unit = onDecline,
+    onSelectExistingOrg: (com.aerotech.upieasy.core.network.OrganizationDto) -> Unit = {},
+    onCreateNewStore: () -> Unit = {}
 ) {
     if (visible) {
         val context = LocalContext.current
         ModalBottomSheet(
-            onDismissRequest = { if (!isProcessing) onDecline() },
+            onDismissRequest = { if (!isProcessing) onReject() },
             containerColor = MaterialTheme.colorScheme.surface,
             shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
             dragHandle = { BottomSheetDefaults.DragHandle() },
@@ -1414,7 +1418,7 @@ fun UpieasyPendingInviteModal(
                 Spacer(modifier = Modifier.height(18.dp))
 
                 Text(
-                    text = "Team Invitation",
+                    text = "Store Invitation",
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface,
@@ -1424,7 +1428,7 @@ fun UpieasyPendingInviteModal(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Text(
-                    text = "You have been invited to join an organization on UPIEasy. Accept to access the workspace immediately and skip business setup.",
+                    text = "You have been invited to join this business workspace. Accept to enter immediately, or decline and continue to your store.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center,
@@ -1450,7 +1454,7 @@ fun UpieasyPendingInviteModal(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                "Organization",
+                                "Invited Store",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -1511,8 +1515,9 @@ fun UpieasyPendingInviteModal(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(26.dp))
+                Spacer(modifier = Modifier.height(20.dp))
 
+                // Action buttons: Reject / Accept
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -1520,7 +1525,7 @@ fun UpieasyPendingInviteModal(
                     OutlinedButton(
                         onClick = {
                             HapticHelper.performHaptic(context, HapticHelper.FeedbackType.LIGHT)
-                            onDecline()
+                            onReject()
                         },
                         enabled = !isProcessing,
                         shape = RoundedCornerShape(14.dp),
@@ -1528,7 +1533,7 @@ fun UpieasyPendingInviteModal(
                             .weight(1f)
                             .height(50.dp)
                     ) {
-                        Text("Decline", fontWeight = FontWeight.SemiBold)
+                        Text("Decline", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.error)
                     }
 
                     Button(
@@ -1549,9 +1554,94 @@ fun UpieasyPendingInviteModal(
                                 color = MaterialTheme.colorScheme.onPrimary
                             )
                         } else {
-                            Text("Accept & Join", fontWeight = FontWeight.Bold)
+                            Text("Accept & Enter", fontWeight = FontWeight.Bold)
                         }
                     }
+                }
+
+                // If user already has pre-linked organizations, offer to continue with them
+                if (existingOrganizations.isNotEmpty()) {
+                    HorizontalDivider(
+                        modifier = Modifier.padding(top = 20.dp, bottom = 12.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+                    )
+
+                    Text(
+                        text = "OR CONTINUE WITH LINKED STORE",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                        modifier = Modifier.padding(bottom = 10.dp)
+                    )
+
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        existingOrganizations.forEach { org ->
+                            Surface(
+                                shape = RoundedCornerShape(14.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable(enabled = !isProcessing) {
+                                        HapticHelper.performHaptic(context, HapticHelper.FeedbackType.LIGHT)
+                                        onSelectExistingOrg(org)
+                                    }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(14.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Default.CorporateFare,
+                                            contentDescription = null,
+                                            tint = BrandPrimary,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Column {
+                                            Text(
+                                                text = org.name,
+                                                style = MaterialTheme.typography.titleSmall,
+                                                fontWeight = FontWeight.SemiBold
+                                            )
+                                            Text(
+                                                text = "Role: ${org.role}",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+                                    Icon(
+                                        Icons.Default.ChevronRight,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                TextButton(
+                    onClick = {
+                        HapticHelper.performHaptic(context, HapticHelper.FeedbackType.LIGHT)
+                        onCreateNewStore()
+                    },
+                    enabled = !isProcessing,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Create a New Store Instead", fontWeight = FontWeight.SemiBold)
                 }
             }
         }

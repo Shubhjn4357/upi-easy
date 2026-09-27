@@ -98,6 +98,7 @@ fun AppSetupScreen(
     }
 
     var pendingInvite by remember { mutableStateOf<com.aerotech.upieasy.core.network.InvitationDto?>(null) }
+    var userExistingOrgs by remember { mutableStateOf<List<com.aerotech.upieasy.data.model.OrganizationItem>>(emptyList()) }
     var isAcceptingInvite by remember { mutableStateOf(false) }
 
     // Check if user has an active firm or pending invitation (e.g. invited staff)
@@ -107,6 +108,7 @@ fun AppSetupScreen(
             val orgRes = apiService.getOrganizations()
             if (orgRes.isSuccessful && orgRes.body()?.success == true) {
                 val orgs = orgRes.body()!!.organizations
+                userExistingOrgs = orgs
                 if (orgs.isNotEmpty()) {
                     val firstOrg = orgs[0]
                     sessionManager.setOrganization(
@@ -116,7 +118,8 @@ fun AppSetupScreen(
                         legalName = firstOrg.legalBusinessName,
                         category = firstOrg.category,
                         panNumber = firstOrg.panNumber,
-                        gstin = firstOrg.gstin
+                        gstin = firstOrg.gstin,
+                        permissions = firstOrg.permissions
                     )
                     sessionManager.setSetupComplete(true)
                     onSetupComplete()
@@ -147,6 +150,7 @@ fun AppSetupScreen(
             role = invite.role,
             invitedBy = invite.inviterName,
             isProcessing = isAcceptingInvite,
+            existingOrganizations = userExistingOrgs,
             onAccept = {
                 scope.launch {
                     isAcceptingInvite = true
@@ -165,7 +169,8 @@ fun AppSetupScreen(
                                         legalName = target.legalBusinessName,
                                         category = target.category,
                                         panNumber = target.panNumber,
-                                        gstin = target.gstin
+                                        gstin = target.gstin,
+                                        permissions = target.permissions
                                     )
                                     sessionManager.setSetupComplete(true)
                                     pendingInvite = null
@@ -183,13 +188,36 @@ fun AppSetupScreen(
                     }
                 }
             },
-            onDecline = {
+            onReject = {
                 scope.launch {
                     try {
                         apiService.rejectInvitation(invite.id)
                     } catch (_: Exception) {}
                     pendingInvite = null
                 }
+            },
+            onSelectExistingOrg = { org ->
+                scope.launch {
+                    sessionManager.setOrganization(
+                        orgId = org.id,
+                        orgName = org.name,
+                        role = org.role,
+                        legalName = org.legalBusinessName,
+                        category = org.category,
+                        panNumber = org.panNumber,
+                        gstin = org.gstin,
+                        permissions = org.permissions
+                    )
+                    sessionManager.setSetupComplete(true)
+                    pendingInvite = null
+                    onSetupComplete()
+                }
+            },
+            onCreateNewStore = {
+                pendingInvite = null
+            },
+            onDismiss = {
+                pendingInvite = null
             }
         )
     }
@@ -746,7 +774,8 @@ fun AppSetupScreen(
                                     legalName = data.organization.legalBusinessName,
                                     category = data.organization.category,
                                     panNumber = data.organization.panNumber,
-                                    gstin = data.organization.gstin
+                                    gstin = data.organization.gstin,
+                                    permissions = listOf("*")
                                 )
                                 sessionManager.setSetupComplete(true)
                                 onSetupComplete()

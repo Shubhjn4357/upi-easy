@@ -203,7 +203,8 @@ fun CreateOrganizationDialog(
                                     legalName = org.legalBusinessName,
                                     category = org.category,
                                     panNumber = org.panNumber,
-                                    gstin = org.gstin
+                                    gstin = org.gstin,
+                                    permissions = listOf("*")
                                 )
                                 orgRepository.refreshOrganizations()
                                 Toast.makeText(context, "Business '${org.name}' created!", Toast.LENGTH_SHORT).show()

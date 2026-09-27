@@ -64,8 +64,9 @@ fun UpiScreen(
     val apiService = remember { NetworkClient.getApiService(sessionManager) }
     val currentOrgId by sessionManager.currentOrgIdFlow.collectAsState(initial = null)
     val userRole by sessionManager.userRoleFlow.collectAsState(initial = null)
+    val userPerms by sessionManager.userPermissionsFlow.collectAsState(initial = emptySet())
     val isOwner = userRole?.equals("OWNER", ignoreCase = true) == true
-    val canManageUpi = isOwner
+    val canManageUpi = isOwner || userRole?.uppercase() == "MANAGER" || userPerms.contains("upi.manage") || userPerms.contains("*")
 
     val localAccounts by remember(currentOrgId) {
         if (!currentOrgId.isNullOrBlank()) {
@@ -118,7 +119,8 @@ fun UpiScreen(
                                 legalName = firstOrg.legalBusinessName,
                                 category = firstOrg.category,
                                 panNumber = firstOrg.panNumber,
-                                gstin = firstOrg.gstin
+                                gstin = firstOrg.gstin,
+                                permissions = firstOrg.permissions
                             )
                             orgId = firstOrg.id
                         }

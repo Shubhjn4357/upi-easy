@@ -96,8 +96,9 @@ fun StaffScreen(
     val currentOrgId by sessionManager.currentOrgIdFlow.collectAsState(initial = null)
     val currentOrgName by sessionManager.currentOrgNameFlow.collectAsState(initial = null)
     val userRole by sessionManager.userRoleFlow.collectAsState(initial = null)
+    val userPerms by sessionManager.userPermissionsFlow.collectAsState(initial = emptySet())
     val isOwner = userRole?.equals("OWNER", ignoreCase = true) == true
-    val canManageStaff = isOwner || userRole?.equals("MANAGER", ignoreCase = true) == true
+    val canManageStaff = isOwner || userRole?.equals("MANAGER", ignoreCase = true) == true || userPerms.contains("staff.manage") || userPerms.contains("*")
 
     var staffList by remember { mutableStateOf<List<StaffMemberDto>>(emptyList()) }
     var pendingDeletedIds by remember { mutableStateOf(setOf<String>()) }

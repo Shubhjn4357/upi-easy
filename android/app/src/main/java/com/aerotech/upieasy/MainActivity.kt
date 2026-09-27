@@ -127,7 +127,8 @@ class MainActivity : FragmentActivity() {
                                             legalName = active.legalBusinessName,
                                             category = active.category,
                                             panNumber = active.panNumber,
-                                            gstin = active.gstin
+                                            gstin = active.gstin,
+                                            permissions = active.permissions
                                         )
                                         sessionManager.setSetupComplete(true)
                                         isComplete = true
@@ -228,13 +229,18 @@ class MainActivity : FragmentActivity() {
                         }
                     }
 
-                    LaunchedEffect(token, currentOrgId) {
+                    var pendingInvite by remember { mutableStateOf<com.aerotech.upieasy.data.model.PendingInvitationItem?>(null) }
+                    var userExistingOrgs by remember { mutableStateOf<List<com.aerotech.upieasy.data.model.OrganizationItem>>(emptyList()) }
+                    var isAcceptingInvite by remember { mutableStateOf(false) }
+
+                    LaunchedEffect(token, currentOrgId, incomingInviteToken) {
                         if (!token.isNullOrBlank()) {
                             try {
                                 val api = NetworkClient.getApiService(sessionManager)
                                 val res = api.getOrganizations()
                                 if (res.isSuccessful && res.body()?.success == true) {
                                     val orgs = res.body()!!.organizations
+                                    userExistingOrgs = orgs
                                     if (orgs.isNotEmpty()) {
                                         val currentId = currentOrgId ?: sessionManager.getCurrentOrgId()
                                         val o = orgs.find { it.id == currentId } ?: orgs[0]
@@ -245,9 +251,38 @@ class MainActivity : FragmentActivity() {
                                             legalName = o.legalBusinessName,
                                             category = o.category,
                                             panNumber = o.panNumber,
-                                            gstin = o.gstin
+                                            gstin = o.gstin,
+                                            permissions = o.permissions
                                         )
                                     }
+                                }
+
+                                // Check pending invitations for current user on login/resume
+                                val inviteRes = api.getMyInvitations()
+                                if (inviteRes.isSuccessful && inviteRes.body()?.success == true) {
+                                    val invites = inviteRes.body()?.invitations ?: inviteRes.body()?.invites ?: emptyList()
+                                    val pending = invites.firstOrNull { it.status.equals("PENDING", ignoreCase = true) }
+                                    if (pending != null) {
+                                        pendingInvite = pending
+                                    }
+                                }
+
+                                // If deep link invite token received
+                                if (pendingInvite == null && !incomingInviteToken.isNullOrBlank()) {
+                                    try {
+                                        val tokenRes = api.getInviteDetails(incomingInviteToken!!)
+                                        if (tokenRes.isSuccessful && tokenRes.body()?.success == true) {
+                                            val d = tokenRes.body()!!.invitation
+                                            pendingInvite = com.aerotech.upieasy.data.model.PendingInvitationItem(
+                                                id = d.id,
+                                                organizationId = d.organizationId,
+                                                organizationName = d.organizationName,
+                                                role = d.role,
+                                                inviterName = d.inviterName,
+                                                createdAt = d.createdAt
+                                            )
+                                        }
+                                    } catch (_: Exception) {}
                                 }
                             } catch (e: Exception) {
                                 e.printStackTrace()
@@ -415,6 +450,90 @@ class MainActivity : FragmentActivity() {
                         com.aerotech.upieasy.ui.components.PaymentPopupDialog(
                             alert = alert,
                             onDismiss = { com.aerotech.upieasy.core.util.PaymentAlertManager.dismissAlert() }
+                        )
+                    }
+
+                    pendingInvite?.let { invite ->
+                        com.aerotech.upieasy.ui.components.UpieasyPendingInviteModal(
+                            visible = true,
+                            orgName = invite.organizationName ?: "Workspace",
+                            role = invite.role,
+                            invitedBy = invite.inviterName,
+                            isProcessing = isAcceptingInvite,
+                            existingOrganizations = userExistingOrgs,
+                            onAccept = {
+                                scope.launch {
+                                    isAcceptingInvite = true
+                                    try {
+                                        val api = NetworkClient.getApiService(sessionManager)
+                                        val acceptRes = api.acceptInvitation(invite.id)
+                                        if (acceptRes.isSuccessful && acceptRes.body()?.success == true) {
+                                            val orgRes = api.getOrganizations()
+                                            if (orgRes.isSuccessful && orgRes.body()?.success == true) {
+                                                val orgs = orgRes.body()!!.organizations
+                                                val target = orgs.find { it.id == invite.organizationId } ?: orgs.firstOrNull()
+                                                if (target != null) {
+                                                    sessionManager.setOrganization(
+                                                        orgId = target.id,
+                                                        orgName = target.name,
+                                                        role = target.role,
+                                                        legalName = target.legalBusinessName,
+                                                        category = target.category,
+                                                        panNumber = target.panNumber,
+                                                        gstin = target.gstin,
+                                                        permissions = target.permissions
+                                                    )
+                                                    sessionManager.setSetupComplete(true)
+                                                }
+                                            }
+                                            pendingInvite = null
+                                            incomingInviteToken = null
+                                        } else {
+                                            android.widget.Toast.makeText(this@MainActivity, acceptRes.body()?.message ?: "Failed to accept invite", android.widget.Toast.LENGTH_SHORT).show()
+                                        }
+                                    } catch (e: Exception) {
+                                        android.widget.Toast.makeText(this@MainActivity, "Network error: ${e.localizedMessage}", android.widget.Toast.LENGTH_SHORT).show()
+                                    } finally {
+                                        isAcceptingInvite = false
+                                    }
+                                }
+                            },
+                            onReject = {
+                                scope.launch {
+                                    try {
+                                        val api = NetworkClient.getApiService(sessionManager)
+                                        api.rejectInvitation(invite.id)
+                                    } catch (_: Exception) {}
+                                    pendingInvite = null
+                                    incomingInviteToken = null
+                                }
+                            },
+                            onSelectExistingOrg = { org ->
+                                scope.launch {
+                                    sessionManager.setOrganization(
+                                        orgId = org.id,
+                                        orgName = org.name,
+                                        role = org.role,
+                                        legalName = org.legalBusinessName,
+                                        category = org.category,
+                                        panNumber = org.panNumber,
+                                        gstin = org.gstin,
+                                        permissions = org.permissions
+                                    )
+                                    sessionManager.setSetupComplete(true)
+                                    pendingInvite = null
+                                    incomingInviteToken = null
+                                }
+                            },
+                            onCreateNewStore = {
+                                pendingInvite = null
+                                incomingInviteToken = null
+                                navController.navigate("setup")
+                            },
+                            onDismiss = {
+                                pendingInvite = null
+                                incomingInviteToken = null
+                            }
                         )
                     }
 

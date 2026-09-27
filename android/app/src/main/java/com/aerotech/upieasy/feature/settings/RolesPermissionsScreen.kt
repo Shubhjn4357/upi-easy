@@ -85,7 +85,8 @@ fun RolesPermissionsScreen(
                             legalName = active.legalBusinessName,
                             category = active.category,
                             panNumber = active.panNumber,
-                            gstin = active.gstin
+                            gstin = active.gstin,
+                            permissions = active.permissions
                         )
                     }
                 }
