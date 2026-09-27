@@ -34,6 +34,15 @@ export const requireTenant: MiddlewareHandler<AppEnv> = async (c, next) => {
     )
     .get();
 
+  // Check if user is the direct owner of the organization
+  const org = await db.select().from(schema.organizations).where(eq(schema.organizations.id, orgId)).get();
+  if (org && org.ownerId === userId) {
+    c.set("organizationId", orgId);
+    c.set("role", "OWNER");
+    c.set("permissions", ["*"]);
+    return await next();
+  }
+
   if (!member) {
     throw new ForbiddenError("User is not an active member of this organization");
   }

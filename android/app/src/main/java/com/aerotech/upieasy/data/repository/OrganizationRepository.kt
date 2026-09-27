@@ -7,6 +7,7 @@ import com.aerotech.upieasy.core.database.entity.OrganizationEntity
 import com.aerotech.upieasy.core.database.entity.OrganizationInviteEntity
 import com.aerotech.upieasy.core.network.ApiService
 import com.aerotech.upieasy.core.network.SendInviteRequest
+import com.aerotech.upieasy.core.network.SendInviteResponse
 import com.aerotech.upieasy.core.security.SessionManager
 import com.aerotech.upieasy.core.sync.SyncScheduler
 import kotlinx.coroutines.flow.Flow
@@ -242,7 +243,7 @@ class OrganizationRepository(
         name: String?,
         email: String?,
         role: String
-    ): Result<String> {
+    ): Result<SendInviteResponse> {
         return try {
             val response = apiService.sendInvite(
                 orgId = orgId,
@@ -254,7 +255,7 @@ class OrganizationRepository(
                 )
             )
             if (response.isSuccessful && response.body()?.success == true) {
-                Result.success(response.body()?.message ?: "Invitation sent successfully")
+                Result.success(response.body()!!)
             } else {
                 val errorMsg = response.errorBody()?.string() ?: "Failed to send invitation"
                 Result.failure(Exception(errorMsg))

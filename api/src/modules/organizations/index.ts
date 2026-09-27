@@ -26,6 +26,7 @@ organizationsRouter.get("/", async (c) => {
       panNumber: schema.organizations.panNumber,
       gstin: schema.organizations.gstin,
       status: schema.organizations.status,
+      ownerId: schema.organizations.ownerId,
       roleId: schema.organizationMembers.roleId,
       role: schema.roles.name,
       createdAt: schema.organizations.createdAt,
@@ -47,7 +48,8 @@ organizationsRouter.get("/", async (c) => {
   // Attach permissions for each organization
   const orgsWithPermissions = await Promise.all(
     orgRows.map(async (org) => {
-      const roleName = org.role || "MEMBER";
+      const isOwner = org.ownerId === userId || org.role === "OWNER" || org.roleId === "role_owner" || org.roleId === "OWNER";
+      const roleName = isOwner ? "OWNER" : (org.role || "MEMBER");
       let permissions: string[] = [];
       if (roleName === "OWNER") {
         permissions = ["*"];

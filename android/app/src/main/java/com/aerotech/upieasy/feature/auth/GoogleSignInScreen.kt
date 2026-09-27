@@ -12,6 +12,7 @@ import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.QrCodeScanner
+import androidx.compose.material.icons.filled.MailOutline
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Warning
@@ -37,6 +38,8 @@ import kotlinx.coroutines.launch
 @Composable
 fun GoogleSignInScreen(
     sessionManager: SessionManager,
+    invitedEmail: String? = null,
+    invitedToken: String? = null,
     onNavigateToSetup: () -> Unit,
     onNavigateToMain: () -> Unit
 ) {
@@ -122,6 +125,27 @@ fun GoogleSignInScreen(
                             }
 
                             sessionManager.setSetupComplete(body.isSetupComplete)
+
+                            // If invited via deep-link token, auto-accept immediately
+                            if (!invitedToken.isNullOrBlank()) {
+                                try {
+                                    val acceptRes = apiService.acceptInvitation(invitedToken)
+                                    if (acceptRes.isSuccessful && acceptRes.body()?.success == true) {
+                                        val acceptedOrg = acceptRes.body()?.organization
+                                        if (acceptedOrg != null && !acceptedOrg.id.isNullOrBlank()) {
+                                            sessionManager.setOrganization(
+                                                orgId = acceptedOrg.id,
+                                                orgName = acceptedOrg.name ?: "Organization",
+                                                role = acceptedOrg.role ?: "MEMBER"
+                                            )
+                                            sessionManager.setSetupComplete(true)
+                                            android.widget.Toast.makeText(context, "Joined ${acceptedOrg.name ?: "workspace"}!", android.widget.Toast.LENGTH_LONG).show()
+                                            onNavigateToMain()
+                                            return@launch
+                                        }
+                                    }
+                                } catch (_: Exception) {}
+                            }
 
                             if (body.isSetupComplete) {
                                 onNavigateToMain()
@@ -343,6 +367,43 @@ fun GoogleSignInScreen(
                     }
 
                     Spacer(modifier = Modifier.height(28.dp))
+
+                    if (!invitedEmail.isNullOrBlank()) {
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 16.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(14.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.MailOutline,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column {
+                                    Text(
+                                        text = "Staff Invitation Detected",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                    Text(
+                                        text = "Sign in with $invitedEmail to accept.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f)
+                                    )
+                                }
+                            }
+                        }
+                    }
 
                     // Real Sign in with Google Button adapting to dynamic colors
                     Button(

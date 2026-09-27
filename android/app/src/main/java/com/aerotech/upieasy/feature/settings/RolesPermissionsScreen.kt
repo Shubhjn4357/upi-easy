@@ -2,6 +2,7 @@ package com.aerotech.upieasy.feature.settings
 
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -43,28 +44,94 @@ fun RolesPermissionsScreen(
 
     val orgId by sessionManager.currentOrgIdFlow.collectAsState(initial = null)
     val userRole by sessionManager.userRoleFlow.collectAsState(initial = null)
-    val isOwner = userRole?.equals("OWNER", ignoreCase = true) == true
+    var resolvedOrgId by remember { mutableStateOf<String?>(null) }
+    var resolvedUserRole by remember { mutableStateOf<String?>(null) }
+
+    val effectiveRole = (resolvedUserRole ?: userRole).orEmpty()
+    val isOwner = effectiveRole.equals("OWNER", ignoreCase = true) ||
+            effectiveRole.equals("ADMIN", ignoreCase = true) ||
+            userRole?.equals("OWNER", ignoreCase = true) == true
 
     var roles by remember { mutableStateOf<List<RoleDto>>(emptyList()) }
     var allPermissions by remember { mutableStateOf<List<PermissionDto>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
     var editingRole by remember { mutableStateOf<RoleDto?>(null) }
     var isSaving by remember { mutableStateOf(false) }
 
     suspend fun loadRoles() {
-        val id = orgId ?: return
         isLoading = true
+        errorMessage = null
         try {
-            val res = apiService.getRolesAndPermissions(id)
-            if (res.isSuccessful) {
-                roles = res.body()?.roles ?: emptyList()
-                allPermissions = res.body()?.permissions ?: emptyList()
+            var activeId = orgId ?: resolvedOrgId
+            if (activeId.isNullOrBlank()) {
+                activeId = sessionManager.getCurrentOrgId()
             }
-        } catch (_: Exception) {}
-        finally { isLoading = false }
+
+            // 1. Proactively query getOrganizations() to verify user's real role and active organization
+            try {
+                val orgRes = apiService.getOrganizations()
+                if (orgRes.isSuccessful && orgRes.body()?.success == true) {
+                    val orgs = orgRes.body()!!.organizations
+                    if (orgs.isNotEmpty()) {
+                        val active = orgs.find { it.id == activeId } ?: orgs[0]
+                        activeId = active.id
+                        resolvedOrgId = active.id
+                        resolvedUserRole = active.role
+                        sessionManager.setOrganization(
+                            orgId = active.id,
+                            orgName = active.name,
+                            role = active.role,
+                            legalName = active.legalBusinessName,
+                            category = active.category,
+                            panNumber = active.panNumber,
+                            gstin = active.gstin
+                        )
+                    }
+                }
+            } catch (_: Exception) {}
+
+            val finalOrgId = activeId ?: resolvedOrgId
+            if (finalOrgId.isNullOrBlank()) {
+                roles = getDefaultSystemRoles()
+                allPermissions = getDefaultSystemPermissions()
+                errorMessage = "No active organization found. Displaying standard system roles."
+                return
+            }
+
+            // 2. Fetch roles and permissions from backend
+            val res = apiService.getRolesAndPermissions(finalOrgId)
+            if (res.isSuccessful && res.body()?.success == true) {
+                val fetchedRoles = res.body()?.roles ?: emptyList()
+                val fetchedPerms = res.body()?.permissions ?: emptyList()
+
+                if (fetchedRoles.isNotEmpty()) {
+                    roles = fetchedRoles
+                    allPermissions = fetchedPerms
+                } else {
+                    roles = getDefaultSystemRoles()
+                    allPermissions = getDefaultSystemPermissions()
+                }
+            } else {
+                // If API fails or backend unseeded, provide standard roles so owner controls are always accessible
+                roles = getDefaultSystemRoles()
+                allPermissions = getDefaultSystemPermissions()
+                val err = res.errorBody()?.string()
+                if (!err.isNullOrBlank()) {
+                    errorMessage = "Server role sync: $err"
+                }
+            }
+        } catch (e: Exception) {
+            roles = getDefaultSystemRoles()
+            allPermissions = getDefaultSystemPermissions()
+            errorMessage = e.localizedMessage ?: "Unable to connect to roles service"
+        } finally {
+            isLoading = false
+        }
     }
 
-    LaunchedEffect(orgId) { loadRoles() }
+    LaunchedEffect(Unit) { loadRoles() }
+    LaunchedEffect(orgId) { if (!orgId.isNullOrBlank()) loadRoles() }
 
     // Permission categories for grouped display
     val permissionCategories = allPermissions.groupBy { it.category }
@@ -82,6 +149,11 @@ fun RolesPermissionsScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { scope.launch { loadRoles() } }) {
+                        Icon(Icons.Default.Refresh, contentDescription = "Refresh roles", tint = BrandPrimary)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -106,11 +178,44 @@ fun RolesPermissionsScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = PaddingValues(vertical = 12.dp)
         ) {
-            // Info card
+            // Error banner if any
+            errorMessage?.let { msg ->
+                item {
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                modifier = Modifier.weight(1f),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(Icons.Default.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                                Text(
+                                    msg,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onErrorContainer
+                                )
+                            }
+                            TextButton(onClick = { scope.launch { loadRoles() } }) {
+                                Text("Retry")
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Info banner
             item {
                 Surface(
                     shape = RoundedCornerShape(16.dp),
-                    color = BrandPrimary.copy(alpha = 0.08f),
+                    color = if (isOwner) BrandPrimary.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
@@ -118,15 +223,27 @@ fun RolesPermissionsScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Icon(Icons.Default.Info, contentDescription = null, tint = BrandPrimary)
-                        Text(
-                            if (isOwner)
-                                "As the Owner, you can configure what each role can access. OWNER always has full access."
-                            else
-                                "Only organization Owners can modify role permissions.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        Icon(
+                            if (isOwner) Icons.Default.AdminPanelSettings else Icons.Default.Info,
+                            contentDescription = null,
+                            tint = if (isOwner) BrandPrimary else MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        Column {
+                            Text(
+                                if (isOwner) "Owner Access" else "View Mode",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isOwner) BrandPrimary else MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                if (isOwner)
+                                    "As the Organization Owner, you can tap on any role to configure its module permissions. The OWNER role always maintains unrestricted access."
+                                else
+                                    "Your active role is ${effectiveRole.ifBlank { "Member" }}. Only organization Owners can modify role permissions.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 }
             }
@@ -155,7 +272,7 @@ fun RolesPermissionsScreen(
                 scope.launch {
                     isSaving = true
                     try {
-                        val id = orgId ?: return@launch
+                        val id = orgId ?: resolvedOrgId ?: return@launch
                         val res = apiService.updateRolePermissions(
                             id,
                             role.id,
@@ -166,7 +283,8 @@ fun RolesPermissionsScreen(
                             loadRoles()
                             Toast.makeText(context, "Permissions updated for ${role.name}", Toast.LENGTH_SHORT).show()
                         } else {
-                            Toast.makeText(context, "Failed to update permissions", Toast.LENGTH_SHORT).show()
+                            val errText = res.errorBody()?.string() ?: "Failed to update permissions"
+                            Toast.makeText(context, errText, Toast.LENGTH_LONG).show()
                         }
                     } catch (e: Exception) {
                         Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
@@ -209,7 +327,13 @@ private fun RoleCard(
         shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.surface,
         tonalElevation = 1.dp,
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(
+                if (isOwner && !isOwnerRole) {
+                    Modifier.clickable { onEditClick() }
+                } else Modifier
+            )
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
             Row(
@@ -217,7 +341,10 @@ private fun RoleCard(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Box(
                         modifier = Modifier
                             .size(44.dp)
@@ -229,11 +356,28 @@ private fun RoleCard(
                     }
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
-                        Text(
-                            role.name,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                role.name,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            if (isOwnerRole) {
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = BrandPrimary.copy(alpha = 0.1f)
+                                ) {
+                                    Text(
+                                        "FULL ACCESS",
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = BrandPrimary
+                                    )
+                                }
+                            }
+                        }
                         Text(
                             role.description ?: "",
                             style = MaterialTheme.typography.bodySmall,
@@ -241,9 +385,20 @@ private fun RoleCard(
                         )
                     }
                 }
+
                 if (isOwner && !isOwnerRole) {
-                    IconButton(onClick = onEditClick) {
-                        Icon(Icons.Default.Edit, contentDescription = "Edit permissions", tint = BrandPrimary)
+                    FilledTonalButton(
+                        onClick = onEditClick,
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = BrandPrimary.copy(alpha = 0.12f),
+                            contentColor = BrandPrimary
+                        )
+                    ) {
+                        Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(15.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Edit", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -504,3 +659,69 @@ private fun EditRolePermissionsSheet(
         }
     }
 }
+
+private fun getDefaultSystemRoles(): List<RoleDto> {
+    return listOf(
+        RoleDto(
+            id = "role_owner",
+            name = "OWNER",
+            description = "Full business control",
+            isSystem = true,
+            permissions = listOf(
+                "perm_tx_read", "perm_tx_export", "perm_tx_create", "perm_tx_refund", "perm_tx_delete",
+                "perm_evt_ingest", "perm_acc_read", "perm_acc_manage", "perm_upi_read", "perm_upi_manage",
+                "perm_qr_create", "perm_staff_read", "perm_staff_manage", "perm_rep_read", "perm_org_manage"
+            )
+        ),
+        RoleDto(
+            id = "role_manager",
+            name = "MANAGER",
+            description = "Business and staff operations",
+            isSystem = true,
+            permissions = listOf(
+                "perm_tx_read", "perm_tx_export", "perm_tx_create", "perm_tx_refund",
+                "perm_evt_ingest", "perm_acc_read", "perm_upi_read", "perm_qr_create",
+                "perm_staff_read", "perm_staff_manage", "perm_rep_read"
+            )
+        ),
+        RoleDto(
+            id = "role_cashier",
+            name = "CASHIER",
+            description = "Payment initiation and transaction records",
+            isSystem = true,
+            permissions = listOf(
+                "perm_tx_read", "perm_tx_create", "perm_evt_ingest", "perm_qr_create"
+            )
+        ),
+        RoleDto(
+            id = "role_accountant",
+            name = "ACCOUNTANT",
+            description = "Reconciliation, reporting and exports",
+            isSystem = true,
+            permissions = listOf(
+                "perm_tx_read", "perm_tx_export", "perm_acc_read", "perm_rep_read"
+            )
+        )
+    )
+}
+
+private fun getDefaultSystemPermissions(): List<PermissionDto> {
+    return listOf(
+        PermissionDto("perm_tx_read", "transactions.read", "View payment transactions & settlement history", "transactions"),
+        PermissionDto("perm_tx_export", "transactions.export", "Export reports to Excel & CSV spreadsheets", "transactions"),
+        PermissionDto("perm_tx_create", "transactions.create", "Record manual payments & initiate transactions", "transactions"),
+        PermissionDto("perm_tx_refund", "transactions.refund", "Process payment refunds back to customers", "transactions"),
+        PermissionDto("perm_tx_delete", "transactions.delete", "Delete payment transactions", "transactions"),
+        PermissionDto("perm_evt_ingest", "payment_events.ingest", "Auto-detect and capture payment notifications & SMS", "transactions"),
+        PermissionDto("perm_acc_read", "accounts.read", "View settlement bank accounts", "accounts"),
+        PermissionDto("perm_acc_manage", "accounts.manage", "Add, update, or remove linked bank accounts", "accounts"),
+        PermissionDto("perm_upi_read", "upi.read", "View active UPI IDs and VPAs", "upi"),
+        PermissionDto("perm_upi_manage", "upi.manage", "Configure and manage business UPI handles", "upi"),
+        PermissionDto("perm_qr_create", "qr.create", "Generate custom counter and customer QR codes", "qr"),
+        PermissionDto("perm_staff_read", "staff.read", "View team members and staff list", "staff"),
+        PermissionDto("perm_staff_manage", "staff.manage", "Invite staff, assign roles, or remove members", "staff"),
+        PermissionDto("perm_rep_read", "reports.read", "Access sales reports and business analytics", "reports"),
+        PermissionDto("perm_org_manage", "organization.manage", "Manage organization settings and business profile", "organization")
+    )
+}
+

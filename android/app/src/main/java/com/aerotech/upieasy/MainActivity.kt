@@ -1,6 +1,7 @@
 package com.aerotech.upieasy
 
 import android.os.Bundle
+import android.content.Intent
 import android.content.pm.ActivityInfo
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -69,10 +70,14 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector)
 }
 
 class MainActivity : FragmentActivity() {
+    private var incomingInviteEmail by mutableStateOf<String?>(null)
+    private var incomingInviteToken by mutableStateOf<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
         enableEdgeToEdge()
+        handleInviteIntent(intent)
 
         val sessionManager = SessionManager(applicationContext)
         val database by lazy { AppDatabase.getInstance(applicationContext) }
@@ -137,7 +142,7 @@ class MainActivity : FragmentActivity() {
                             !isComplete && currentOrg.isNullOrBlank() -> "setup"
                             else -> "main"
                         }
-                    } catch (e: Exception) {
+                    } catch (_e: Exception) {
                         resolvedStartDestination = "auth"
                     } finally {
                         isInitialized = true
@@ -282,6 +287,8 @@ class MainActivity : FragmentActivity() {
                         composable("auth") {
                             GoogleSignInScreen(
                                 sessionManager = sessionManager,
+                                invitedEmail = incomingInviteEmail,
+                                invitedToken = incomingInviteToken,
                                 onNavigateToSetup = {
                                     navController.navigate("setup") {
                                         popUpTo("auth") { inclusive = true }
@@ -437,6 +444,26 @@ class MainActivity : FragmentActivity() {
             }
         }
     }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleInviteIntent(intent)
+    }
+
+    private fun handleInviteIntent(intent: Intent?) {
+        val uri = intent?.data ?: return
+        val email = uri.getQueryParameter("email")
+        val token = uri.getQueryParameter("token")
+            ?: if (uri.pathSegments.contains("invite")) uri.lastPathSegment else null
+
+        if (!email.isNullOrBlank()) {
+            incomingInviteEmail = email
+        }
+        if (!token.isNullOrBlank()) {
+            incomingInviteToken = token
+        }
+    }
 }
 
 @Composable
@@ -455,6 +482,7 @@ fun MainAppContent(
     val navBackStackEntry by bottomNavController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route ?: Screen.Dashboard.route
     val userRole by sessionManager.userRoleFlow.collectAsState(initial = null)
+    val userPermissions by sessionManager.userPermissionsFlow.collectAsState(initial = emptySet())
     var showHubSheet by remember { mutableStateOf(false) }
     var isBottomBarShrunk by remember { mutableStateOf(false) }
 
@@ -560,6 +588,7 @@ fun MainAppContent(
         BentoGridRoutesBottomDrawer(
             visible = showHubSheet,
             userRole = userRole,
+            userPermissions = userPermissions,
             onDismiss = { showHubSheet = false },
             onNavigateToScan = {
                 showHubSheet = false
@@ -802,11 +831,21 @@ fun FloatingGlassBottomBar(
 /**
  * Bento Grid Routes Bottom Drawer displaying all destinations with glassmorphic cards.
  */
+private data class QuickRouteItem(
+    val title: String,
+    val subtitle: String,
+    val icon: ImageVector,
+    val iconBg: Color,
+    val iconTint: Color,
+    val onClick: () -> Unit
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BentoGridRoutesBottomDrawer(
     visible: Boolean,
     userRole: String? = null,
+    userPermissions: Set<String> = emptySet(),
     onDismiss: () -> Unit,
     onNavigateToScan: () -> Unit,
     onNavigateToQr: () -> Unit,
@@ -818,6 +857,38 @@ fun BentoGridRoutesBottomDrawer(
 ) {
     if (visible) {
         val context = LocalContext.current
+        val isOwner = userRole?.equals("OWNER", ignoreCase = true) == true
+        val roleUpper = userRole?.uppercase() ?: ""
+
+        val visibleActions = remember(userRole, userPermissions) {
+            val list = mutableListOf<QuickRouteItem>()
+            // 1. Scan QR (Scan Pay)
+            if (isOwner || roleUpper in listOf("MANAGER", "CASHIER") || userPermissions.contains("transactions.create")) {
+                list.add(QuickRouteItem("Scan QR", "Pay any merchant", Icons.Default.QrCodeScanner, PastelEmeraldBg, SuccessGreen, onNavigateToScan))
+            }
+            // 2. My QR Code
+            if (isOwner || roleUpper in listOf("MANAGER", "CASHIER") || userPermissions.contains("qr.create") || userPermissions.contains("upi.read")) {
+                list.add(QuickRouteItem("My QR Code", "Receive payments", Icons.Default.QrCode, PastelIndigoBg, BrandPrimary, onNavigateToQr))
+            }
+            // 3. Ledger History
+            if (isOwner || roleUpper in listOf("MANAGER", "ACCOUNTANT", "CASHIER") || userPermissions.contains("transactions.read")) {
+                list.add(QuickRouteItem("Ledger History", "Inflows & filters", Icons.AutoMirrored.Filled.ReceiptLong, PastelAmberBg, AmberAlert, onNavigateToTransactions))
+            }
+            // 4. UPI Accounts (Role-Gated: Cashiers & Accountants cannot manage UPI unless permitted)
+            if (isOwner || roleUpper == "MANAGER" || userPermissions.contains("upi.manage")) {
+                list.add(QuickRouteItem("UPI Accounts", "VPAs & Bank handles", Icons.Default.AccountBalanceWallet, PastelBlueBg, PastelBlueIcon, onNavigateToUpi))
+            }
+            // 5. Team & Staff (Role-Gated: Cashiers & Accountants cannot access Staff)
+            if (isOwner || roleUpper == "MANAGER" || userPermissions.contains("staff.manage") || userPermissions.contains("staff.read")) {
+                list.add(QuickRouteItem("Team & Staff", "Cashiers & roles", Icons.Default.Group, PastelPurpleBg, PastelPurpleIcon, onNavigateToStaff))
+            }
+            // 6. Settings (Role-Gated: Cashiers & Accountants cannot access settings)
+            if (isOwner || roleUpper == "MANAGER" || userPermissions.contains("organization.manage")) {
+                list.add(QuickRouteItem("Settings", "Audio, alerts & theme", Icons.Default.Settings, PastelCyan, PastelCyanIcon, onNavigateToSettings))
+            }
+            list
+        }
+
         ModalBottomSheet(
             onDismissRequest = onDismiss,
             containerColor = MaterialTheme.colorScheme.surface,
@@ -860,107 +931,31 @@ fun BentoGridRoutesBottomDrawer(
 
                 Spacer(modifier = Modifier.height(18.dp))
 
-                // Row 1: Primary Actions (Scan & Receive)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    BentoCard(
-                        modifier = Modifier.weight(1f),
-                        title = "Scan QR",
-                        subtitle = "Pay any merchant",
-                        icon = Icons.Default.QrCodeScanner,
-                        iconBg = PastelEmeraldBg,
-                        iconTint = SuccessGreen,
-                        onClick = {
-                            HapticHelper.performHaptic(context, HapticHelper.FeedbackType.MEDIUM)
-                            onNavigateToScan()
+                // Dynamically render visible quick action cards in 2-column rows
+                visibleActions.chunked(2).forEach { rowPair ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        rowPair.forEach { action ->
+                            BentoCard(
+                                modifier = Modifier.weight(1f),
+                                title = action.title,
+                                subtitle = action.subtitle,
+                                icon = action.icon,
+                                iconBg = action.iconBg,
+                                iconTint = action.iconTint,
+                                onClick = {
+                                    HapticHelper.performHaptic(context, HapticHelper.FeedbackType.MEDIUM)
+                                    action.onClick()
+                                }
+                            )
                         }
-                    )
-
-                    BentoCard(
-                        modifier = Modifier.weight(1f),
-                        title = "My QR Code",
-                        subtitle = "Receive payments",
-                        icon = Icons.Default.QrCode,
-                        iconBg = PastelIndigoBg,
-                        iconTint = BrandPrimary,
-                        onClick = {
-                            HapticHelper.performHaptic(context, HapticHelper.FeedbackType.MEDIUM)
-                            onNavigateToQr()
+                        if (rowPair.size == 1) {
+                            Spacer(modifier = Modifier.weight(1f))
                         }
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Row 2: Transactions & Accounts
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    BentoCard(
-                        modifier = Modifier.weight(1f),
-                        title = "Ledger History",
-                        subtitle = "Inflows & filters",
-                        icon = Icons.AutoMirrored.Filled.ReceiptLong,
-                        iconBg = PastelAmberBg,
-                        iconTint = AmberAlert,
-                        onClick = {
-                            HapticHelper.performHaptic(context, HapticHelper.FeedbackType.LIGHT)
-                            onNavigateToTransactions()
-                        }
-                    )
-
-                    BentoCard(
-                        modifier = Modifier.weight(1f),
-                        title = "UPI Accounts",
-                        subtitle = "VPAs & Bank handles",
-                        icon = Icons.Default.AccountBalanceWallet,
-                        iconBg = PastelBlueBg,
-                        iconTint = PastelBlueIcon,
-                        onClick = {
-                            HapticHelper.performHaptic(context, HapticHelper.FeedbackType.LIGHT)
-                            onNavigateToUpi()
-                        }
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Row 3: Staff & Settings (Role-Gated: Cashiers cannot access Staff)
-                val isCashier = userRole?.uppercase() == "CASHIER"
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    if (!isCashier) {
-                        BentoCard(
-                            modifier = Modifier.weight(1f),
-                            title = "Team & Staff",
-                            subtitle = "Cashiers & roles",
-                            icon = Icons.Default.Group,
-                            iconBg = PastelPurpleBg,
-                            iconTint = PastelPurpleIcon,
-                            onClick = {
-                                HapticHelper.performHaptic(context, HapticHelper.FeedbackType.LIGHT)
-                                onNavigateToStaff()
-                            }
-                        )
                     }
-
-                    BentoCard(
-                        modifier = Modifier.weight(1f),
-                        title = "Settings",
-                        subtitle = "Audio, alerts & theme",
-                        icon = Icons.Default.Settings,
-                        iconBg = PastelCyan,
-                        iconTint = PastelCyanIcon,
-                        onClick = {
-                            HapticHelper.performHaptic(context, HapticHelper.FeedbackType.LIGHT)
-                            onNavigateToSettings()
-                        }
-                    )
+                    Spacer(modifier = Modifier.height(12.dp))
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))

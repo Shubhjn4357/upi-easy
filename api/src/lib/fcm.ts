@@ -34,8 +34,9 @@ export async function sendFcmToDevice(
   // In production with Cloudflare Worker, this can call Google OAuth2 FCM v1 endpoint.
   // For local and tests, we simulate successful delivery and log for audit.
   try {
-    const fcmServerKey = process.env.FCM_SERVER_KEY;
-    if (fcmServerKey && process.env.NODE_ENV === "production") {
+    const fcmServerKey = typeof process !== "undefined" && process?.env ? process.env.FCM_SERVER_KEY : undefined;
+    const isProd = typeof process !== "undefined" && process?.env ? process.env.NODE_ENV === "production" : false;
+    if (fcmServerKey && isProd) {
       const res = await fetch("https://fcm.googleapis.com/fcm/send", {
         method: "POST",
         headers: {

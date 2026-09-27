@@ -91,6 +91,86 @@ app.get("/admin", (c) => {
   return c.html(renderDashboardHtml({ clientId, apiBaseUrl }));
 });
 
+// Web Invite Landing Page (Deep links directly into Android app)
+app.get("/invite/:token", async (c) => {
+  const token = c.req.param("token");
+  const email = c.req.query("email") || "";
+
+  // Attempt to fetch invite details from DB
+  let orgName = "Store";
+  let role = "Staff Member";
+  try {
+    const invite = await (await import("./db/index.js")).db
+      .select({
+        role: (await import("./db/schema/index.js")).organizationInvites.role,
+        orgName: (await import("./db/schema/index.js")).organizations.name,
+      })
+      .from((await import("./db/schema/index.js")).organizationInvites)
+      .innerJoin(
+        (await import("./db/schema/index.js")).organizations,
+        (await import("drizzle-orm")).eq(
+          (await import("./db/schema/index.js")).organizationInvites.organizationId,
+          (await import("./db/schema/index.js")).organizations.id
+        )
+      )
+      .where(
+        (await import("drizzle-orm")).or(
+          (await import("drizzle-orm")).eq((await import("./db/schema/index.js")).organizationInvites.token, token),
+          (await import("drizzle-orm")).eq((await import("./db/schema/index.js")).organizationInvites.id, token)
+        )
+      )
+      .get();
+
+    if (invite) {
+      orgName = invite.orgName;
+      role = invite.role;
+    }
+  } catch (_) {}
+
+  const deepLink = `upieasy://invite?token=${encodeURIComponent(token)}&email=${encodeURIComponent(email)}`;
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Join ${orgName} on UPI-Easy</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background: #0A0D14; color: #F3F4F6; display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }
+    .card { background: #131826; border: 1px solid #1F293D; border-radius: 24px; padding: 36px 28px; max-width: 420px; width: 100%; text-align: center; box-shadow: 0 20px 40px rgba(0,0,0,0.5); }
+    .badge { display: inline-block; background: rgba(99, 102, 241, 0.15); color: #818CF8; border: 1px solid rgba(99, 102, 241, 0.3); padding: 6px 14px; border-radius: 999px; font-size: 13px; font-weight: 600; text-transform: uppercase; margin-bottom: 20px; }
+    h1 { font-size: 24px; font-weight: 800; margin-bottom: 10px; color: #FFFFFF; }
+    p { font-size: 15px; color: #9CA3AF; line-height: 1.5; margin-bottom: 28px; }
+    .email-chip { background: #1E2638; border-radius: 12px; padding: 10px 14px; font-size: 14px; color: #E5E7EB; margin-bottom: 24px; word-break: break-all; }
+    .btn { display: block; width: 100%; background: linear-gradient(135deg, #4F46E5, #6366F1); color: #FFF; font-weight: 700; font-size: 16px; padding: 15px; border-radius: 14px; text-decoration: none; border: none; cursor: pointer; transition: transform 0.1s, opacity 0.2s; box-shadow: 0 4px 14px rgba(79, 70, 229, 0.4); }
+    .btn:hover { opacity: 0.95; transform: scale(1.01); }
+    .subtext { margin-top: 20px; font-size: 13px; color: #6B7280; }
+  </style>
+  <script>
+    // Auto launch deep link on mobile browsers
+    window.onload = function() {
+      setTimeout(function() {
+        window.location.href = "${deepLink}";
+      }, 300);
+    };
+  </script>
+</head>
+<body>
+  <div class="card">
+    <div class="badge">${role} Invitation</div>
+    <h1>You're Invited!</h1>
+    <p>You have been invited to join <strong>${orgName}</strong> on UPI-Easy as a <strong>${role}</strong>.</p>
+    ${email ? `<div class="email-chip">Sign in with: <strong>${email}</strong></div>` : ""}
+    <a href="${deepLink}" class="btn">Open in UPI-Easy App</a>
+    <div class="subtext">Make sure the UPI-Easy app is installed on your Android device.</div>
+  </div>
+</body>
+</html>`;
+
+  return c.html(html);
+});
+
 // Health check
 app.get("/health", (c) => {
   return c.json({

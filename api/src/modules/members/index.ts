@@ -87,28 +87,32 @@ membersRouter.get("/:orgId/invites", requireTenant, requirePermission("staff.rea
   }
 });
 
+export const createInviteSchema = z.object({
+  email: z
+    .string({ required_error: "Email address is required to invite staff" })
+    .trim()
+    .min(1, "Email address is required")
+    .email("A valid email address is required"),
+  mobileNumber: z.string().optional().nullable().or(z.literal("")),
+  name: z.string().optional().nullable().or(z.literal("")),
+  fullName: z.string().optional().nullable().or(z.literal("")),
+  role: z.enum(["MANAGER", "CASHIER", "ACCOUNTANT"]).default("CASHIER"),
+});
+
+export type CreateInviteInput = z.infer<typeof createInviteSchema>;
+
 const createInviteHandler = async (c: Context<AppEnv>) => {
   const orgId = c.get("organizationId");
   const actorId = c.get("userId");
-  const body = await c.req.json();
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    throw new AppError("Invalid JSON payload", 400, "BAD_REQUEST");
+  }
 
-  const validator = z
-    .object({
-      email: z.string().email("Valid email address is required").optional().nullable().or(z.literal("")),
-      mobileNumber: z.string().optional().nullable(),
-      name: z.string().optional().nullable(),
-      fullName: z.string().optional().nullable(),
-      role: z.enum(["MANAGER", "CASHIER", "ACCOUNTANT"]).default("CASHIER"),
-    })
-    .refine(
-      (data) => Boolean((data.email && data.email.trim()) || (data.mobileNumber && data.mobileNumber.trim())),
-      {
-        message: "Either mobile number or email must be provided",
-      }
-    );
-
-  const parsed = validator.parse(body);
-  const email = parsed.email?.trim() ? parsed.email.trim().toLowerCase() : undefined;
+  const parsed = createInviteSchema.parse(body);
+  const email = parsed.email.trim().toLowerCase();
   const rawMobile = parsed.mobileNumber?.trim() || undefined;
   const name = parsed.name?.trim() || parsed.fullName?.trim() || undefined;
   const role = parsed.role;
@@ -131,7 +135,14 @@ const createInviteHandler = async (c: Context<AppEnv>) => {
   const actor = await db.select().from(schema.users).where(eq(schema.users.id, actorId)).get();
 
   let existingUser: typeof schema.users.$inferSelect | undefined;
-  if (normalizedMobile && mobile10) {
+  if (email) {
+    existingUser = await db
+      .select()
+      .from(schema.users)
+      .where(eq(schema.users.email, email))
+      .get();
+  }
+  if (!existingUser && normalizedMobile && mobile10) {
     existingUser = await db
       .select()
       .from(schema.users)
@@ -143,22 +154,15 @@ const createInviteHandler = async (c: Context<AppEnv>) => {
       )
       .get();
   }
-  if (!existingUser && email) {
-    existingUser = await db
-      .select()
-      .from(schema.users)
-      .where(eq(schema.users.email, email))
-      .get();
-  }
 
   // 4. Prevent inviting self
   const actorNormalizedMobile = actor?.mobileNumber ? normalizeIndianMobileNumber(actor.mobileNumber) : null;
   const actorMobile10 = actor?.mobileNumber ? get10DigitMobile(actor.mobileNumber) : null;
   const isSelfInvite =
     (existingUser && existingUser.id === actorId) ||
+    (actor?.email && email === actor.email.toLowerCase()) ||
     (normalizedMobile && actorNormalizedMobile && normalizedMobile === actorNormalizedMobile) ||
-    (mobile10 && actorMobile10 && mobile10 === actorMobile10) ||
-    (email && actor?.email && email.toLowerCase() === actor.email.toLowerCase());
+    (mobile10 && actorMobile10 && mobile10 === actorMobile10);
 
   if (isSelfInvite) {
     throw new AppError("You cannot invite yourself to the organization", 400, "CANNOT_INVITE_SELF");
@@ -183,29 +187,61 @@ const createInviteHandler = async (c: Context<AppEnv>) => {
     }
   }
 
-  // 6. Prevent duplicate pending invitation
+  // 6. Check existing pending invitation
   const now = new Date();
-  const dupConditions = [];
-  if (email) dupConditions.push(eq(schema.organizationInvites.invitedEmail, email));
-  if (existingUser) dupConditions.push(eq(schema.organizationInvites.invitedUserId, existingUser.id));
-  if (normalizedMobile) dupConditions.push(eq(schema.organizationInvites.invitedMobile, normalizedMobile));
-  if (mobile10) dupConditions.push(eq(schema.organizationInvites.invitedMobile, mobile10));
-
-  if (dupConditions.length > 0) {
-    const duplicate = await db
-      .select()
-      .from(schema.organizationInvites)
-      .where(
-        and(
-          eq(schema.organizationInvites.organizationId, orgId),
-          eq(schema.organizationInvites.status, "PENDING"),
-          or(...dupConditions)
-        )
+  const existingPending = await db
+    .select()
+    .from(schema.organizationInvites)
+    .where(
+      and(
+        eq(schema.organizationInvites.organizationId, orgId),
+        eq(schema.organizationInvites.status, "PENDING"),
+        eq(schema.organizationInvites.invitedEmail, email)
       )
-      .get();
+    )
+    .get();
 
-    if (duplicate && new Date(duplicate.expiresAt) > now) {
-      throw new AppError("A pending invitation already exists for this recipient", 409, "DUPLICATE_INVITATION");
+  if (existingPending) {
+    if (existingPending.expiresAt && new Date(existingPending.expiresAt) > now) {
+      // Refresh token & expiration for seamless re-sending
+      const refreshedToken = generateId("invtok");
+      const refreshedExpiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+      await db.update(schema.organizationInvites)
+        .set({
+          token: refreshedToken,
+          role,
+          invitedName: name ?? existingPending.invitedName,
+          invitedMobile: normalizedMobile || mobile10 || existingPending.invitedMobile || "",
+          expiresAt: refreshedExpiresAt,
+          updatedAt: now,
+        })
+        .where(eq(schema.organizationInvites.id, existingPending.id))
+        .run();
+
+      const apiBaseUrl = (c.env as any)?.API_BASE_URL || "https://upi-easy-api.aerotech.workers.dev";
+      const inviteUrl = `${apiBaseUrl}/invite/${refreshedToken}?email=${encodeURIComponent(email)}`;
+      const deepLinkUrl = `upieasy://invite?token=${refreshedToken}&email=${encodeURIComponent(email)}&role=${role}&orgId=${orgId}`;
+
+      return c.json({
+        success: true,
+        message: "Existing invitation refreshed and renewed for 7 days",
+        invite: {
+          id: existingPending.id,
+          token: refreshedToken,
+          inviteUrl,
+          deepLinkUrl,
+          organizationId: orgId,
+          organizationName: org.name,
+          invitedEmail: email,
+          invitedMobile: normalizedMobile || null,
+          role,
+          status: "PENDING",
+          expiresAt: refreshedExpiresAt.toISOString(),
+        },
+      });
+    } else {
+      // Remove old expired invitation
+      await db.delete(schema.organizationInvites).where(eq(schema.organizationInvites.id, existingPending.id)).run();
     }
   }
 
@@ -214,14 +250,15 @@ const createInviteHandler = async (c: Context<AppEnv>) => {
   const token = generateId("invtok");
   const expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
 
+  // Store empty string for mobile if absent to prevent NOT NULL constraint error on SQLite schema
   await db.insert(schema.organizationInvites)
     .values({
       id: inviteId,
       token,
       organizationId: orgId,
       invitedUserId: existingUser ? existingUser.id : null,
-      invitedMobile: normalizedMobile || mobile10 || null,
-      invitedEmail: email || null,
+      invitedMobile: normalizedMobile || mobile10 || "",
+      invitedEmail: email,
       invitedName: name ?? null,
       role,
       invitedBy: actorId,
@@ -232,38 +269,46 @@ const createInviteHandler = async (c: Context<AppEnv>) => {
     })
     .run();
 
-  // 8. Audit log
-  await db.insert(schema.auditLogs)
-    .values({
-      id: generateId("aud"),
-      organizationId: orgId,
-      actorId,
-      action: "staff.invited",
-      resourceType: "organization_invite",
-      resourceId: inviteId,
-      metadataJson: JSON.stringify({ invitedMobile: normalizedMobile, email, role }),
-      createdAt: now,
-    })
-    .run();
-
-  // 9. Outbox event
-  await db.insert(schema.outboxEvents)
-    .values({
-      id: generateId("evt"),
-      organizationId: orgId,
-      eventType: "staff.invited",
-      payloadJson: JSON.stringify({
+  // 8. Auxiliary operations safely guarded
+  try {
+    await db.insert(schema.auditLogs)
+      .values({
+        id: generateId("aud"),
         organizationId: orgId,
-        inviteId,
-        invitedUserId: existingUser?.id ?? null,
-        role,
-      }),
-      status: "PENDING",
-      createdAt: now,
-    })
-    .run();
+        actorId,
+        action: "staff.invited",
+        resourceType: "organization_invite",
+        resourceId: inviteId,
+        metadataJson: JSON.stringify({ invitedMobile: normalizedMobile, email, role }),
+        createdAt: now,
+      })
+      .run();
+  } catch (err) {
+    console.warn("[Invite] Audit log notice:", err);
+  }
 
-  // 10. In-app and Push Notification to recipient if user exists
+  try {
+    await db.insert(schema.outboxEvents)
+      .values({
+        id: generateId("evt"),
+        organizationId: orgId,
+        eventType: "staff.invited",
+        payloadJson: JSON.stringify({
+          organizationId: orgId,
+          inviteId,
+          invitedUserId: existingUser?.id ?? null,
+          role,
+          email,
+        }),
+        status: "PENDING",
+        createdAt: now,
+      })
+      .run();
+  } catch (err) {
+    console.warn("[Invite] Outbox notice:", err);
+  }
+
+  // 9. In-app and Push Notification to recipient if user exists
   if (existingUser) {
     try {
       await db.insert(schema.notifications)
@@ -279,14 +324,14 @@ const createInviteHandler = async (c: Context<AppEnv>) => {
             organizationId: orgId,
             organizationName: org.name,
             inviteId,
+            token,
             role,
-            deepLink: `upieasy://organization/${orgId}/invitation/${inviteId}`,
+            deepLink: `upieasy://invite?token=${token}&email=${encodeURIComponent(email)}`,
           }),
           createdAt: now,
         })
         .run();
 
-      // Find recipient's active devices
       const recipientDevices = await db
         .select()
         .from(schema.devices)
@@ -302,33 +347,34 @@ const createInviteHandler = async (c: Context<AppEnv>) => {
         if (dev.fcmToken) {
           await sendFcmToDevice(dev.fcmToken, {
             title: "New staff invitation",
-            body: `${org.name}\nRole: ${role}\nTap to review`,
+            body: `${org.name}\nRole: ${role}\nTap to review and accept`,
             data: {
               type: "staff.invited",
               organizationId: orgId,
               inviteId,
+              token,
               role,
             },
           });
         }
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.warn(`[Invite] Notification dispatch notice:`, msg);
+      console.warn("[Invite] Notification dispatch notice:", err);
     }
   }
 
-  const origin = c.req.header("origin") || c.req.header("referer")?.replace(/\/$/, "") || "http://localhost:5173";
-  const baseUrl = origin.replace(/\/invite.*$/, "").replace(/\/$/, "");
-  const inviteUrl = `${baseUrl}/invite/${token}`;
+  const apiBaseUrl = (c.env as any)?.API_BASE_URL || "https://upi-easy-api.aerotech.workers.dev";
+  const inviteUrl = `${apiBaseUrl}/invite/${token}?email=${encodeURIComponent(email)}`;
+  const deepLinkUrl = `upieasy://invite?token=${token}&email=${encodeURIComponent(email)}&role=${role}&orgId=${orgId}`;
 
   return c.json({
     success: true,
-    message: "Invitation link created successfully",
+    message: "Staff invitation sent successfully",
     invite: {
       id: inviteId,
       token,
       inviteUrl,
+      deepLinkUrl,
       organizationId: orgId,
       organizationName: org.name,
       invitedEmail: email,

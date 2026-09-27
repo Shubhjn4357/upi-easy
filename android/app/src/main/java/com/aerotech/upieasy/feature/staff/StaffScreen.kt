@@ -32,6 +32,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.KeyboardActions
+import android.content.Context
+import android.content.Intent
+import java.net.URLEncoder
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.platform.LocalFocusManager
@@ -53,6 +56,33 @@ import com.aerotech.upieasy.core.ui.StaffScreenSkeleton
 import com.aerotech.upieasy.ui.theme.*
 import kotlinx.coroutines.launch
 
+fun shareStaffInviteLink(context: Context, invite: InvitationDto, orgName: String? = null) {
+    val storeName = orgName?.takeIf { it.isNotBlank() } ?: invite.organizationName.takeIf { it.isNotBlank() } ?: "our store"
+    val token = invite.token?.takeIf { it.isNotBlank() } ?: invite.id
+    val encodedEmail = invite.invitedEmail?.let { URLEncoder.encode(it, "UTF-8") } ?: ""
+    val deepLink = "upieasy://invite?token=$token&email=$encodedEmail"
+    val webLink = invite.inviteUrl ?: "https://upi-easy-api.aerotech.workers.dev/invite/$token?email=$encodedEmail"
+
+    val shareText = """
+        You have been invited to join $storeName on UPI-Easy as a ${invite.role}!
+
+        Click to open the UPI-Easy app:
+        $deepLink
+
+        Or open in your browser:
+        $webLink
+
+        Note: Sign in using ${invite.invitedEmail ?: "your Google account"} to accept access.
+    """.trimIndent()
+
+    val sendIntent = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_SUBJECT, "Invitation to join $storeName on UPI-Easy")
+        putExtra(Intent.EXTRA_TEXT, shareText)
+    }
+    context.startActivity(Intent.createChooser(sendIntent, "Share Staff Invitation"))
+}
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun StaffScreen(
@@ -64,6 +94,7 @@ fun StaffScreen(
     val apiService = remember { NetworkClient.getApiService(sessionManager) }
     val orgRepository = remember { OrganizationRepository(context, apiService, database, sessionManager) }
     val currentOrgId by sessionManager.currentOrgIdFlow.collectAsState(initial = null)
+    val currentOrgName by sessionManager.currentOrgNameFlow.collectAsState(initial = null)
     val userRole by sessionManager.userRoleFlow.collectAsState(initial = null)
     val isOwner = userRole?.equals("OWNER", ignoreCase = true) == true
     val canManageStaff = isOwner || userRole?.equals("MANAGER", ignoreCase = true) == true
@@ -691,7 +722,8 @@ fun StaffScreen(
                                 refresh(silent = true)
                             }
                         }
-                    }
+                    },
+                    currentOrgName = currentOrgName
                 )
             }
         }
@@ -757,7 +789,7 @@ fun StaffScreen(
                         emailInput = it.trim()
                         errorMessage = null
                     },
-                    label = { Text("Email Address (Optional)") },
+                    label = { Text("Email Address (Required) *") },
                     placeholder = { Text("staff@example.com") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
@@ -835,16 +867,16 @@ fun StaffScreen(
                         val email = emailInput.trim().ifBlank { null }
                         val name = nameInput.trim().ifBlank { null }
 
-                        if (mobile == null && email == null) {
-                            errorMessage = "Please enter either a 10-digit mobile number or email address."
+                        if (email == null) {
+                            errorMessage = "Email address is required to invite staff."
+                            return@Button
+                        }
+                        if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches() && !email.contains("@")) {
+                            errorMessage = "Please enter a valid email address (e.g. staff@example.com)."
                             return@Button
                         }
                         if (mobile != null && mobile.length != 10) {
                             errorMessage = "Mobile number must be exactly 10 digits."
-                            return@Button
-                        }
-                        if (email != null && !email.contains("@")) {
-                            errorMessage = "Please enter a valid email address."
                             return@Button
                         }
 
@@ -860,13 +892,20 @@ fun StaffScreen(
                                         role = selectedRole
                                     )
                                     if (sendRes.isSuccess) {
-                                        Toast.makeText(context, "Staff invitation sent successfully. It is now pending until accepted.", Toast.LENGTH_SHORT).show()
+                                        val inviteResponse = sendRes.getOrNull()
+                                        val createdInvite = inviteResponse?.invite
+                                        Toast.makeText(context, "Staff invitation sent successfully!", Toast.LENGTH_SHORT).show()
                                         showInviteBottomSheet = false
                                         refresh()
+                                        if (createdInvite != null) {
+                                            shareStaffInviteLink(context, createdInvite, currentOrgName)
+                                        }
                                     } else {
                                         val errBody = sendRes.exceptionOrNull()?.message ?: "Failed to send invitation"
                                         val serverMsg = try {
-                                            org.json.JSONObject(errBody).optString("message", "").takeIf { it.isNotEmpty() }
+                                            val jsonObj = org.json.JSONObject(errBody)
+                                            jsonObj.optString("message").takeIf { it.isNotEmpty() }
+                                                ?: jsonObj.optJSONObject("error")?.optString("message")?.takeIf { it.isNotEmpty() }
                                         } catch (_: Exception) { null }
                                         errorMessage = serverMsg ?: errBody
                                     }
@@ -877,7 +916,6 @@ fun StaffScreen(
                                 }
                             }
                         }
-
                     },
                     modifier = Modifier
                         .fillMaxWidth()
@@ -977,8 +1015,10 @@ private fun InvitationsTabContent(
     onAcceptInvite: (OrganizationInviteEntity) -> Unit,
     onRejectInvite: (OrganizationInviteEntity) -> Unit,
     onCancelInvite: (InvitationDto) -> Unit,
+    currentOrgName: String? = null,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     UpieasyPullToRefreshContainer(
         isRefreshing = isRefreshing,
         onRefresh = onRefresh
@@ -1338,20 +1378,48 @@ private fun InvitationsTabContent(
 
                                 if (invite.status == "PENDING") {
                                     Spacer(modifier = Modifier.height(6.dp))
-                                    TextButton(
-                                        onClick = { onCancelInvite(invite) },
-                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                                        enabled = !isLoadingThis
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                                     ) {
-                                        if (isLoadingThis) {
-                                            CircularProgressIndicator(modifier = Modifier.size(12.dp), strokeWidth = 1.5.dp)
-                                        } else {
-                                            Text(
-                                                "Cancel",
-                                                color = FailedRed,
-                                                style = MaterialTheme.typography.labelSmall,
-                                                fontWeight = FontWeight.SemiBold
+                                        FilledTonalButton(
+                                            onClick = { shareStaffInviteLink(context, invite, currentOrgName) },
+                                            shape = RoundedCornerShape(10.dp),
+                                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                                            modifier = Modifier.height(32.dp),
+                                            colors = ButtonDefaults.filledTonalButtonColors(
+                                                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
                                             )
+                                        ) {
+                                            Icon(
+                                                Icons.Default.Share,
+                                                contentDescription = "Share",
+                                                modifier = Modifier.size(13.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text(
+                                                "Share",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+
+                                        TextButton(
+                                            onClick = { onCancelInvite(invite) },
+                                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                            enabled = !isLoadingThis
+                                        ) {
+                                            if (isLoadingThis) {
+                                                CircularProgressIndicator(modifier = Modifier.size(12.dp), strokeWidth = 1.5.dp)
+                                            } else {
+                                                Text(
+                                                    "Cancel",
+                                                    color = FailedRed,
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    fontWeight = FontWeight.SemiBold
+                                                )
+                                            }
                                         }
                                     }
                                 }
