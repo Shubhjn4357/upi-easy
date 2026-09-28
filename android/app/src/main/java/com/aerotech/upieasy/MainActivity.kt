@@ -229,8 +229,8 @@ class MainActivity : FragmentActivity() {
                         }
                     }
 
-                    var pendingInvite by remember { mutableStateOf<com.aerotech.upieasy.data.model.PendingInvitationItem?>(null) }
-                    var userExistingOrgs by remember { mutableStateOf<List<com.aerotech.upieasy.data.model.OrganizationItem>>(emptyList()) }
+                    var pendingInvite by remember { mutableStateOf<com.aerotech.upieasy.core.network.InvitationDto?>(null) }
+                    var userExistingOrgs by remember { mutableStateOf<List<com.aerotech.upieasy.core.network.OrganizationDto>>(emptyList()) }
                     var isAcceptingInvite by remember { mutableStateOf(false) }
 
                     LaunchedEffect(token, currentOrgId, incomingInviteToken) {
@@ -261,28 +261,15 @@ class MainActivity : FragmentActivity() {
                                 val inviteRes = api.getMyInvitations()
                                 if (inviteRes.isSuccessful && inviteRes.body()?.success == true) {
                                     val invites = inviteRes.body()?.invitations ?: inviteRes.body()?.invites ?: emptyList()
-                                    val pending = invites.firstOrNull { it.status.equals("PENDING", ignoreCase = true) }
+                                    val pending = if (!incomingInviteToken.isNullOrBlank()) {
+                                        invites.firstOrNull { it.token == incomingInviteToken || it.id == incomingInviteToken }
+                                            ?: invites.firstOrNull { it.status.equals("PENDING", ignoreCase = true) }
+                                    } else {
+                                        invites.firstOrNull { it.status.equals("PENDING", ignoreCase = true) }
+                                    }
                                     if (pending != null) {
                                         pendingInvite = pending
                                     }
-                                }
-
-                                // If deep link invite token received
-                                if (pendingInvite == null && !incomingInviteToken.isNullOrBlank()) {
-                                    try {
-                                        val tokenRes = api.getInviteDetails(incomingInviteToken!!)
-                                        if (tokenRes.isSuccessful && tokenRes.body()?.success == true) {
-                                            val d = tokenRes.body()!!.invitation
-                                            pendingInvite = com.aerotech.upieasy.data.model.PendingInvitationItem(
-                                                id = d.id,
-                                                organizationId = d.organizationId,
-                                                organizationName = d.organizationName,
-                                                role = d.role,
-                                                inviterName = d.inviterName,
-                                                createdAt = d.createdAt
-                                            )
-                                        }
-                                    } catch (_: Exception) {}
                                 }
                             } catch (e: Exception) {
                                 e.printStackTrace()
@@ -453,7 +440,8 @@ class MainActivity : FragmentActivity() {
                         )
                     }
 
-                    pendingInvite?.let { invite ->
+                    val invite = pendingInvite
+                    if (invite != null) {
                         com.aerotech.upieasy.ui.components.UpieasyPendingInviteModal(
                             visible = true,
                             orgName = invite.organizationName ?: "Workspace",
@@ -529,10 +517,6 @@ class MainActivity : FragmentActivity() {
                                 pendingInvite = null
                                 incomingInviteToken = null
                                 navController.navigate("setup")
-                            },
-                            onDismiss = {
-                                pendingInvite = null
-                                incomingInviteToken = null
                             }
                         )
                     }

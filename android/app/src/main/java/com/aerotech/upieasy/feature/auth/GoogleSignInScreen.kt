@@ -220,7 +220,8 @@ fun GoogleSignInScreen(
     }
 
     // Pending Invitation Popup Drawer (Accept, Reject, Select existing store, Create new store)
-    pendingInvite?.let { invite ->
+    val invite = pendingInvite
+    if (invite != null) {
         com.aerotech.upieasy.ui.components.UpieasyPendingInviteModal(
             visible = true,
             orgName = invite.organizationName ?: "Workspace",

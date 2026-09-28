@@ -98,7 +98,7 @@ fun AppSetupScreen(
     }
 
     var pendingInvite by remember { mutableStateOf<com.aerotech.upieasy.core.network.InvitationDto?>(null) }
-    var userExistingOrgs by remember { mutableStateOf<List<com.aerotech.upieasy.data.model.OrganizationItem>>(emptyList()) }
+    var userExistingOrgs by remember { mutableStateOf<List<com.aerotech.upieasy.core.network.OrganizationDto>>(emptyList()) }
     var isAcceptingInvite by remember { mutableStateOf(false) }
 
     // Check if user has an active firm or pending invitation (e.g. invited staff)
@@ -143,7 +143,8 @@ fun AppSetupScreen(
     }
 
     // Pending Invitation Popup Modal
-    pendingInvite?.let { invite ->
+    val invite = pendingInvite
+    if (invite != null) {
         com.aerotech.upieasy.ui.components.UpieasyPendingInviteModal(
             visible = true,
             orgName = invite.organizationName ?: "Workspace",
@@ -214,9 +215,6 @@ fun AppSetupScreen(
                 }
             },
             onCreateNewStore = {
-                pendingInvite = null
-            },
-            onDismiss = {
                 pendingInvite = null
             }
         )
