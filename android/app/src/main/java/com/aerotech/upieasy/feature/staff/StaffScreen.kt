@@ -98,7 +98,9 @@ fun StaffScreen(
     val userRole by sessionManager.userRoleFlow.collectAsState(initial = null)
     val userPerms by sessionManager.userPermissionsFlow.collectAsState(initial = emptySet())
     val isOwner = userRole?.equals("OWNER", ignoreCase = true) == true
-    val canManageStaff = isOwner || userRole?.equals("MANAGER", ignoreCase = true) == true || userPerms.contains("staff.manage") || userPerms.contains("*")
+    val hasWildcard = isOwner || userPerms.contains("*")
+    val canManageStaff = hasWildcard || userRole?.equals("MANAGER", ignoreCase = true) == true || userPerms.contains("staff.manage")
+    val canReadStaff = canManageStaff || userRole?.uppercase() in listOf("MANAGER", "ACCOUNTANT") || userPerms.contains("staff.read")
 
     var staffList by remember { mutableStateOf<List<StaffMemberDto>>(emptyList()) }
     var pendingDeletedIds by remember { mutableStateOf(setOf<String>()) }
@@ -121,6 +123,10 @@ fun StaffScreen(
     var actionLoadingId by remember { mutableStateOf<String?>(null) }
 
     fun refresh(silent: Boolean = false) {
+        if (!canReadStaff) {
+            isLoading = false
+            return
+        }
         currentOrgId?.let { orgId ->
             if (!silent && staffList.isEmpty()) {
                 isLoading = true
@@ -287,7 +293,56 @@ fun StaffScreen(
                     .background(SoftGlowEmerald)
             )
 
-            if (selectedTab == 0) {
+            if (!canReadStaff) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(24.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(24.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)),
+                        border = BorderStroke(1.dp, GlassBorderLight),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(28.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(58.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.errorContainer),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Lock,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(30.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                text = "Permission Required",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "You do not have permission (staff.read) to view store staff and invitations.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            )
+                        }
+                    }
+                }
+            } else if (selectedTab == 0) {
             if (isLoading) {
                 StaffScreenSkeleton()
             } else if (staffList.isEmpty()) {

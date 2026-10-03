@@ -50,6 +50,7 @@ fun DashboardScreen(
     onNavigateToQr: () -> Unit,
     onNavigateToTransactions: () -> Unit,
     onNavigateToUpi: () -> Unit,
+    onNavigateToBankAccounts: () -> Unit = {},
     onNavigateToSettings: () -> Unit = {},
     onNavigateToStaff: () -> Unit = {},
     onNavigateToLegal: () -> Unit = {},
@@ -240,9 +241,9 @@ fun DashboardScreen(
                                 UpieasyHeroCard(
                                     balance = receivedAmount,
                                     transactionCount = receivedCount,
-                                    onShowQrClick = onNavigateToQr,
-                                    onScanPayClick = onNavigateToScan,
-                                    onHistoryClick = onNavigateToTransactions
+                                    onShowQrClick = { if (can("qr.create") || can("upi.read")) onNavigateToQr() },
+                                    onScanPayClick = { if (can("transactions.create")) onNavigateToScan() },
+                                    onHistoryClick = { if (can("transactions.read")) onNavigateToTransactions() }
                                 )
                             }
                         }
@@ -255,7 +256,9 @@ fun DashboardScreen(
                         ) {
                             // Bento Sub-Tile A: 0% MDR Free Direct Settlement
                             Card(
-                                modifier = Modifier.weight(1.2f),
+                                modifier = Modifier
+                                    .weight(1.2f)
+                                    .then(if (can("accounts.read") || can("accounts.manage")) Modifier.clickable { onNavigateToBankAccounts() } else Modifier),
                                 shape = RoundedCornerShape(22.dp),
                                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)),
                                 border = BorderStroke(1.dp, GlassBorderLight),
@@ -306,7 +309,7 @@ fun DashboardScreen(
                             Card(
                                 modifier = Modifier
                                     .weight(0.9f)
-                                    .clickable { onNavigateToUpi() },
+                                    .then(if (can("upi.read") || can("upi.manage")) Modifier.clickable { onNavigateToUpi() } else Modifier),
                                 shape = RoundedCornerShape(22.dp),
                                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)),
                                 border = BorderStroke(1.dp, GlassBorderLight),
@@ -425,6 +428,9 @@ fun DashboardScreen(
                                     if (can("upi.manage")) {
                                         list.add(Triple("Add UPI", Icons.Default.AccountBalanceWallet, onNavigateToUpi))
                                     }
+                                    if (can("accounts.read") || can("accounts.manage")) {
+                                        list.add(Triple("Bank", Icons.Default.AccountBalance, onNavigateToBankAccounts))
+                                    }
                                     if (can("transactions.read")) {
                                         list.add(Triple("Ledger", Icons.AutoMirrored.Filled.ReceiptLong, onNavigateToTransactions))
                                     }
@@ -449,6 +455,7 @@ fun DashboardScreen(
                                                 "Show QR" -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f) to MaterialTheme.colorScheme.primary
                                                 "Scan Pay" -> MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f) to MaterialTheme.colorScheme.tertiary
                                                 "Add UPI" -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f) to MaterialTheme.colorScheme.secondary
+                                                "Bank" -> MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.45f) to MaterialTheme.colorScheme.tertiary
                                                 "Ledger" -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f) to MaterialTheme.colorScheme.primary
                                                 "Staff" -> MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.4f) to MaterialTheme.colorScheme.tertiary
                                                 "Alerts" -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f) to MaterialTheme.colorScheme.primary
@@ -483,7 +490,7 @@ fun DashboardScreen(
                             Card(
                                 modifier = Modifier
                                     .weight(1f)
-                                    .clickable { onNavigateToTransactions() },
+                                    .then(if (can("transactions.read")) Modifier.clickable { onNavigateToTransactions() } else Modifier),
                                 shape = RoundedCornerShape(20.dp),
                                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)),
                                 border = BorderStroke(1.dp, PendingAmber.copy(alpha = 0.3f)),
@@ -518,7 +525,7 @@ fun DashboardScreen(
                             Card(
                                 modifier = Modifier
                                     .weight(1f)
-                                    .clickable { onNavigateToTransactions() },
+                                    .then(if (can("transactions.read")) Modifier.clickable { onNavigateToTransactions() } else Modifier),
                                 shape = RoundedCornerShape(20.dp),
                                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)),
                                 border = BorderStroke(1.dp, FailedRed.copy(alpha = 0.3f)),

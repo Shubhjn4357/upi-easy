@@ -49,6 +49,7 @@ paymentEventsRouter.post(
     const userRole = c.get("role");
     const perms = c.get("permissions") || [];
     const hasPerm =
+      perms.includes("*") ||
       perms.includes("payment_events.ingest") ||
       perms.includes("transactions.create") ||
       userRole === "OWNER" ||

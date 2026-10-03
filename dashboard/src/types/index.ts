@@ -198,6 +198,13 @@ export interface OverviewPageProps {
   onOpenNewUpi: () => void;
   onNavigate: (tab: string) => void;
   onInspectTxn: (action: string, txn: Transaction) => void;
+  canCreateTransactions?: boolean;
+  canManageUpi?: boolean;
+  canReadTransactions?: boolean;
+  canReadUpi?: boolean;
+  canReadStaff?: boolean;
+  canReadAccounts?: boolean;
+  isOwner?: boolean;
 }
 
 export interface PermissionDefinition {

@@ -109,7 +109,7 @@ export function DataTable<T>({
   return (
     <div className="space-y-3">
       {/* Top Filter & Menu Action Bar */}
-      <Card className="p-3 flex flex-col md:flex-row items-center justify-between gap-3 bg-card/80 backdrop-blur-sm border-border">
+      <Card className="p-3 flex flex-col md:flex-row items-center justify-between gap-3 bg-card/80 backdrop-blur-sm border-border relative z-30">
         {/* Left side: Search & Menu-style dropdown filters */}
         <div className="flex flex-1 flex-wrap items-center gap-2.5 w-full">
           {onSearchChange !== undefined && (
@@ -135,7 +135,7 @@ export function DataTable<T>({
 
           {/* Menu-style dropdowns */}
           {menuDropdowns.map((menu) => (
-            <div key={menu.id} className="min-w-[140px]">
+            <div key={menu.id} className="min-w-[140px] relative z-40">
               <Select
                 value={menu.value}
                 onChange={menu.onChange}
@@ -193,7 +193,7 @@ export function DataTable<T>({
       )}
 
       {/* Table Canvas */}
-      <Card className="overflow-hidden border border-border bg-card/90">
+      <Card className="overflow-hidden border border-border bg-card/90 relative z-0">
         <Table>
           <TableHeader>
             <TableRow>

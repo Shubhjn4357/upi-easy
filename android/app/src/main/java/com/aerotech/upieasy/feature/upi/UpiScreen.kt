@@ -66,7 +66,9 @@ fun UpiScreen(
     val userRole by sessionManager.userRoleFlow.collectAsState(initial = null)
     val userPerms by sessionManager.userPermissionsFlow.collectAsState(initial = emptySet())
     val isOwner = userRole?.equals("OWNER", ignoreCase = true) == true
-    val canManageUpi = isOwner || userRole?.uppercase() == "MANAGER" || userPerms.contains("upi.manage") || userPerms.contains("*")
+    val hasWildcard = isOwner || userPerms.contains("*")
+    val canManageUpi = hasWildcard || userRole?.uppercase() == "MANAGER" || userPerms.contains("upi.manage")
+    val canReadUpi = hasWildcard || userRole?.uppercase() in listOf("MANAGER", "ACCOUNTANT", "CASHIER") || userPerms.contains("upi.read") || canManageUpi
 
     val localAccounts by remember(currentOrgId) {
         if (!currentOrgId.isNullOrBlank()) {
@@ -103,6 +105,10 @@ fun UpiScreen(
     var showBulkDeleteConfirm by remember { mutableStateOf(false) }
 
     fun refresh() {
+        if (!canReadUpi) {
+            isLoading = false
+            return
+        }
         scope.launch {
             isLoading = true
             var orgId = currentOrgId ?: sessionManager.getCurrentOrgId()
@@ -260,7 +266,56 @@ fun UpiScreen(
                     .background(SoftGlowEmerald)
             )
 
-            if (isLoading && effectiveList.isEmpty()) {
+            if (!canReadUpi) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(24.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(24.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)),
+                        border = BorderStroke(1.dp, GlassBorderLight),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(28.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(58.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.errorContainer),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Lock,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(30.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                text = "Permission Required",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "You do not have permission (upi.read) to view UPI accounts and handles.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            )
+                        }
+                    }
+                }
+            } else if (isLoading && effectiveList.isEmpty()) {
                 UpiScreenSkeleton()
             } else if (effectiveList.isEmpty()) {
                 Box(
@@ -308,15 +363,17 @@ fun UpiScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
                             )
-                            Spacer(modifier = Modifier.height(20.dp))
-                            Button(
-                                onClick = { showAddBottomSheet = true },
-                                shape = RoundedCornerShape(16.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                            ) {
-                                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Add UPI Account", fontWeight = FontWeight.Bold)
+                            if (canManageUpi) {
+                                Spacer(modifier = Modifier.height(20.dp))
+                                Button(
+                                    onClick = { showAddBottomSheet = true },
+                                    shape = RoundedCornerShape(16.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                                ) {
+                                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Add UPI Account", fontWeight = FontWeight.Bold)
+                                }
                             }
                         }
                     }

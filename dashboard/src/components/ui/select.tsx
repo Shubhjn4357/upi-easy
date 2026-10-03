@@ -114,7 +114,7 @@ export function Select({
     : options;
 
   return (
-    <div className={`w-full space-y-1.5 ${className}`} ref={containerRef}>
+    <div className={`w-full space-y-1.5 ${isOpen ? 'relative z-50' : ''} ${className}`} ref={containerRef}>
       {/* Hidden input for standard HTML form compatibility */}
       {name && <input type="hidden" name={name} value={selectedValue} />}
 
@@ -127,7 +127,7 @@ export function Select({
         </div>
       )}
 
-      <div className="relative">
+      <div className={`relative ${isOpen ? 'z-50' : ''}`}>
         {/* Trigger Button */}
         <button
           type="button"
@@ -165,7 +165,7 @@ export function Select({
         {isOpen && (
           <div
             role="listbox"
-            className={`glass-dropdown absolute z-[9999] mt-1.5 max-h-60 w-full overflow-hidden rounded-2xl border border-border/80 bg-popover/95 p-1 text-popover-foreground shadow-2xl backdrop-blur-xl animate-dropdown-in ${dropdownClassName}`}>
+            className={`glass-dropdown absolute z-[9999] mt-1.5 max-h-60 min-w-full overflow-hidden rounded-2xl border border-border/80 bg-popover/95 p-1 text-popover-foreground shadow-2xl backdrop-blur-xl animate-dropdown-in pointer-events-auto ${dropdownClassName}`}>
             {/* Search Input in Dropdown */}
             {searchable && (
               <div className="p-1.5 border-b border-border/60 mb-1">

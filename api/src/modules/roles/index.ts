@@ -57,6 +57,39 @@ rolesRouter.get("/:orgId/roles", requireTenant, async (c) => {
     allPermissions = await db.select().from(schema.permissions).all();
   }
 
+  if (allRolePerms.length === 0) {
+    const rolePermMap: Record<string, string[]> = {
+      role_owner: allPermissions.map((p) => p.id),
+      role_manager: [
+        "perm_tx_read",
+        "perm_tx_export",
+        "perm_tx_create",
+        "perm_tx_refund",
+        "perm_tx_delete",
+        "perm_evt_ingest",
+        "perm_acc_read",
+        "perm_upi_read",
+        "perm_qr_create",
+        "perm_staff_read",
+        "perm_staff_manage",
+        "perm_rep_read",
+      ],
+      role_cashier: ["perm_tx_read", "perm_tx_create", "perm_evt_ingest", "perm_upi_read", "perm_qr_create"],
+      role_accountant: ["perm_tx_read", "perm_tx_export", "perm_rep_read", "perm_acc_read", "perm_upi_read"],
+    };
+    for (const [roleId, permIds] of Object.entries(rolePermMap)) {
+      for (const permId of permIds) {
+        try {
+          await db.insert(schema.rolePermissions)
+            .values({ id: `${roleId}_${permId}`, roleId, permissionId: permId })
+            .onConflictDoNothing()
+            .run();
+        } catch (_) {}
+      }
+    }
+    allRolePerms = await db.select().from(schema.rolePermissions).all();
+  }
+
 
   const formattedRoles = allRoles.map((role) => {
     let permIds: string[] = [];

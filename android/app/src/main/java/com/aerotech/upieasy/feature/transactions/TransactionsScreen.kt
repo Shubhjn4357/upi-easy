@@ -109,8 +109,10 @@ fun TransactionsScreen(
     val userRole by sessionManager.userRoleFlow.collectAsState(initial = null)
     val userPermissions by sessionManager.userPermissionsFlow.collectAsState(initial = emptySet())
     val isOwner = userRole?.equals("OWNER", ignoreCase = true) == true
-    val canExport = isOwner || userRole?.uppercase() in listOf("MANAGER", "ACCOUNTANT") || userPermissions.contains("transactions.export") || userPermissions.contains("*")
-    val canDelete = isOwner || userPermissions.contains("transactions.delete") || userPermissions.contains("*")
+    val hasWildcard = isOwner || userPermissions.contains("*")
+    val canReadTransactions = hasWildcard || userRole?.uppercase() in listOf("MANAGER", "ACCOUNTANT", "CASHIER") || userPermissions.contains("transactions.read")
+    val canExport = hasWildcard || userRole?.uppercase() in listOf("MANAGER", "ACCOUNTANT") || userPermissions.contains("transactions.export")
+    val canDelete = hasWildcard || userPermissions.contains("transactions.delete")
     val userAvatarUrl by sessionManager.userAvatarUrlFlow.collectAsState(initial = null)
 
     var searchQuery by remember { mutableStateOf("") }
@@ -131,7 +133,11 @@ fun TransactionsScreen(
 
     val transactionsList by repository.getTransactionsFlow(currentOrgId ?: "").collectAsState(initial = emptyList())
 
-    LaunchedEffect(currentOrgId) {
+    LaunchedEffect(currentOrgId, canReadTransactions) {
+        if (!canReadTransactions) {
+            isInitialLoading = false
+            return@LaunchedEffect
+        }
         currentOrgId?.let {
             repository.refreshTransactions(it)
             isInitialLoading = false
@@ -254,11 +260,62 @@ fun TransactionsScreen(
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-        ) {
+        if (!canReadTransactions) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(24.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(28.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(58.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.errorContainer),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Lock,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(30.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "Permission Required",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "You do not have permission (transactions.read) to view payment transactions.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    }
+                }
+            }
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+            ) {
             // Search Bar & Filter Controls Row 
             Row(
                 modifier = Modifier
@@ -511,6 +568,7 @@ fun TransactionsScreen(
             }
         }
     }
+}
 
     // Redesigned Comprehensive Filter Bottom Sheet
     if (showFilterSheet) {

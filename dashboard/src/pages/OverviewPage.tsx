@@ -12,20 +12,12 @@ import {
   IconWallet,
   IconHeartPulse,
 } from '@/components/ui/icons';
-import type { DashboardStats, Transaction } from '@/types';
+import type { DashboardStats, Transaction, OverviewPageProps } from '@/types';
+
+export type { OverviewPageProps };
 
 import { BentoOverviewSkeleton } from '@/components/ui/Skeleton';
 
-export interface OverviewPageProps {
-  stats: DashboardStats | null;
-  loading?: boolean;
-  onOpenNewTxn: () => void;
-  onOpenNewUpi: () => void;
-  onNavigate: (tab: string) => void;
-  onInspectTxn: (action: string, txn: Transaction) => void;
-}
-
-// Dashboard Overview & KPIs Page using shadcn/ui with strict TypeScript types
 export function OverviewPage({
   stats,
   loading = false,
@@ -33,6 +25,13 @@ export function OverviewPage({
   onOpenNewUpi,
   onNavigate,
   onInspectTxn,
+  canCreateTransactions = true,
+  canManageUpi = true,
+  canReadTransactions = true,
+  canReadUpi = true,
+  canReadStaff = true,
+  canReadAccounts = true,
+  isOwner = false,
 }: OverviewPageProps) {
   if (loading || !stats) {
     return <BentoOverviewSkeleton />;
@@ -51,21 +50,25 @@ export function OverviewPage({
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            variant="brand"
-            size="sm"
-            onClick={onOpenNewTxn}
-            className="rounded-xl gap-1.5 font-bold">
-            <IconPlus className="w-3.5 h-3.5" />
-            <span>Record Payment</span>
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onOpenNewUpi}
-            className="rounded-xl">
-            Add UPI ID
-          </Button>
+          {canCreateTransactions && (
+            <Button
+              variant="brand"
+              size="sm"
+              onClick={onOpenNewTxn}
+              className="rounded-xl gap-1.5 font-bold">
+              <IconPlus className="w-3.5 h-3.5" />
+              <span>Record Payment</span>
+            </Button>
+          )}
+          {canManageUpi && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onOpenNewUpi}
+              className="rounded-xl">
+              Add UPI ID
+            </Button>
+          )}
         </div>
       </div>
 
@@ -128,14 +131,16 @@ export function OverviewPage({
         <Card className="lg:col-span-2 p-5">
           <div className="flex items-center justify-between mb-4">
             <CardTitle className="text-sm font-bold">Recent Transactions</CardTitle>
-            <Button
-              variant="link"
-              size="sm"
-              onClick={() => onNavigate('transactions')}
-              className="text-xs p-0 h-auto gap-1">
-              <span>View All</span>
-              <IconArrowUpRight className="w-3.5 h-3.5" />
-            </Button>
+            {canReadTransactions && (
+              <Button
+                variant="link"
+                size="sm"
+                onClick={() => onNavigate('transactions')}
+                className="text-xs p-0 h-auto gap-1">
+                <span>View All</span>
+                <IconArrowUpRight className="w-3.5 h-3.5" />
+              </Button>
+            )}
           </div>
 
           <Table>
@@ -194,61 +199,69 @@ export function OverviewPage({
         <Card className="p-5 space-y-3">
           <CardTitle className="text-sm font-bold">Quick Shortcuts</CardTitle>
           <div className="space-y-2">
-            <Button
-              variant="outline"
-              onClick={() => onNavigate('upi')}
-              className="w-full justify-between h-auto py-3 px-4 rounded-xl">
-              <div className="flex items-center gap-2.5">
-                <IconQrCode className="w-4 h-4 text-brand-500" />
-                <div className="text-left">
-                  <div className="font-semibold text-xs">Generate Counter QR</div>
-                  <div className="text-[10px] text-muted-foreground">Dynamic amount UPI codes</div>
+            {(canReadUpi || canManageUpi) && (
+              <Button
+                variant="outline"
+                onClick={() => onNavigate('upi')}
+                className="w-full justify-between h-auto py-3 px-4 rounded-xl">
+                <div className="flex items-center gap-2.5">
+                  <IconQrCode className="w-4 h-4 text-brand-500" />
+                  <div className="text-left">
+                    <div className="font-semibold text-xs">Generate Counter QR</div>
+                    <div className="text-[10px] text-muted-foreground">Dynamic amount UPI codes</div>
+                  </div>
                 </div>
-              </div>
-              <IconArrowUpRight className="w-3.5 h-3.5 opacity-50" />
-            </Button>
+                <IconArrowUpRight className="w-3.5 h-3.5 opacity-50" />
+              </Button>
+            )}
 
-            <Button
-              variant="outline"
-              onClick={() => onNavigate('staff')}
-              className="w-full justify-between h-auto py-3 px-4 rounded-xl">
-              <div className="flex items-center gap-2.5">
-                <IconUsers className="w-4 h-4 text-indigo-500" />
-                <div className="text-left">
-                  <div className="font-semibold text-xs">Manage Store Staff</div>
-                  <div className="text-[10px] text-muted-foreground">Cashier & Manager access</div>
+            {canReadStaff && (
+              <Button
+                variant="outline"
+                onClick={() => onNavigate('staff')}
+                className="w-full justify-between h-auto py-3 px-4 rounded-xl">
+                <div className="flex items-center gap-2.5">
+                  <IconUsers className="w-4 h-4 text-indigo-500" />
+                  <div className="text-left">
+                    <div className="font-semibold text-xs">Manage Store Staff</div>
+                    <div className="text-[10px] text-muted-foreground">Cashier & Manager access</div>
+                  </div>
                 </div>
-              </div>
-              <IconArrowUpRight className="w-3.5 h-3.5 opacity-50" />
-            </Button>
+                <IconArrowUpRight className="w-3.5 h-3.5 opacity-50" />
+              </Button>
+            )}
 
-            <Button
-              variant="outline"
-              onClick={() => onNavigate('accounts')}
-              className="w-full justify-between h-auto py-3 px-4 rounded-xl">
-              <div className="flex items-center gap-2.5">
-                <IconWallet className="w-4 h-4 text-emerald-500" />
-                <div className="text-left">
-                  <div className="font-semibold text-xs">Settlement Accounts</div>
-                  <div className="text-[10px] text-muted-foreground">Bank account routing</div>
+            {canReadAccounts && (
+              <Button
+                variant="outline"
+                onClick={() => onNavigate('accounts')}
+                className="w-full justify-between h-auto py-3 px-4 rounded-xl">
+                <div className="flex items-center gap-2.5">
+                  <IconWallet className="w-4 h-4 text-emerald-500" />
+                  <div className="text-left">
+                    <div className="font-semibold text-xs">Settlement Accounts</div>
+                    <div className="text-[10px] text-muted-foreground">Bank account routing</div>
+                  </div>
                 </div>
-              </div>
-              <IconArrowUpRight className="w-3.5 h-3.5 opacity-50" />
-            </Button>
+                <IconArrowUpRight className="w-3.5 h-3.5 opacity-50" />
+              </Button>
+            )}
 
-            <Button
-              variant="outline"
-              onClick={() => onNavigate('health')}
-              className="w-full justify-between h-auto py-3 px-4 rounded-xl">
-              <div className="flex items-center gap-2.5">
-                <IconHeartPulse className="w-4 h-4 text-cyan-500" />
-                <div className="text-left">
-                  <div className="font-semibold text-xs">System Diagnostics</div>
-                  <div className="text-[10px] text-muted-foreground">API latency & SQLite metrics</div>
+            {isOwner && (
+              <Button
+                variant="outline"
+                onClick={() => onNavigate('health')}
+                className="w-full justify-between h-auto py-3 px-4 rounded-xl">
+                <div className="flex items-center gap-2.5">
+                  <IconHeartPulse className="w-4 h-4 text-cyan-500" />
+                  <div className="text-left">
+                    <div className="font-semibold text-xs">System Diagnostics</div>
+                    <div className="text-[10px] text-muted-foreground">API latency & SQLite metrics</div>
+                  </div>
                 </div>
-              </div>
-              <IconArrowUpRight className="w-3.5 h-3.5 opacity-50" />
-            </Button>
+                <IconArrowUpRight className="w-3.5 h-3.5 opacity-50" />
+              </Button>
+            )}
           </div>
         </Card>
       </div>

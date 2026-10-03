@@ -19,12 +19,14 @@ export function BottomNav({ activeTab, onSelectTab, onOpenMoreSheet, activeOrg }
   const role = activeOrg?.role || 'OWNER';
   const permissions = activeOrg?.permissions || (role === 'OWNER' ? ['*'] : []);
   const isOwner = role === 'OWNER' || permissions.includes('*');
-  const canReadStaff = isOwner || permissions.includes('staff.read') || role === 'MANAGER';
+  const canReadTransactions = isOwner || permissions.includes('transactions.read') || ['MANAGER', 'ACCOUNTANT', 'CASHIER'].includes(role);
+  const canReadUpi = isOwner || permissions.includes('upi.read') || permissions.includes('upi.manage') || ['MANAGER', 'ACCOUNTANT', 'CASHIER'].includes(role);
+  const canReadStaff = isOwner || permissions.includes('staff.read') || permissions.includes('staff.manage') || role === 'MANAGER';
 
   const primaryTabs: (BottomTabItem & { visible: boolean })[] = [
     { id: 'overview', label: 'Overview', icon: <IconActivity className="w-5 h-5" />, visible: true },
-    { id: 'transactions', label: 'Ledger', icon: <IconCreditCard className="w-5 h-5" />, visible: true },
-    { id: 'upi', label: 'UPI/QR', icon: <IconQrCode className="w-5 h-5" />, visible: true },
+    { id: 'transactions', label: 'Ledger', icon: <IconCreditCard className="w-5 h-5" />, visible: canReadTransactions },
+    { id: 'upi', label: 'UPI/QR', icon: <IconQrCode className="w-5 h-5" />, visible: canReadUpi },
     { id: 'staff', label: 'Staff', icon: <IconUsers className="w-5 h-5" />, visible: canReadStaff },
   ];
 

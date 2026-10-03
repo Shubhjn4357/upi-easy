@@ -7,8 +7,8 @@ export function requirePermission(permission: string): MiddlewareHandler<AppEnv>
     const role = c.get("role");
     const permissions: string[] = c.get("permissions") || [];
 
-    // Owner role has implicit full permissions
-    if (role === "OWNER") {
+    // Owner role or wildcard permission has implicit full permissions
+    if (role === "OWNER" || permissions.includes("*")) {
       return await next();
     }
 

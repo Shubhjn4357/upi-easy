@@ -39,6 +39,7 @@ import type {
   StaffInvite,
   TableColumnDef,
   BottomSheetConfig,
+  BottomSheetAction,
   BankAccount,
   Organization,
 } from './types';
@@ -135,6 +136,11 @@ function AppContent() {
     canExportTransactions,
     canRefundTransactions,
     canDeleteTransactions,
+    canReadTransactions,
+    canReadUpi,
+    canReadAccounts,
+    canReadStaff,
+    canCreateQr,
   } = useOrganizations({
     token: '',
     onDeleted: () => navigate('/overview'),
@@ -231,51 +237,59 @@ function AppContent() {
 
   // Mobile Bottom Sheet Action Handlers
   const handleSelectTxnAction = (_action: string, txn: Transaction) => {
+    const actions: BottomSheetAction[] = [
+      {
+        label: 'View Full Audit Payload',
+        onClick: () => setInspectTxn(txn),
+      },
+      {
+        label: 'Copy UTR Reference',
+        onClick: () => {
+          navigator.clipboard.writeText(txn.referenceNumber || txn.id);
+          showToast('UTR reference copied!');
+        },
+      },
+    ];
+
+    if (canRefundTransactions) {
+      actions.push({
+        label: 'Issue Refund',
+        onClick: () => showToast('Refund initiated to customer account'),
+      });
+    }
+
+    if (canDeleteTransactions) {
+      actions.push({
+        label: 'Delete Transaction Record',
+        variant: 'destructive',
+        onClick: async () => {
+          if (!activeOrg) return;
+          const ok = await confirm({
+            title: 'Delete Transaction',
+            description: `Permanently delete transaction ${txn.referenceNumber || txn.id}? This will remove it from the store ledger.`,
+            variant: 'danger',
+            confirmText: 'Delete Record',
+          });
+          if (!ok) return;
+          try {
+            await apiFetch(`/api/v1/organizations/${activeOrg.id}/transactions/${txn.id}`, {
+              method: 'DELETE',
+            });
+            showToast('Transaction deleted successfully');
+            loadTransactions();
+            loadOverview();
+          } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : 'Error deleting transaction';
+            showToast(msg, 'error');
+          }
+        },
+      });
+    }
+
     setBottomSheetConfig({
       title: `Transaction ${txn.referenceNumber || txn.id.slice(0, 8)}`,
       subtitle: `₹${Number(txn.amount).toFixed(2)} · ${txn.status}`,
-      actions: [
-        {
-          label: 'View Full Audit Payload',
-          onClick: () => setInspectTxn(txn),
-        },
-        {
-          label: 'Copy UTR Reference',
-          onClick: () => {
-            navigator.clipboard.writeText(txn.referenceNumber || txn.id);
-            showToast('UTR reference copied!');
-          },
-        },
-        {
-          label: 'Issue Refund',
-          onClick: () => showToast('Refund initiated to customer account'),
-        },
-        {
-          label: 'Delete Transaction Record',
-          variant: 'destructive',
-          onClick: async () => {
-            if (!activeOrg) return;
-            const ok = await confirm({
-              title: 'Delete Transaction',
-              description: `Permanently delete transaction ${txn.referenceNumber || txn.id}? This will remove it from the store ledger.`,
-              variant: 'danger',
-              confirmText: 'Delete Record',
-            });
-            if (!ok) return;
-            try {
-              await apiFetch(`/api/v1/organizations/${activeOrg.id}/transactions/${txn.id}`, {
-                method: 'DELETE',
-              });
-              showToast('Transaction deleted successfully');
-              loadTransactions();
-              loadOverview();
-            } catch (err: unknown) {
-              const msg = err instanceof Error ? err.message : 'Error deleting transaction';
-              showToast(msg, 'error');
-            }
-          },
-        },
-      ],
+      actions,
     });
   };
 
@@ -284,14 +298,15 @@ function AppContent() {
       setShowQrModal(upi);
       return;
     }
-    setBottomSheetConfig({
-      title: upi.payeeName || upi.accountHolderName || 'UPI Account',
-      subtitle: upi.vpa || upi.upiId,
-      actions: [
-        {
-          label: 'Generate Counter QR Code',
-          onClick: () => setShowQrModal(upi),
-        },
+    const actions: BottomSheetAction[] = [];
+    if (canCreateQr || canReadUpi || canManageUpi) {
+      actions.push({
+        label: 'Generate Counter QR Code',
+        onClick: () => setShowQrModal(upi),
+      });
+    }
+    if (canManageUpi) {
+      actions.push(
         {
           label: 'Edit UPI Account Details',
           onClick: () => setShowUpiModal(upi),
@@ -336,16 +351,21 @@ function AppContent() {
               showToast(msg, 'error');
             }
           },
-        },
-      ],
+        }
+      );
+    }
+    setBottomSheetConfig({
+      title: upi.payeeName || upi.accountHolderName || 'UPI Account',
+      subtitle: upi.vpa || upi.upiId,
+      actions,
     });
   };
 
   const handleSelectAccountAction = (_action: string, account: BankAccount) => {
-    setBottomSheetConfig({
-      title: account.bankName,
-      subtitle: `${account.accountHolderName} • ${account.accountNumberMasked || '••••'}`,
-      actions: [
+    const actions: BottomSheetAction[] = [];
+
+    if (canManageAccounts) {
+      actions.push(
         {
           label: account.isDefault ? 'Default Settlement Account' : 'Set as Default Settlement Account',
           onClick: async () => {
@@ -389,13 +409,23 @@ function AppContent() {
               showToast(msg, 'error');
             }
           },
-        },
-      ],
+        }
+      );
+    }
+
+    setBottomSheetConfig({
+      title: account.bankName,
+      subtitle: `${account.accountHolderName} • ${account.accountNumberMasked || '••••'}`,
+      actions,
     });
   };
 
   const handleSelectStaffAction = async (_action: string, member: StaffMember | StaffInvite) => {
     if (_action === 'revoke_invite') {
+      if (!canManageStaff) {
+        showToast('You do not have permission to revoke invitations', 'error');
+        return;
+      }
       const invite = member as StaffInvite;
       const target = invite.invitedEmail || invite.email || 'this recipient';
       const ok = await confirm({
@@ -419,10 +449,10 @@ function AppContent() {
     }
 
     const staffMember = member as StaffMember;
-    setBottomSheetConfig({
-      title: staffMember.fullName || staffMember.name || staffMember.mobileNumber || 'Staff Member',
-      subtitle: `Role: ${staffMember.role} · Status: ${staffMember.status}`,
-      actions: [
+    const actions: BottomSheetAction[] = [];
+
+    if (canManageStaff) {
+      actions.push(
         {
           label: 'Edit Assigned Role & Permissions',
           onClick: () => setShowStaffModal(staffMember),
@@ -471,8 +501,14 @@ function AppContent() {
               showToast(msg, 'error');
             }
           },
-        },
-      ],
+        }
+      );
+    }
+
+    setBottomSheetConfig({
+      title: staffMember.fullName || staffMember.name || staffMember.mobileNumber || 'Staff Member',
+      subtitle: `Role: ${staffMember.role} · Status: ${staffMember.status}`,
+      actions,
     });
   };
 
@@ -524,15 +560,23 @@ function AppContent() {
   };
 
   const handleOpenMoreSheet = () => {
+    const actions: BottomSheetAction[] = [];
+    if (canReadAccounts) {
+      actions.push({ label: 'Settlement Bank Accounts', onClick: () => navigate('/accounts') });
+    }
+    if (canManageOrg) {
+      actions.push({ label: 'Business Profile & Registration', onClick: () => navigate('/orgs') });
+    }
+    if (isOwner) {
+      actions.push(
+        { label: 'Database Table Explorer (Admin)', onClick: () => navigate('/tables') },
+        { label: 'System Health Diagnostics', onClick: () => navigate('/health') }
+      );
+    }
     setBottomSheetConfig({
       title: 'More Features & Settings',
       subtitle: 'Management & Diagnostics',
-      actions: [
-        { label: 'Settlement Bank Accounts', onClick: () => navigate('/accounts') },
-        { label: 'Business Profile & Registration', onClick: () => navigate('/orgs') },
-        { label: 'Database Table Explorer (Admin)', onClick: () => navigate('/tables') },
-        { label: 'System Health Diagnostics', onClick: () => navigate('/health') },
-      ],
+      actions,
     });
   };
 
@@ -634,6 +678,13 @@ function AppContent() {
                     onOpenNewUpi={() => setShowUpiModal({})}
                     onNavigate={(tab) => navigate(`/${tab}`)}
                     onInspectTxn={handleSelectTxnAction}
+                    canCreateTransactions={canCreateTransactions}
+                    canManageUpi={canManageUpi}
+                    canReadTransactions={canReadTransactions}
+                    canReadUpi={canReadUpi}
+                    canReadStaff={canReadStaff}
+                    canReadAccounts={canReadAccounts}
+                    isOwner={isOwner}
                   />
                 }
               />
@@ -942,6 +993,13 @@ function AppContent() {
                     onOpenNewUpi={() => setShowUpiModal({})}
                     onNavigate={(tab) => navigate(`/${tab}`)}
                     onInspectTxn={handleSelectTxnAction}
+                    canCreateTransactions={canCreateTransactions}
+                    canManageUpi={canManageUpi}
+                    canReadTransactions={canReadTransactions}
+                    canReadUpi={canReadUpi}
+                    canReadStaff={canReadStaff}
+                    canReadAccounts={canReadAccounts}
+                    isOwner={isOwner}
                   />
                 }
               />

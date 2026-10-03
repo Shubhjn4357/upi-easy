@@ -53,7 +53,9 @@ fun BankAccountsScreen(
     val userRole by sessionManager.userRoleFlow.collectAsState(initial = null)
     val userPerms by sessionManager.userPermissionsFlow.collectAsState(initial = emptySet())
     val isOwner = userRole?.equals("OWNER", ignoreCase = true) == true
-    val canManageAccounts = isOwner || userRole?.uppercase() == "MANAGER" || userPerms.contains("accounts.manage") || userPerms.contains("*")
+    val hasWildcard = isOwner || userPerms.contains("*")
+    val canManageAccounts = hasWildcard || userRole?.uppercase() == "MANAGER" || userPerms.contains("accounts.manage")
+    val canReadAccounts = hasWildcard || userRole?.uppercase() in listOf("MANAGER", "ACCOUNTANT") || userPerms.contains("accounts.read") || canManageAccounts
 
     var bankAccounts by remember { mutableStateOf<List<BankAccountDto>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
@@ -64,6 +66,10 @@ fun BankAccountsScreen(
     var deletingId by remember { mutableStateOf<String?>(null) }
 
     suspend fun loadAccounts() {
+        if (!canReadAccounts) {
+            isLoading = false
+            return
+        }
         val id = orgId ?: return
         isLoading = true
         try {
@@ -75,7 +81,7 @@ fun BankAccountsScreen(
         finally { isLoading = false }
     }
 
-    LaunchedEffect(orgId) { loadAccounts() }
+    LaunchedEffect(orgId, canReadAccounts) { loadAccounts() }
 
     Scaffold(
         topBar = {
@@ -113,6 +119,41 @@ fun BankAccountsScreen(
                 .padding(horizontal = 16.dp)
         ) {
             when {
+                !canReadAccounts -> {
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(72.dp)
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(MaterialTheme.colorScheme.errorContainer),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Lock,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(36.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            "Permission Required",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            "You do not have permission (accounts.read) to view settlement bank accounts.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 32.dp, vertical = 8.dp),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    }
+                }
                 isLoading -> {
                     BankAccountsSkeleton()
                 }
@@ -148,7 +189,7 @@ fun BankAccountsScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(horizontal = 32.dp, vertical = 8.dp)
                         )
-                        if (isOwner) {
+                        if (canManageAccounts) {
                             Button(
                                 onClick = { showAddDialog = true },
                                 colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)

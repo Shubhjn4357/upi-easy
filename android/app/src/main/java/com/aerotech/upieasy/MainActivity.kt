@@ -631,6 +631,7 @@ fun MainAppContent(
                     onNavigateToQr = { onNavigateToQr(null, null) },
                     onNavigateToTransactions = { bottomNavController.navigate(Screen.Transactions.route) },
                     onNavigateToUpi = { bottomNavController.navigate(Screen.Upi.route) },
+                    onNavigateToBankAccounts = onNavigateToBankAccounts,
                     onNavigateToSettings = { bottomNavController.navigate(Screen.Settings.route) },
                     onNavigateToStaff = { bottomNavController.navigate(Screen.Staff.route) },
                     onNavigateToLegal = onNavigateToLegal,
@@ -716,6 +717,10 @@ fun MainAppContent(
                     launchSingleTop = true
                     restoreState = true
                 }
+            },
+            onNavigateToBankAccounts = {
+                showHubSheet = false
+                onNavigateToBankAccounts()
             },
             onNavigateToStaff = {
                 showHubSheet = false
@@ -954,6 +959,7 @@ fun BentoGridRoutesBottomDrawer(
     onNavigateToQr: () -> Unit,
     onNavigateToTransactions: () -> Unit,
     onNavigateToUpi: () -> Unit,
+    onNavigateToBankAccounts: () -> Unit = {},
     onNavigateToStaff: () -> Unit,
     onNavigateToSettings: () -> Unit,
     onNavigateToLegal: () -> Unit
@@ -961,32 +967,37 @@ fun BentoGridRoutesBottomDrawer(
     if (visible) {
         val context = LocalContext.current
         val isOwner = userRole?.equals("OWNER", ignoreCase = true) == true
+        val hasWildcard = isOwner || userPermissions.contains("*")
         val roleUpper = userRole?.uppercase() ?: ""
 
         val visibleActions = remember(userRole, userPermissions) {
             val list = mutableListOf<QuickRouteItem>()
             // 1. Scan QR (Scan Pay)
-            if (isOwner || roleUpper in listOf("MANAGER", "CASHIER") || userPermissions.contains("transactions.create")) {
+            if (hasWildcard || roleUpper in listOf("MANAGER", "CASHIER") || userPermissions.contains("transactions.create")) {
                 list.add(QuickRouteItem("Scan QR", "Pay any merchant", Icons.Default.QrCodeScanner, PastelEmeraldBg, SuccessGreen, onNavigateToScan))
             }
             // 2. My QR Code
-            if (isOwner || roleUpper in listOf("MANAGER", "CASHIER") || userPermissions.contains("qr.create") || userPermissions.contains("upi.read")) {
+            if (hasWildcard || roleUpper in listOf("MANAGER", "CASHIER") || userPermissions.contains("qr.create") || userPermissions.contains("upi.read")) {
                 list.add(QuickRouteItem("My QR Code", "Receive payments", Icons.Default.QrCode, PastelIndigoBg, BrandPrimary, onNavigateToQr))
             }
             // 3. Ledger History
-            if (isOwner || roleUpper in listOf("MANAGER", "ACCOUNTANT", "CASHIER") || userPermissions.contains("transactions.read")) {
+            if (hasWildcard || roleUpper in listOf("MANAGER", "ACCOUNTANT", "CASHIER") || userPermissions.contains("transactions.read")) {
                 list.add(QuickRouteItem("Ledger History", "Inflows & filters", Icons.AutoMirrored.Filled.ReceiptLong, PastelAmberBg, AmberAlert, onNavigateToTransactions))
             }
-            // 4. UPI Accounts (Role-Gated: Cashiers & Accountants cannot manage UPI unless permitted)
-            if (isOwner || roleUpper == "MANAGER" || userPermissions.contains("upi.manage")) {
+            // 4. UPI Accounts (Viewable with upi.read or upi.manage)
+            if (hasWildcard || roleUpper in listOf("MANAGER", "ACCOUNTANT", "CASHIER") || userPermissions.contains("upi.read") || userPermissions.contains("upi.manage")) {
                 list.add(QuickRouteItem("UPI Accounts", "VPAs & Bank handles", Icons.Default.AccountBalanceWallet, PastelBlueBg, PastelBlueIcon, onNavigateToUpi))
             }
-            // 5. Team & Staff (Role-Gated: Cashiers & Accountants cannot access Staff)
-            if (isOwner || roleUpper == "MANAGER" || userPermissions.contains("staff.manage") || userPermissions.contains("staff.read")) {
+            // 5. Settlement Bank Accounts (Viewable with accounts.read or accounts.manage)
+            if (hasWildcard || roleUpper in listOf("MANAGER", "ACCOUNTANT") || userPermissions.contains("accounts.read") || userPermissions.contains("accounts.manage")) {
+                list.add(QuickRouteItem("Bank Accounts", "Payouts & settlements", Icons.Default.AccountBalance, PastelIndigoBg, BrandPrimary, onNavigateToBankAccounts))
+            }
+            // 6. Team & Staff (Gated: Manager or staff.read / staff.manage)
+            if (hasWildcard || roleUpper == "MANAGER" || userPermissions.contains("staff.manage") || userPermissions.contains("staff.read")) {
                 list.add(QuickRouteItem("Team & Staff", "Cashiers & roles", Icons.Default.Group, PastelPurpleBg, PastelPurpleIcon, onNavigateToStaff))
             }
-            // 6. Settings (Role-Gated: Cashiers & Accountants cannot access settings)
-            if (isOwner || roleUpper == "MANAGER" || userPermissions.contains("organization.manage")) {
+            // 7. Settings (Gated: Manager or organization.manage)
+            if (hasWildcard || roleUpper == "MANAGER" || userPermissions.contains("organization.manage")) {
                 list.add(QuickRouteItem("Settings", "Audio, alerts & theme", Icons.Default.Settings, PastelCyan, PastelCyanIcon, onNavigateToSettings))
             }
             list

@@ -91,6 +91,14 @@ export function useOrganizations({ token, onDeleted, showToast, apiFetch }: UseO
   const canRefundTransactions = isOwner || permissions.includes('transactions.refund') || role === 'MANAGER';
   const canDeleteTransactions = isOwner || permissions.includes('transactions.delete');
 
+  const canReadTransactions = isOwner || permissions.includes('transactions.read') || ['MANAGER', 'ACCOUNTANT', 'CASHIER'].includes(role);
+  const canReadUpi = isOwner || permissions.includes('upi.read') || canManageUpi || ['MANAGER', 'ACCOUNTANT', 'CASHIER'].includes(role);
+  const canReadAccounts = isOwner || permissions.includes('accounts.read') || canManageAccounts || ['MANAGER', 'ACCOUNTANT'].includes(role);
+  const canReadStaff = isOwner || permissions.includes('staff.read') || canManageStaff;
+  const canCreateQr = isOwner || permissions.includes('qr.create') || canCreateTransactions || canManageUpi;
+  const canIngestPayments = isOwner || permissions.includes('payment_events.ingest') || ['MANAGER', 'CASHIER'].includes(role);
+  const canReadReports = isOwner || permissions.includes('reports.read') || ['MANAGER', 'ACCOUNTANT'].includes(role);
+
   return {
     organizations,
     setOrganizations,
@@ -112,6 +120,13 @@ export function useOrganizations({ token, onDeleted, showToast, apiFetch }: UseO
     canExportTransactions,
     canRefundTransactions,
     canDeleteTransactions,
+    canReadTransactions,
+    canReadUpi,
+    canReadAccounts,
+    canReadStaff,
+    canCreateQr,
+    canIngestPayments,
+    canReadReports,
   };
 }
 
