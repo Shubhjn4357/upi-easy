@@ -87,17 +87,26 @@ membersRouter.get("/:orgId/invites", requireTenant, requirePermission("staff.rea
   }
 });
 
-export const createInviteSchema = z.object({
-  email: z
-    .string({ required_error: "Email address is required to invite staff" })
-    .trim()
-    .min(1, "Email address is required")
-    .email("A valid email address is required"),
-  mobileNumber: z.string().optional().nullable().or(z.literal("")),
-  name: z.string().optional().nullable().or(z.literal("")),
-  fullName: z.string().optional().nullable().or(z.literal("")),
-  role: z.enum(["MANAGER", "CASHIER", "ACCOUNTANT"]).default("CASHIER"),
-});
+export const createInviteSchema = z
+  .object({
+    email: z
+      .string()
+      .trim()
+      .email("A valid email address is required")
+      .optional()
+      .nullable()
+      .or(z.literal("")),
+    mobileNumber: z.string().optional().nullable().or(z.literal("")),
+    name: z.string().optional().nullable().or(z.literal("")),
+    fullName: z.string().optional().nullable().or(z.literal("")),
+    role: z.enum(["MANAGER", "CASHIER", "ACCOUNTANT"]).default("CASHIER"),
+  })
+  .refine(
+    (data) => Boolean((data.email && data.email.length > 0) || (data.mobileNumber && data.mobileNumber.length > 0)),
+    {
+      message: "Either email or mobile number must be provided to invite staff",
+    }
+  );
 
 export type CreateInviteInput = z.infer<typeof createInviteSchema>;
 
@@ -112,18 +121,13 @@ const createInviteHandler = async (c: Context<AppEnv>) => {
   }
 
   const parsed = createInviteSchema.parse(body);
-  const email = parsed.email.trim().toLowerCase();
   const rawMobile = parsed.mobileNumber?.trim() || undefined;
+  const normalizedMobile = rawMobile ? normalizeIndianMobileNumber(rawMobile) : undefined;
+  const mobile10 = rawMobile ? get10DigitMobile(rawMobile) : undefined;
+  const email = parsed.email?.trim().toLowerCase() || (mobile10 ? `${mobile10}@phone.upieasy.internal` : "");
   const name = parsed.name?.trim() || parsed.fullName?.trim() || undefined;
   const role = parsed.role;
 
-  // 1. Normalize mobile if present
-  let normalizedMobile: string | undefined;
-  let mobile10: string | undefined;
-  if (rawMobile) {
-    normalizedMobile = normalizeIndianMobileNumber(rawMobile);
-    mobile10 = get10DigitMobile(rawMobile);
-  }
 
   // 2. Fetch organization info
   const org = await db.select().from(schema.organizations).where(eq(schema.organizations.id, orgId)).get();
@@ -189,58 +193,33 @@ const createInviteHandler = async (c: Context<AppEnv>) => {
 
   // 6. Check existing pending invitation
   const now = new Date();
+  const inviteConditions = [eq(schema.organizationInvites.organizationId, orgId), eq(schema.organizationInvites.status, "PENDING")];
+  const targetOr = [];
+  if (email && !email.endsWith("@phone.upieasy.internal")) {
+    targetOr.push(eq(schema.organizationInvites.invitedEmail, email));
+  }
+  if (normalizedMobile) {
+    targetOr.push(eq(schema.organizationInvites.invitedMobile, normalizedMobile));
+  }
+  if (mobile10) {
+    targetOr.push(eq(schema.organizationInvites.invitedMobile, mobile10));
+  }
+
   const existingPending = await db
     .select()
     .from(schema.organizationInvites)
     .where(
       and(
-        eq(schema.organizationInvites.organizationId, orgId),
-        eq(schema.organizationInvites.status, "PENDING"),
-        eq(schema.organizationInvites.invitedEmail, email)
+        ...inviteConditions,
+        targetOr.length > 1 ? or(...targetOr) : targetOr[0]
       )
     )
     .get();
 
   if (existingPending) {
     if (existingPending.expiresAt && new Date(existingPending.expiresAt) > now) {
-      // Refresh token & expiration for seamless re-sending
-      const refreshedToken = generateId("invtok");
-      const refreshedExpiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-      await db.update(schema.organizationInvites)
-        .set({
-          token: refreshedToken,
-          role,
-          invitedName: name ?? existingPending.invitedName,
-          invitedMobile: normalizedMobile || mobile10 || existingPending.invitedMobile || "",
-          expiresAt: refreshedExpiresAt,
-          updatedAt: now,
-        })
-        .where(eq(schema.organizationInvites.id, existingPending.id))
-        .run();
-
-      const apiBaseUrl = (c.env as any)?.API_BASE_URL || "https://upi-easy-api.aerotech.workers.dev";
-      const inviteUrl = `${apiBaseUrl}/invite/${refreshedToken}?email=${encodeURIComponent(email)}`;
-      const deepLinkUrl = `upieasy://invite?token=${refreshedToken}&email=${encodeURIComponent(email)}&role=${role}&orgId=${orgId}`;
-
-      return c.json({
-        success: true,
-        message: "Existing invitation refreshed and renewed for 7 days",
-        invite: {
-          id: existingPending.id,
-          token: refreshedToken,
-          inviteUrl,
-          deepLinkUrl,
-          organizationId: orgId,
-          organizationName: org.name,
-          invitedEmail: email,
-          invitedMobile: normalizedMobile || null,
-          role,
-          status: "PENDING",
-          expiresAt: refreshedExpiresAt.toISOString(),
-        },
-      });
+      throw new AppError("An active invitation is already pending for this user", 409, "INVITE_ALREADY_EXISTS");
     } else {
-      // Remove old expired invitation
       await db.delete(schema.organizationInvites).where(eq(schema.organizationInvites.id, existingPending.id)).run();
     }
   }

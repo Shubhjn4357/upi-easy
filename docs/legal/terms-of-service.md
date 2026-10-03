@@ -30,10 +30,12 @@ Users must NEVER disclose such credentials to UPI-Easy or any person claiming to
 ### 6. UPI QR Codes & Merchant Representations
 You warrant that any UPI VPA (Virtual Payment Address) registered in UPI-Easy is legitimately owned by or assigned to your business. You agree not to use UPI-Easy to display deceptive, fraudulent, or unauthorized UPI identifiers.
 
-### 7. Transaction Information & Settlement Disclaimer
-UPI-Easy displays transaction records based on incoming device notifications and API synchronizations.
-- UPI-Easy does NOT guarantee or independently verify the settlement of funds into your bank account.
-- In the event of network delays, discrepancies, or disputed payments, merchants must independently verify settlement with their acquiring bank or official banking statement.
+### 7. Notification-Based Observation & Settlement Disclaimer
+UPI-Easy observes incoming payment alerts posted on your Android device by supported payment applications (**Google Pay**, **PhonePe**, **BHIM UPI**, and **Paytm**).
+- **Observed vs. Verified Semantics**: Notification-originated payment records are marked as `OBSERVED` signals with transaction status `UNKNOWN`. They are NOT authoritative proof that funds have settled into your bank account.
+- **Operating System Limitations**: Notification delivery is subject to Android OS battery optimization (Doze mode), manufacturer process management, network coverage, and payment app behavior. UPI-Easy does NOT claim or guarantee 100% notification capture.
+- **Independent Reconciliation**: Merchants must independently verify all critical settlements and commercial orders against their acquiring bank's official statement, net banking, or official bank SMS before releasing high-value goods.
+- **Auto-Rebind & Diagnostics**: While UPI-Easy implements auto-rebind mechanisms on disconnect and device reboot, merchants are responsible for ensuring that Android Notification Access remains enabled.
 
 ### 8. Prohibited Activities
 You agree not to use UPI-Easy for:

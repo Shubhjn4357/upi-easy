@@ -37,8 +37,8 @@ describe("Payment Accounts & Observed Events Integration Tests", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.success).toBe(true);
-    expect(body.data).toHaveLength(2);
-    expect(body.data.map((d: any) => d.id)).toEqual(["phonepe", "google_pay"]);
+    expect(body.data).toHaveLength(4);
+    expect(body.data.map((d: any) => d.id)).toEqual(["phonepe", "google_pay", "bhim", "paytm"]);
   });
 
   it("should create and list a payment account", async () => {
@@ -204,5 +204,135 @@ describe("Payment Accounts & Observed Events Integration Tests", () => {
     expect(body2.accepted).toBe(true);
     expect(body2.eventId).toBe(body1.eventId);
     expect(body2.duplicate).toBe(true);
+  });
+
+  it("should create BHIM and Paytm payment accounts and ingest their observed payment events", async () => {
+    // 1. Create BHIM payment account
+    const bhimAccRes = await app.request(`/api/v1/organizations/${orgId}/payment-accounts`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+        "X-Organization-Id": orgId,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        label: "Counter 2 BHIM",
+        upiId: "bhim.merchant@upi",
+        paymentAppId: "bhim",
+        paymentAppPackage: "in.org.npci.upiapp",
+        detectionEnabled: true,
+        notificationAccessRequired: true,
+      }),
+    });
+    expect(bhimAccRes.status).toBe(201);
+    const bhimAcc = await bhimAccRes.json();
+    expect(bhimAcc.data.paymentAppId).toBe("bhim");
+    expect(bhimAcc.data.paymentAppPackage).toBe("in.org.npci.upiapp");
+
+    // 2. Create Paytm payment account
+    const paytmAccRes = await app.request(`/api/v1/organizations/${orgId}/payment-accounts`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+        "X-Organization-Id": orgId,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        label: "Counter 3 Paytm",
+        upiId: "paytm.merchant@paytm",
+        paymentAppId: "paytm",
+        paymentAppPackage: "net.one97.paytm",
+        detectionEnabled: true,
+        notificationAccessRequired: true,
+      }),
+    });
+    expect(paytmAccRes.status).toBe(201);
+    const paytmAcc = await paytmAccRes.json();
+    expect(paytmAcc.data.paymentAppId).toBe("paytm");
+    expect(paytmAcc.data.paymentAppPackage).toBe("net.one97.paytm");
+
+    // 3. Ingest BHIM observed payment event
+    const bhimEventRes = await app.request(`/api/v1/organizations/${orgId}/payment-events/observed`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+        "X-Organization-Id": orgId,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        clientEventId: "evt_local_bhim_1",
+        source: {
+          type: "NOTIFICATION_BHIM",
+          packageName: "in.org.npci.upiapp",
+        },
+        paymentAccountId: bhimAcc.data.id,
+        amountMinor: 35000, // Rs 350.00
+        currency: "INR",
+        direction: "RECEIVED",
+        payerName: "Kavita Sharma",
+        payerVpa: "kavita@upi",
+        reference: "998877665544",
+        observedAt: new Date().toISOString(),
+        verificationStatus: "OBSERVED",
+        matchStatus: "MATCHED",
+        fingerprint: "fp_test_bhim_001_unique_hash_987",
+      }),
+    });
+    expect(bhimEventRes.status).toBe(201);
+    const bhimBody = await bhimEventRes.json();
+    expect(bhimBody.accepted).toBe(true);
+    expect(bhimBody.status).toBe("OBSERVED");
+
+    const bhimTxn = db
+      .select()
+      .from(schema.transactions)
+      .where(eq(schema.transactions.id, bhimBody.transactionId))
+      .get();
+    expect(bhimTxn?.status).toBe("UNKNOWN");
+    expect(bhimTxn?.verificationStatus).toBe("OBSERVED");
+    expect(bhimTxn?.eventSource).toBe("NOTIFICATION_BHIM");
+    expect(bhimTxn?.amount).toBe(350.0);
+
+    // 4. Ingest Paytm observed payment event
+    const paytmEventRes = await app.request(`/api/v1/organizations/${orgId}/payment-events/observed`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+        "X-Organization-Id": orgId,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        clientEventId: "evt_local_paytm_1",
+        source: {
+          type: "NOTIFICATION_PAYTM",
+          packageName: "net.one97.paytm",
+        },
+        paymentAccountId: paytmAcc.data.id,
+        amountMinor: 120000, // Rs 1200.00
+        currency: "INR",
+        direction: "RECEIVED",
+        payerName: "Sanjay Kumar",
+        payerVpa: "sanjay@paytm",
+        reference: "554433221100",
+        observedAt: new Date().toISOString(),
+        verificationStatus: "OBSERVED",
+        matchStatus: "MATCHED",
+        fingerprint: "fp_test_paytm_001_unique_hash_123",
+      }),
+    });
+    expect(paytmEventRes.status).toBe(201);
+    const paytmBody = await paytmEventRes.json();
+    expect(paytmBody.accepted).toBe(true);
+    expect(paytmBody.status).toBe("OBSERVED");
+
+    const paytmTxn = db
+      .select()
+      .from(schema.transactions)
+      .where(eq(schema.transactions.id, paytmBody.transactionId))
+      .get();
+    expect(paytmTxn?.status).toBe("UNKNOWN");
+    expect(paytmTxn?.verificationStatus).toBe("OBSERVED");
+    expect(paytmTxn?.eventSource).toBe("NOTIFICATION_PAYTM");
+    expect(paytmTxn?.amount).toBe(1200.0);
   });
 });

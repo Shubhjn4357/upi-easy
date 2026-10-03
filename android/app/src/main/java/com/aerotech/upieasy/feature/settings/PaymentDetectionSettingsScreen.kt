@@ -161,7 +161,7 @@ fun PaymentDetectionSettingsScreen(
                                 color = MaterialTheme.colorScheme.onErrorContainer
                             )
                             Text(
-                                text = "Grant Android notification access to observe incoming PhonePe and Google Pay payments.",
+                                text = "Grant Android notification access to observe incoming PhonePe, Google Pay, BHIM UPI, and Paytm payments.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.85f)
                             )
@@ -178,6 +178,93 @@ fun PaymentDetectionSettingsScreen(
                     Icon(Icons.Default.NotificationsActive, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Enable Notification Access")
+                }
+            }
+
+            // Notification System Strengthening & Diagnostics
+            Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = MaterialTheme.colorScheme.surface,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Sync,
+                                contentDescription = null,
+                                tint = BrandPrimary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Listener Health & Auto-Rebind",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Surface(
+                            shape = CircleShape,
+                            color = if (isListenerGranted) SuccessGreen.copy(alpha = 0.15f) else MaterialTheme.colorScheme.error.copy(alpha = 0.15f)
+                        ) {
+                            Text(
+                                text = if (isListenerGranted) "ONLINE" else "OFFLINE",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isListenerGranted) SuccessGreen else MaterialTheme.colorScheme.error,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "UPI-Easy automatically reconnects its listener service across device restarts, updates, and memory sweeps. You can also manually trigger a diagnostic rebind.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = {
+                                PaymentNotificationListenerService.requestRebindIfDisconnected(context)
+                                isListenerGranted = isNotificationAccessGranted(context)
+                            },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Rebind Service", style = MaterialTheme.typography.labelMedium)
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                try {
+                                    val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                                    context.startActivity(intent)
+                                } catch (_: Exception) {
+                                    val intent = Intent(Settings.ACTION_SETTINGS)
+                                    context.startActivity(intent)
+                                }
+                            },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Icon(Icons.Default.BatteryChargingFull, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Battery Settings", style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
                 }
             }
 
@@ -304,7 +391,7 @@ fun PaymentDetectionSettingsScreen(
             title = { Text("Why is Notification Access Needed?") },
             text = {
                 Text(
-                    "UPI-Easy uses Android's official NotificationListenerService to observe payment arrival alerts posted by PhonePe and Google Pay.\n\n" +
+                    "UPI-Easy uses Android's official NotificationListenerService to observe payment arrival alerts posted by PhonePe, Google Pay, BHIM UPI, and Paytm.\n\n" +
                             "• No access to other apps' private data\n" +
                             "• No SMS scraping or private API abuse\n" +
                             "• Only supported payment notifications are processed\n\n" +

@@ -12,22 +12,48 @@ data class PaymentAppDefinition(
     val parserKey: String
 )
 
-val supportedPaymentApps = listOf(
-    PaymentAppDefinition(
-        id = "phonepe",
-        displayName = "PhonePe",
-        packageName = "com.phonepe.app",
-        supported = true,
-        parserKey = "phonepe"
-    ),
-    PaymentAppDefinition(
+object SupportedPaymentApps {
+    val GOOGLE_PAY = PaymentAppDefinition(
         id = "google_pay",
         displayName = "Google Pay",
         packageName = "com.google.android.apps.nbu.paisa.user",
         supported = true,
         parserKey = "google_pay"
     )
-)
+
+    val PHONEPE = PaymentAppDefinition(
+        id = "phonepe",
+        displayName = "PhonePe",
+        packageName = "com.phonepe.app",
+        supported = true,
+        parserKey = "phonepe"
+    )
+
+    val BHIM = PaymentAppDefinition(
+        id = "bhim",
+        displayName = "BHIM UPI",
+        packageName = "in.org.npci.upiapp",
+        supported = true,
+        parserKey = "bhim"
+    )
+
+    val PAYTM = PaymentAppDefinition(
+        id = "paytm",
+        displayName = "Paytm",
+        packageName = "net.one97.paytm",
+        supported = true,
+        parserKey = "paytm"
+    )
+
+    val ALL = listOf(
+        GOOGLE_PAY,
+        PHONEPE,
+        BHIM,
+        PAYTM
+    )
+}
+
+val supportedPaymentApps = SupportedPaymentApps.ALL
 
 interface PaymentAppDetector {
     fun getInstalledSupportedApps(): List<PaymentAppDefinition>

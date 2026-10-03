@@ -2,7 +2,6 @@ package com.aerotech.upieasy.feature.legal
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -17,7 +16,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -35,8 +33,11 @@ fun LegalScreen(
     val context = LocalContext.current
     val tabs = listOf(
         "About Role",
-        "Privacy Policy",
+        "Permissions",
+        "Changelog",
+        "Sitemap",
         "Terms",
+        "Privacy Policy",
         "UPI Disclaimer",
         "Refunds",
         "Data Deletion",
@@ -114,12 +115,15 @@ fun LegalScreen(
                 ) {
                     when (selectedTab) {
                         0 -> AboutRoleSection()
-                        1 -> PrivacyPolicySection()
-                        2 -> TermsSection()
-                        3 -> UpiDisclaimerSection()
-                        4 -> RefundPolicySection()
-                        5 -> DataRetentionSection()
-                        6 -> GrievanceSection()
+                        1 -> PermissionsSection()
+                        2 -> ChangelogSection()
+                        3 -> SitemapSection()
+                        4 -> TermsSection()
+                        5 -> PrivacyPolicySection()
+                        6 -> UpiDisclaimerSection()
+                        7 -> RefundPolicySection()
+                        8 -> DataRetentionSection()
+                        9 -> GrievanceSection()
                     }
 
                     Spacer(modifier = Modifier.height(48.dp))
@@ -132,7 +136,6 @@ fun LegalScreen(
 @Composable
 private fun AboutRoleSection() {
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        // High-level Bento Overview
         GlassCard(
             backgroundColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f),
             borderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
@@ -163,7 +166,7 @@ private fun AboutRoleSection() {
                 }
                 Spacer(modifier = Modifier.height(10.dp))
                 Text(
-                    text = "UPI-Easy is an independent merchant software application providing tools for managing authorized UPI identifiers, dynamic QR codes, transaction records, soundbox alerts, and staff permissions.",
+                    text = "UPI-Easy is an independent merchant payment observation platform providing tools for managing authorized UPI identifiers, counter QR codes, multi-UPI notification observation (Google Pay, PhonePe, BHIM UPI, and Paytm), offline bookkeeping, soundbox alerts, and staff permissions.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface
                 )
@@ -180,12 +183,13 @@ private fun AboutRoleSection() {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.Info, contentDescription = null, tint = MaterialTheme.colorScheme.error)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Important Regulatory Clarification", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
+                    Text("Observed vs. Verified Semantics", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
                 }
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "• UPI-Easy is NOT a bank, Payment System Operator (PSO), PSP Bank, Payment Aggregator, or wallet issuer.\n" +
-                            "• UPI-Easy does NOT hold customer or merchant funds, nor does it process or authorize interbank settlements.\n" +
+                    text = "• Notification signals are OBSERVED payment indicators, NOT authoritative confirmation of fund settlement.\n" +
+                            "• UPI-Easy is NOT a bank, Payment System Operator (PSO), PSP Bank, Payment Aggregator, or wallet issuer.\n" +
+                            "• UPI-Easy does NOT hold funds, execute settlements, or modify bank ledgers.\n" +
                             "• All payments occur directly between customer and merchant bank accounts via NPCI-authorized UPI applications.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -193,7 +197,6 @@ private fun AboutRoleSection() {
             }
         }
 
-        // Zero Banking Credentials Card
         Card(
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.3f)),
@@ -211,6 +214,106 @@ private fun AboutRoleSection() {
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurface
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PermissionsSection() {
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Text("Android System Permissions Guide", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+
+        Card(
+            shape = RoundedCornerShape(18.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                LegalItemRow(
+                    "Notification Listener Service (BIND_NOTIFICATION_LISTENER_SERVICE)",
+                    "Essential to observe payment alerts posted by supported UPI applications (PhonePe, Google Pay, BHIM UPI, and Paytm). Only notifications from these four apps are inspected; all other notifications are discarded immediately."
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                LegalItemRow(
+                    "Auto-Rebind on Disconnect & Boot (RECEIVE_BOOT_COMPLETED)",
+                    "Ensures UPI-Easy automatically rebinds and restores notification detection when your phone restarts, without requiring manual intervention."
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                LegalItemRow(
+                    "Battery Optimization Exemption (REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)",
+                    "Prevents Android Doze mode and manufacturer battery savers (MIUI, OneUI, ColorOS) from sleeping the listener service when the phone screen is locked."
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                LegalItemRow(
+                    "Post Notifications (POST_NOTIFICATIONS)",
+                    "Displays instant payment arrival alerts and voice announcement status cards in the system notification drawer."
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                LegalItemRow(
+                    "Camera Access (CAMERA - Optional)",
+                    "Used solely for scanning customer or merchant UPI QR codes to initiate dynamic collections."
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ChangelogSection() {
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Text("Product Changelog", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+
+        Card(
+            shape = RoundedCornerShape(18.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Version 2.0.0 — Multi-UPI Detection & Reliability", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                Text(
+                    text = "• Added BHIM UPI (in.org.npci.upiapp) notification detection and parser.\n" +
+                            "• Added Paytm (net.one97.paytm) notification detection and parser.\n" +
+                            "• Strengthened Notification Listener with automatic rebind on disconnect (Android 7+) and device boot receiver.\n" +
+                            "• Enhanced Payment Detection Settings with real-time listener health checks and battery optimization exemption shortcuts.\n" +
+                            "• Strict OBSERVED vs VERIFIED financial status integrity enforced across Android Room and Backend Hono API.\n" +
+                            "• SHA-256 fingerprint deduplication guarantees zero duplicate records on notification updates.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    lineHeight = 20.sp
+                )
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
+                Text("Version 1.0.0 — Initial Release", fontWeight = FontWeight.Bold)
+                Text(
+                    text = "• Notification-based payment detection for Google Pay and PhonePe.\n" +
+                            "• Offline-first SQLite Room database and WorkManager cloud synchronization.\n" +
+                            "• Multi-device staff notifications and local voice soundbox announcements.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    lineHeight = 20.sp
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SitemapSection() {
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Text("Application Sitemap & Directory", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+
+        Card(
+            shape = RoundedCornerShape(18.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                LegalItemRow("Dashboard", "Overview of today's collections, soundbox toggle, and recent detected payments.")
+                LegalItemRow("Transactions", "Complete business ledger, filter by direction, payment app, and review observed transactions.")
+                LegalItemRow("UPI & QR Counters", "Payment accounts configured for PhonePe, Google Pay, BHIM UPI, and Paytm, with QR code generation.")
+                LegalItemRow("Staff & Devices", "Invite cashiers, managers, and accountants, and manage registered POS listener devices.")
+                LegalItemRow("Settings > Payment Detection", "Notification access permission, live listener health status, and battery settings.")
+                LegalItemRow("Settings > Soundbox", "Voice announcement volume, language, and speech confirmation preferences.")
+                LegalItemRow("Legal & Regulatory", "Disclosures, permissions, changelog, DPDP compliance, and grievance contacts.")
             }
         }
     }
@@ -248,7 +351,7 @@ private fun PrivacyPolicySection() {
                 Text("Information NEVER Collected or Processed", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
-                    text = "❌ UPI PIN\n❌ Net Banking Passwords\n❌ Debit/Credit Card CVV or PIN\n❌ Banking Transaction OTPs",
+                    text = "❌ UPI PIN\n❌ Net Banking Passwords\n❌ Debit/Credit Card CVV or PIN\n❌ Banking Transaction OTPs\n❌ Personal Messages or Unrelated Notifications",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface
                 )
@@ -269,9 +372,10 @@ private fun TermsSection() {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 LegalItemRow("1. Eligibility", "Users must be at least 18 years old and authorized to conduct commercial business under Indian laws.")
                 LegalItemRow("2. Merchant Representation", "You represent that any UPI VPA entered is legitimately assigned to your business. Deceptive VPAs are strictly prohibited.")
-                LegalItemRow("3. Staff Control", "Organization owners control staff permissions. Actions performed by staff members are recorded in organizational audit logs.")
-                LegalItemRow("4. Non-Custodial Limitation", "UPI-Easy does not hold funds or guarantee settlement. Merchants must verify critical settlements via bank account statements.")
-                LegalItemRow("5. Governing Law", "Subject to the jurisdiction of the courts of Bengaluru, Karnataka, India.")
+                LegalItemRow("3. Observation Semantics", "Payment detection relies on device notifications from selected payment applications. All notification events are recorded as 'Observed' signals. Merchants must reconcile critical transactions against bank statements.")
+                LegalItemRow("4. Staff Control", "Organization owners control staff permissions. Actions performed by staff members are recorded in organizational audit logs.")
+                LegalItemRow("5. Non-Custodial Limitation", "UPI-Easy does not hold funds or guarantee settlement.")
+                LegalItemRow("6. Governing Law", "Subject to the jurisdiction of the courts of Bengaluru, Karnataka, India.")
             }
         }
     }
@@ -288,8 +392,8 @@ private fun UpiDisclaimerSection() {
         ) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
-                    text = "UPI-Easy is an independent commercial software product. UPI is a registered trademark of National Payments Corporation of India (NPCI).\n\n" +
-                            "UPI-Easy is NOT an official NPCI or RBI application and does not claim official certification unless documented. Payments are executed directly via NPCI rails between participating PSP banks.",
+                    text = "UPI-Easy is an independent commercial software product. UPI, BHIM, PhonePe, Google Pay, and Paytm are trademarks of their respective owners.\n\n" +
+                            "UPI-Easy is NOT an official NPCI or RBI application and does not claim official endorsement or certification unless documented. Payments are executed directly via NPCI rails between participating PSP banks.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

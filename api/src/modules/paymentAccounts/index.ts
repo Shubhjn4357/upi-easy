@@ -32,6 +32,20 @@ paymentAppsRouter.get("/supported", (c) => {
         supported: true,
         parserKey: "google_pay",
       },
+      {
+        id: "bhim",
+        displayName: "BHIM UPI",
+        packageName: "in.org.npci.upiapp",
+        supported: true,
+        parserKey: "bhim",
+      },
+      {
+        id: "paytm",
+        displayName: "Paytm",
+        packageName: "net.one97.paytm",
+        supported: true,
+        parserKey: "paytm",
+      },
     ],
   });
 });
@@ -70,10 +84,12 @@ paymentAccountsRouter.post(
         .string()
         .min(3)
         .regex(/^[a-zA-Z0-9.\-_]{2,256}@[a-zA-Z]{2,64}$/, "Invalid UPI ID format (e.g. user@bank)"),
-      paymentAppId: z.enum(["phonepe", "google_pay"]),
+      paymentAppId: z.enum(["phonepe", "google_pay", "bhim", "paytm"]),
       paymentAppPackage: z.enum([
         "com.phonepe.app",
         "com.google.android.apps.nbu.paisa.user",
+        "in.org.npci.upiapp",
+        "net.one97.paytm",
       ]),
       detectionEnabled: z.boolean().default(true),
       notificationAccessRequired: z.boolean().default(true),

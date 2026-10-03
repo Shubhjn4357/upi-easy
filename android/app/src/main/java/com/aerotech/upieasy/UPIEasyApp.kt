@@ -24,6 +24,11 @@ class UPIEasyApp : Application() {
         PaymentAlertManager.init(this)
         scheduleBackgroundSync()
         registerNetworkAutoSync()
+
+        // Proactively ensure PaymentNotificationListenerService is bound on app launch
+        if (com.aerotech.upieasy.feature.settings.isNotificationAccessGranted(this)) {
+            com.aerotech.upieasy.feature.notifications.PaymentNotificationListenerService.requestRebindIfDisconnected(this)
+        }
     }
 
     private fun registerNetworkAutoSync() {

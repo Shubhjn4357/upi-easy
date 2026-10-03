@@ -8,42 +8,10 @@ class GooglePayNotificationParser : PaymentNotificationParser {
     companion object {
         const val PACKAGE_NAME = "com.google.android.apps.nbu.paisa.user"
 
-        private val NON_PAYMENT_KEYWORDS = listOf(
-            // Offers & Promotions
-            "offer", "offers", "deal", "deals", "discount", "discounts", "sale", "special",
-            "cashback", "scratch card", "scratchcard", "reward", "rewards", "coupon", "coupons",
-            "voucher", "vouchers", "voucher code", "promo", "promotional", "exclusive",
-            "win up to", "win upto", "won up to", "won upto", "get up to", "get upto",
-            "flat rs", "flat ₹", "flat inr", "save up to", "save upto", "save rs", "save ₹",
-            "bumper", "jackpot", "festive", "explore", "claim your", "claim now",
-            "refer", "referral", "invite friends", "invite your", "spin & win", "spin and win",
-            "spin to win", "spin the wheel", "contest", "play now", "earn up to", "earn upto",
+        private val NON_PAYMENT_KEYWORDS = NotificationFilterConstants.COMMON_NON_PAYMENT_KEYWORDS + listOf(
+            // Loyalty points & tokens
             "reward points", "reward point", "loyalty points", "coins", "coin", "supercoin", "supercoins", "token", "tokens",
-            "gift card", "gift voucher", "congratulations",
-
-            // Financial Products & Upselling
-            "loan", "pre-approved", "preapproved", "personal loan", "business loan",
-            "insurance", "policy", "premium", "mutual fund", "mutual funds", "sip", "gold",
-            "digital gold", "credit card", "credit score", "cibil score", "cibil",
-
-            // Bills, Recharges & Reminders (Not completed payments!)
-            "recharge offer", "bill offer", "recharge now", "bill due", "bill generated",
-            "due on", "due date", "upcoming bill", "bill payment due", "payment due",
-            "electricity bill", "water bill", "gas bill", "broadband", "dth",
-            "payment request", "requested money", "requested rs", "requested ₹",
-            "has requested", "requested you", "remind", "reminder", "pay request",
-            "autopay scheduled", "autopay due", "mandate created", "mandate approved",
-            "e-mandate", "standing instruction",
-
-            // Commerce & Delivery Status
-            "order placed", "order confirmed", "order delivered", "swiggy", "zomato",
-            "flipkart", "amazon", "myntra", "blinkit", "zepto", "instamart", "uber", "ola",
-
-            // System, Security & General Notifications
-            "kyc", "update kyc", "kyc pending", "rate us", "feedback", "survey",
-            "security alert", "login alert", "otp", "verification code", "update available",
-            "new feature", "don't miss", "hurry up", "limited time", "limited period",
-            "failed", "declined", "rejected", "reversed", "refunded", "cancelled", "canceled"
+            "gift card", "gift voucher"
         )
 
         private val CREDIT_PATTERN = Pattern.compile(

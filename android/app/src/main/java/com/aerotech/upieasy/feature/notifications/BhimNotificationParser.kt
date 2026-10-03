@@ -3,24 +3,20 @@ package com.aerotech.upieasy.feature.notifications
 import java.math.BigDecimal
 import java.util.regex.Pattern
 
-class PhonePeNotificationParser : PaymentNotificationParser {
+class BhimNotificationParser : PaymentNotificationParser {
 
     companion object {
-        const val PACKAGE_NAME = "com.phonepe.app"
+        const val PACKAGE_NAME = "in.org.npci.upiapp"
 
-        private val NON_PAYMENT_KEYWORDS = NotificationFilterConstants.COMMON_NON_PAYMENT_KEYWORDS + listOf(
-            // PhonePe-specific loyalty rewards & tokens
-            "reward points", "reward point", "loyalty points", "coins", "coin", "supercoin", "supercoins", "token", "tokens",
-            "gift card", "gift voucher"
-        )
+        private val NON_PAYMENT_KEYWORDS = NotificationFilterConstants.COMMON_NON_PAYMENT_KEYWORDS
 
         private val CREDIT_PATTERN = Pattern.compile(
-            "(?:(?:money\\s+)?received\\s*(?:of\\s*)?(?:Rs\\.?|INR|₹)|(?:Rs\\.?|INR|₹)\\s*[0-9,.]+\\s*(?:credited|received)|paid\\s+(?:to\\s+you|you)\\s*(?:Rs\\.?|INR|₹))",
+            "(?:(?:money\\s+)?received\\s*(?:of\\s*)?(?:Rs\\.?|INR|₹)|(?:Rs\\.?|INR|₹)\\s*[0-9,.]+\\s*(?:credited|received)|credited\\s*(?:with|by)?\\s*(?:Rs\\.?|INR|₹)|credit\\s+of\\s*(?:Rs\\.?|INR|₹)|paid\\s+(?:to\\s+you|you)\\s*(?:Rs\\.?|INR|₹)|received\\s+from|खाते\\s+में\\s+जमा|प्राप्त\\s+हुए)",
             Pattern.CASE_INSENSITIVE
         )
 
         private val DEBIT_PATTERN = Pattern.compile(
-            "(?:paid\\s+(?:Rs\\.?|INR|₹)|(?:Rs\\.?|INR|₹)\\s*[0-9,.]+\\s*(?:debited|paid)|payment\\s+of\\s*(?:Rs\\.?|INR|₹)\\s*[0-9,.]+\\s*(?:to|successful))",
+            "(?:you\\s+(?:sent|paid)\\s*(?:Rs\\.?|INR|₹)|paid\\s+(?:Rs\\.?|INR|₹)|(?:Rs\\.?|INR|₹)\\s*[0-9,.]+\\s*(?:debited|sent)|debited\\s*(?:with|by)?\\s*(?:Rs\\.?|INR|₹)|payment\\s+of\\s*(?:Rs\\.?|INR|₹)\\s*[0-9,.]+\\s*(?:to|successful)|डेबिट\\s+किए\\s+गए|भुगतान\\s+किया)",
             Pattern.CASE_INSENSITIVE
         )
 
@@ -30,7 +26,7 @@ class PhonePeNotificationParser : PaymentNotificationParser {
         )
 
         private val RRN_PATTERN = Pattern.compile(
-            "(?:UTR|RRN|Ref|UPI Ref(?: No)?|Reference No)?[:\\s#]*([0-9]{12})",
+            "(?:UTR|RRN|Ref|UPI Ref(?: No)?|UPI transaction ID|Transaction ID|Ref No)?[:\\s#]*([0-9]{12})",
             Pattern.CASE_INSENSITIVE
         )
 
@@ -40,12 +36,17 @@ class PhonePeNotificationParser : PaymentNotificationParser {
         )
 
         private val FROM_NAME_PATTERN = Pattern.compile(
-            "(?:from|by)\\s+([A-Za-z0-9\\s]{2,40})(?:\\s+via|\\s+using|\\s+for|\\s+on|\\.|$)",
+            "(?:from|by|received from)\\s+([A-Za-z0-9\\s]{2,40}?)(?:\\s+(?:via|using|for|on)|[.]|$)",
+            Pattern.CASE_INSENSITIVE
+        )
+
+        private val SENT_YOU_NAME_PATTERN = Pattern.compile(
+            "^([A-Za-z0-9\\s]{2,30}?)\\s+sent you",
             Pattern.CASE_INSENSITIVE
         )
 
         private val TO_NAME_PATTERN = Pattern.compile(
-            "(?:to|towards)\\s+([A-Za-z0-9\\s]{2,40})(?:\\s+via|\\s+using|\\s+for|\\s+on|\\.|$)",
+            "(?:to|towards)\\s+([A-Za-z0-9\\s]{2,40}?)(?:\\s+(?:via|using|for|on)|[.]|$)",
             Pattern.CASE_INSENSITIVE
         )
     }
@@ -64,7 +65,7 @@ class PhonePeNotificationParser : PaymentNotificationParser {
 
         if (combined.isBlank()) return null
 
-        // 1. Strict filter: Discard any promotional/marketing/offer/bill notifications immediately
+        // 1. Filter out promotional / non-payment alerts
         val isNonPayment = NON_PAYMENT_KEYWORDS.any { keyword ->
             combined.contains(keyword, ignoreCase = true)
         }
@@ -72,17 +73,17 @@ class PhonePeNotificationParser : PaymentNotificationParser {
             return null
         }
 
-        // 2. Strict positive payment direction matching using contextual regex patterns
+        // 2. Determine payment direction
         val isCredit = CREDIT_PATTERN.matcher(combined).find()
         val isDebit = DEBIT_PATTERN.matcher(combined).find()
 
         val direction = when {
             isCredit && !isDebit -> PaymentDirection.RECEIVED
             isDebit && !isCredit -> PaymentDirection.SENT
-            else -> return null // Strictly reject unknown, ambiguous, or non-matching notifications
+            else -> return null // Discard ambiguous or non-payment alerts
         }
 
-        // Extract amount using BigDecimal
+        // 3. Extract amount
         val amountMatcher = AMOUNT_PATTERN.matcher(combined)
         val amount = if (amountMatcher.find()) {
             val amountStr = amountMatcher.group(1)?.replace(",", "")
@@ -99,31 +100,34 @@ class PhonePeNotificationParser : PaymentNotificationParser {
             return null // Reject notifications without a valid transaction amount
         }
 
-        // Extract reference (12-digit UTR/RRN)
+        // 4. Extract 12-digit UTR / RRN reference
         val rrnMatcher = RRN_PATTERN.matcher(combined)
         val reference = if (rrnMatcher.find()) rrnMatcher.group(1) else null
 
-        // Extract VPA if present
+        // 5. Extract customer VPA
         val vpaMatcher = VPA_PATTERN.matcher(combined)
-        val payerVpa = if (vpaMatcher.find()) vpaMatcher.group(1) else null
+        val payerVpa = if (vpaMatcher.find()) vpaMatcher.group(1)?.trim()?.trimEnd('.', ',', ';', ':') else null
 
-        // Extract party name
-        val nameMatcher = if (direction == PaymentDirection.RECEIVED) {
-            FROM_NAME_PATTERN.matcher(combined)
-        } else {
-            TO_NAME_PATTERN.matcher(combined)
+        // 6. Extract customer / merchant party name
+        val fromMatcher = FROM_NAME_PATTERN.matcher(combined)
+        val sentYouTextMatcher = SENT_YOU_NAME_PATTERN.matcher(text.trim())
+        val sentYouBigTextMatcher = if (bigText.isNotBlank()) SENT_YOU_NAME_PATTERN.matcher(bigText.trim()) else null
+        val toMatcher = TO_NAME_PATTERN.matcher(combined)
+
+        val partyName = when {
+            direction == PaymentDirection.RECEIVED && sentYouTextMatcher.find() -> sentYouTextMatcher.group(1)?.trim()?.take(50)
+            direction == PaymentDirection.RECEIVED && sentYouBigTextMatcher != null && sentYouBigTextMatcher.find() -> sentYouBigTextMatcher.group(1)?.trim()?.take(50)
+            direction == PaymentDirection.RECEIVED && fromMatcher.find() -> fromMatcher.group(1)?.trim()?.take(50)
+            direction == PaymentDirection.SENT && toMatcher.find() -> toMatcher.group(1)?.trim()?.take(50)
+            title.isNotBlank() && !title.contains("BHIM", ignoreCase = true) && !title.contains("Payment", ignoreCase = true) -> title.trim().take(50)
+            else -> null
         }
-        val partyName = if (nameMatcher.find()) {
-            nameMatcher.group(1)?.trim()?.take(50)
-        } else if (title.isNotBlank() && !title.contains("PhonePe", ignoreCase = true) && !title.contains("Payment", ignoreCase = true)) {
-            title.trim().take(50)
-        } else {
-            null
-        }
+
+        val confidence = if (reference != null) ParseConfidence.HIGH else ParseConfidence.MEDIUM
 
         return ParsedPaymentEvent(
             sourcePackage = PACKAGE_NAME,
-            sourceApp = "PhonePe",
+            sourceApp = "BHIM UPI",
             direction = direction,
             amount = amount,
             payerName = partyName,
@@ -132,7 +136,7 @@ class PhonePeNotificationParser : PaymentNotificationParser {
             rawTitle = notification.title,
             rawText = notification.text ?: notification.bigText,
             observedAt = notification.postTime,
-            confidence = ParseConfidence.HIGH
+            confidence = confidence
         )
     }
 }

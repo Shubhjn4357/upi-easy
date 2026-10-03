@@ -62,7 +62,22 @@ We transmit data only to verified cloud infrastructure providers operating under
 
 ---
 
-## 5. Data Security and Safeguards
+## 5. Notification-Based Observation & Privacy Safeguards
+
+UPI-Easy utilizes Android's `NotificationListenerService` strictly for observing incoming payment alerts from user-selected UPI applications:
+- **Supported Applications Only**: Notification inspection is programmatically limited to four explicit application packages:
+  - `com.google.android.apps.nbu.paisa.user` (Google Pay)
+  - `com.phonepe.app` (PhonePe)
+  - `in.org.npci.upiapp` (BHIM UPI)
+  - `net.one97.paytm` (Paytm)
+- **Immediate Discard of Other Notifications**: Any notification originating from other apps (messaging, email, bank OTPs, personal apps) is immediately discarded in memory without inspection, logging, or transmission.
+- **Normalized Data Extraction**: We extract only normalized transaction metadata: payment direction, amount in minor units (paise), customer VPA/name, and 12-digit UTR/RRN reference.
+- **Zero Raw Payload Upload**: Raw Android `Notification` objects, system icons, `RemoteViews`, or full bundle payloads are NEVER saved to the cloud.
+- **Cryptographic Fingerprinting**: Notifications are hashed locally using SHA-256 (`eventFingerprint`) to ensure duplicate alerts are discarded without creating redundant ledger records.
+
+---
+
+## 6. Data Security and Safeguards
 
 - **In Transit**: All API traffic is strictly enforced over HTTPS with TLS 1.3 encryption and HSTS headers.
 - **At Rest**: Secure encrypted token storage using Android Keystore-backed `EncryptedSharedPreferences`.

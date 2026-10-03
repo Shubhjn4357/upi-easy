@@ -3,25 +3,25 @@ package com.aerotech.upieasy.feature.notifications
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.content.ComponentName
 import android.content.Context
 import android.os.Build
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
-import androidx.core.app.NotificationCompat
 import com.aerotech.upieasy.core.database.AppDatabase
 import com.aerotech.upieasy.core.database.entity.ObservedPaymentEventEntity
 import com.aerotech.upieasy.core.database.entity.TransactionEntity
 import com.aerotech.upieasy.core.security.SessionManager
 import com.aerotech.upieasy.core.sync.PaymentEventSyncWorker
 import com.aerotech.upieasy.core.util.PaymentAlertManager
+import java.math.BigDecimal
+import java.util.UUID
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import java.math.BigDecimal
-import java.util.UUID
 
 class PaymentNotificationListenerService : NotificationListenerService() {
 
@@ -29,19 +29,39 @@ class PaymentNotificationListenerService : NotificationListenerService() {
     private val deduplicator = NotificationEventDeduplicator()
     private val accountResolver = PaymentAccountResolver()
     private val parsers: List<PaymentNotificationParser> = listOf(
+        GooglePayNotificationParser(),
         PhonePeNotificationParser(),
-        GooglePayNotificationParser()
+        BhimNotificationParser(),
+        PaytmNotificationParser()
     )
 
     companion object {
         private const val TAG = "PaymentNotificationListener"
         private const val CHANNEL_ID = "upi_easy_payments"
 
-        // Section 10: The service must immediately ignore unsupported applications
+        // Section 10 & 21: Strict package filter for the 4 supported applications
         val SUPPORTED_PACKAGES = setOf(
+           GooglePayNotificationParser.PACKAGE_NAME,
             PhonePeNotificationParser.PACKAGE_NAME,
-            GooglePayNotificationParser.PACKAGE_NAME
+            BhimNotificationParser.PACKAGE_NAME,
+            PaytmNotificationParser.PACKAGE_NAME
         )
+
+        /**
+         * Proactively requests the Android OS to rebind this NotificationListenerService
+         * if disconnected or unbound.
+         */
+        fun requestRebindIfDisconnected(context: Context) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                try {
+                    val component = ComponentName(context, PaymentNotificationListenerService::class.java)
+                    requestRebind(component)
+                    Log.i(TAG, "Proactively requested rebind for component $component")
+                } catch (e: Exception) {
+                    Log.d(TAG, "requestRebind not permitted or listener already bound: ${e.message}")
+                }
+            }
+        }
     }
 
     override fun onCreate() {
@@ -53,6 +73,20 @@ class PaymentNotificationListenerService : NotificationListenerService() {
     override fun onListenerConnected() {
         super.onListenerConnected()
         Log.i(TAG, "Notification listener connected successfully")
+    }
+
+    override fun onListenerDisconnected() {
+        super.onListenerDisconnected()
+        Log.w(TAG, "Notification listener disconnected! Proactively requesting immediate rebind...")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            try {
+                val component = ComponentName(this, PaymentNotificationListenerService::class.java)
+                requestRebind(component)
+                Log.i(TAG, "requestRebind invoked successfully on disconnection")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to rebind NotificationListenerService", e)
+            }
+        }
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification?) {
@@ -201,7 +235,7 @@ class PaymentNotificationListenerService : NotificationListenerService() {
                         direction = directionStr,
                         amount = amountDouble,
                         currency = "INR",
-                        status = "SUCCESS", // Detected genuine payment notification
+                        status = "UNKNOWN", // Section 2 & 28: Observed notification must remain UNKNOWN until authoritative verification
                         paymentMethod = "UPI",
                         referenceNumber = event.reference,
                         payerName = payerName,

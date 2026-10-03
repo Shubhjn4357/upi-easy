@@ -18,7 +18,12 @@ paymentEventsRouter.use("*", requireAuth);
 const observedPaymentEventSchema = z.object({
   clientEventId: z.string().min(1).max(128),
   source: z.object({
-    type: z.enum(["NOTIFICATION_PHONEPE", "NOTIFICATION_GPAY"]),
+    type: z.enum([
+      "NOTIFICATION_PHONEPE",
+      "NOTIFICATION_GPAY",
+      "NOTIFICATION_BHIM",
+      "NOTIFICATION_PAYTM",
+    ]),
     packageName: z.string().min(1),
   }),
   paymentAccountId: z.string().nullable().optional(),
