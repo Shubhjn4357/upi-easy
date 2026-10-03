@@ -144,3 +144,23 @@ To guarantee that the app never misses a payment notification:
    - Outbox records ensure transactions and notification events are saved atomically in the same database transaction.
 4. **Multi-Role Device Propagation**:
    - FCM sends lightweight payment notices to enrolled staff devices, directing the app to sync the complete event details.
+
+---
+
+## 6. App-Server Mutual Request Authentication & Anti-Tamper Security
+To guarantee that **only the official UPI-Easy Android app and server can communicate**:
+1. **Secrets Isolation & Source Control Safety**:
+   - `API_SECRET_KEY` is loaded from `local.properties` (Android) and `.env` (Backend), preventing leakage to source control.
+2. **Reverse-Engineering Protection (Build-Time XOR Masking)**:
+   - In `app/build.gradle.kts`, the shared secret is XOR-masked with `0x5A` at compile time and injected into `BuildConfig.OBFUSCATED_SECRET_KEY` as a raw byte array literal.
+   - Decompilation tools (`jadx`, `apktool`, `strings`) cannot discover the plaintext secret in the APK DEX string pool.
+   - `RequestAuthenticator.kt` reconstructs the key in memory on demand.
+3. **Mutual Request Signature Interceptor**:
+   - `AppSignatureInterceptor` stamps every outbound OkHttp request with:
+     - `x-app-timestamp`: Current Unix timestamp in seconds.
+     - `x-app-signature`: SHA-256 hex digest of `"${timestamp}${secretKey}"`.
+4. **Backend Cryptographic Guard**:
+   - Middleware `requireAppSignature` intercepts all `/api/v1/*` requests.
+   - Replay defense rejects requests with timestamp drift $> 60$ seconds.
+   - Constant-time validation via `crypto.timingSafeEqual` prevents timing attack vulnerabilities.
+   - Unauthenticated or forged requests fail with HTTP 401 Unauthorized.

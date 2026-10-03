@@ -42,7 +42,7 @@ function getEnvironment(): AppEnvironment {
     (metaEnv.VITE_GOOGLE_CLIENT_ID as string) ||
     win.GOOGLE_WEB_CLIENT_ID ||
     win.GOOGLE_CLIENT_ID ||
-    '332345540842-ks8bq4csr4lklkvv3tesgkig2b221m23.apps.googleusercontent.com';
+    '';
 
   const deviceId =
     (metaEnv.VITE_DEVICE_ID as string) ||

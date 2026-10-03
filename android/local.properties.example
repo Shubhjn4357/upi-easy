@@ -1,0 +1,7 @@
+## Sample local.properties template for UPI-Easy Android client
+# Copy this file to local.properties and configure your local environment.
+# Never commit real credentials or private keys to git.
+sdk.dir=/path/to/Android/Sdk
+GOOGLE_WEB_CLIENT_ID=your_google_web_client_id.apps.googleusercontent.com
+API_BASE_URL=https://upi-easy-api.aerotech.workers.dev/
+API_SECRET_KEY=YOUR_SUPER_SECRET_SHARED_KEY

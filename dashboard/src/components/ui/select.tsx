@@ -165,7 +165,7 @@ export function Select({
         {isOpen && (
           <div
             role="listbox"
-            className={`glass-dropdown absolute z-50 mt-1.5 max-h-60 w-full overflow-hidden rounded-2xl border border-border/80 bg-popover/95 p-1 text-popover-foreground shadow-2xl backdrop-blur-xl animate-dropdown-in ${dropdownClassName}`}>
+            className={`glass-dropdown absolute z-[9999] mt-1.5 max-h-60 w-full overflow-hidden rounded-2xl border border-border/80 bg-popover/95 p-1 text-popover-foreground shadow-2xl backdrop-blur-xl animate-dropdown-in ${dropdownClassName}`}>
             {/* Search Input in Dropdown */}
             {searchable && (
               <div className="p-1.5 border-b border-border/60 mb-1">

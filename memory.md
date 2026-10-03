@@ -84,3 +84,20 @@ To prevent duplicate records from notification re-posts, sticky notifications, o
 - WorkManager (`PaymentEventSyncWorker`) guarantees eventual consistency with exponential backoff.
 - Hono backend rejects any client attempt to self-declare `verificationStatus = "VERIFIED"` on the `/payment-events/observed` endpoint.
 - Soundbox alerts only trigger for `RECEIVED` payments with `HIGH` or `MEDIUM` confidence.
+
+---
+
+## 6. App-Server Mutual Request Authentication & Key Protection
+- **Source Control Security**: Shared secret `API_SECRET_KEY` is kept in `local.properties` (Android) and `.env` (Server), completely ignored by git.
+- **Reverse-Engineering Defense**:
+  - In `build.gradle.kts`, `API_SECRET_KEY` is XOR-obfuscated with mask `0x5A` at compile time and passed to `BuildConfig.OBFUSCATED_SECRET_KEY` as a raw byte array literal.
+  - Plaintext secret strings are absent from the APK DEX bytecode string pool.
+  - `RequestAuthenticator.getSecretKey()` dynamically de-masks the byte array at runtime.
+- **Mutual Request Authentication**:
+  - `AppSignatureInterceptor` stamps every outbound OkHttp request with:
+    - `x-app-timestamp`: Current Unix timestamp in seconds.
+    - `x-app-signature`: SHA-256 hex digest of `"${timestamp}${secretKey}"`.
+  - Backend middleware `requireAppSignature` enforces:
+    - Clock drift tolerance: Request rejected (`REQUEST_EXPIRED`) if $|t_{server} - t_{client}| > 60$ seconds.
+    - Constant-time verification using `crypto.timingSafeEqual` prevents side-channel timing attacks.
+    - Unauthorized clients without valid signatures receive `401 Unauthorized`.

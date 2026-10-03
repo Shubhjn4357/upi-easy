@@ -85,8 +85,12 @@ class TokenAuthenticator(
         return try {
             val json = JSONObject().put("refreshToken", refreshToken).toString()
             val requestBody = json.toRequestBody("application/json; charset=utf-8".toMediaType())
+            val timestampSeconds = System.currentTimeMillis() / 1000
+            val signature = com.aerotech.upieasy.core.security.RequestAuthenticator.generateSignature(timestampSeconds)
             val request = Request.Builder()
                 .url(baseUrl.trimEnd('/') + "/api/v1/auth/refresh")
+                .header("x-app-timestamp", timestampSeconds.toString())
+                .header("x-app-signature", signature)
                 .post(requestBody)
                 .build()
 
@@ -158,10 +162,12 @@ object NetworkClient {
                 // Redact sensitive headers
                 redactHeader("Authorization")
                 redactHeader("X-Webhook-Signature")
+                redactHeader("x-app-signature")
             }
 
             val okHttpClient = OkHttpClient.Builder()
                 .connectionPool(okhttp3.ConnectionPool(5, 5, TimeUnit.MINUTES))
+                .addInterceptor(AppSignatureInterceptor())
                 .addInterceptor(AuthInterceptor(sessionManager))
                 .authenticator(TokenAuthenticator(sessionManager, normalizedBaseUrl))
                 .addInterceptor(logging)

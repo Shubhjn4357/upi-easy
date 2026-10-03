@@ -24,6 +24,7 @@ import { seedDemoMerchantData } from "./db/seed.js";
 import { renderDashboardHtml } from "./dashboard/html.js";
 import { adminRouter } from "./modules/admin/index.js";
 import { requireAuth } from "./middleware/auth.js";
+import { requireAppSignature } from "./middleware/appSignature.js";
 import { setD1Database } from "./db/index.js";
 import { config } from "./config/index.js";
 import type { AppEnv } from "./types/hono.js";
@@ -50,7 +51,17 @@ app.use(
   "*",
   cors({
     origin: "*",
-    allowHeaders: ["Content-Type", "Authorization", "X-Organization-Id", "X-Device-Id", "Idempotency-Key"],
+    allowHeaders: [
+      "Content-Type",
+      "Authorization",
+      "X-Organization-Id",
+      "X-Device-Id",
+      "Idempotency-Key",
+      "x-app-timestamp",
+      "x-app-signature",
+      "X-App-Timestamp",
+      "X-App-Signature",
+    ],
     allowMethods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
   })
 );
@@ -206,6 +217,9 @@ app.get("/api/routes", (c) => {
 
 // Mount /api/v1 endpoints
 const v1 = new Hono<AppEnv>();
+
+// Enforce mutual app-server request signature authentication
+v1.use("*", requireAppSignature);
 
 v1.route("/auth", authRouter);
 v1.route("/users", usersRouter);

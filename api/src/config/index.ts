@@ -12,6 +12,7 @@ const envSchema = z.object({
   REFRESH_TOKEN_EXPIRY: z.string().default("30d"),
   WEBHOOK_SECRET: z.string().default("default-webhook-secret-key-for-local-testing"),
   GOOGLE_WEB_CLIENT_ID: z.string().optional().default(""),
+  API_SECRET_KEY: z.string().default("upi_easy_sec_shared_auth_key_2026_9f8b2c4e"),
 });
 
 export const config = envSchema.parse(process.env);

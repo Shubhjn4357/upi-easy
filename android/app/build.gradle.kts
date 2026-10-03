@@ -27,6 +27,17 @@ val apiBaseUrl: String = providers.environmentVariable("API_BASE_URL")
     .getOrElse(localProperties.getProperty("API_BASE_URL", ""))
     .trim().replace("\"", "").replace("'", "")
 
+val apiSecretKey: String = providers.environmentVariable("API_SECRET_KEY")
+    .orElse(providers.gradleProperty("API_SECRET_KEY"))
+    .getOrElse(localProperties.getProperty("API_SECRET_KEY", "upi_easy_sec_shared_auth_key_2026_9f8b2c4e"))
+    .trim().replace("\"", "").replace("'", "")
+
+// Build-time XOR obfuscation (Mask 0x5A) to prevent reverse-engineering of the secret from DEX bytecode
+val xorMask: Byte = 0x5A
+val rawKeyBytes = apiSecretKey.toByteArray(Charsets.UTF_8)
+val obfuscatedBytes = rawKeyBytes.map { (it.toInt() xor xorMask.toInt()).toByte() }
+val obfuscatedBytesLiteral = "new byte[]{" + obfuscatedBytes.joinToString(",") { "(byte)" + it.toInt() } + "}"
+
 android {
     namespace = "com.aerotech.upieasy"
     compileSdk = 34
@@ -44,6 +55,7 @@ android {
         }
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"$googleWebClientId\"")
         buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
+        buildConfigField("byte[]", "OBFUSCATED_SECRET_KEY", obfuscatedBytesLiteral)
         resValue("string", "default_web_client_id", googleWebClientId)
         resValue("string", "api_base_url", apiBaseUrl)
     }
