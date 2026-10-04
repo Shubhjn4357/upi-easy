@@ -26,6 +26,12 @@ UPI-Easy Android Application
 │   ├── Payment Accounts (Linked to PhonePe, Google Pay, BHIM, or Paytm)
 │   ├── Add / Edit Payment Account Bottom Sheet
 │   └── QR Generator (Static & Dynamic Counter QRs)
+├── Offline Payments (Without Internet)
+│   ├── UPI 123Pay Automated Telephony Dialer
+│   ├── *99# USSD Scan & Pay
+│   ├── Dual-SIM Carrier & VoLTE Selector
+│   ├── In-Call Floating Guidance Overlay Window
+│   └── Offline Bank SMS Confirmation Ingestion
 ├── Staff & Device Management
 │   ├── Organization Members List
 │   ├── Invite Staff (Cashier, Manager, Accountant)
@@ -83,6 +89,7 @@ UPI-Easy Android Application
 
 ## 3. Documentation Repository
 - [AGENT.md](file:///d:/Code/upi-easy/AGENT.md) - Operating guidelines, strict scope, and verification gates
+- [LEGAL.md](file:///d:/Code/upi-easy/LEGAL.md) - Master legal, regulatory, and NPCI compliance disclaimer
 - [memory.md](file:///d:/Code/upi-easy/memory.md) - System contracts, persistent decisions, and constants
 - [architecture.md](file:///d:/Code/upi-easy/architecture.md) - End-to-end component data flow and strengthening mechanisms
 - [database structure.md](file:///d:/Code/upi-easy/database%20structure.md) - Room and Drizzle ORM database schemas

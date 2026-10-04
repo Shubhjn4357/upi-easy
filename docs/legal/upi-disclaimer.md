@@ -1,6 +1,6 @@
 # UPI & Financial Services Regulatory Disclaimer
 
-**Effective Date:** September 20, 2026  
+**Effective Date:** October 4, 2026  
 **Application:** UPI-Easy Android Mobile Application & Web Services  
 
 ---
@@ -9,7 +9,7 @@
 **UPI-Easy is an independent software technology application.**  
 Unless expressly authorized and publicly disclosed, UPI-Easy:
 - **Is NOT a Bank**, Payment System Operator (PSO), Payment Service Provider (PSP) Bank, Payment Aggregator (PA), Payment Gateway (PG), or issuer of Prepaid Payment Instruments (PPI) under the Payment and Settlement Systems Act, 2007 or Reserve Bank of India (RBI) regulations.
-- **Is NOT an official application of the National Payments Corporation of India (NPCI)** or the Reserve Bank of India (RBI). All trademarks, including "UPI", "Unified Payments Interface", and NPCI logos, are the property of their respective owners.
+- **Is NOT an official application of the National Payments Corporation of India (NPCI)** or the Reserve Bank of India (RBI). All trademarks, including "UPI", "Unified Payments Interface", "UPI 123Pay", and NPCI logos, are the property of their respective owners.
 
 ### 2. Fund Flow & Non-Custodial Architecture
 - **Zero Custody of Funds:** UPI-Easy never holds, pools, escrow-stores, deposits, clears, or directly settles user or customer funds.
@@ -17,9 +17,16 @@ Unless expressly authorized and publicly disclosed, UPI-Easy:
 - **No Banking Intermediation:** Funds move directly from the payer's bank account to the merchant's bank account without passing through UPI-Easy servers or accounts.
 
 ### 3. Verification of Transactions & NPCI Boundary
-- Transaction status displayed in UPI-Easy (e.g., "Success", "Pending", "Failed") is recorded from incoming push notifications and API webhooks for merchant convenience and ledger bookkeeping.
+- Transaction status displayed in UPI-Easy (e.g., "Success", "Pending", "Failed") is recorded from incoming push notifications, local SMS confirmations, and API webhooks for merchant convenience and ledger bookkeeping.
 - UPI-Easy does **not** independently adjudicate bank settlement. Merchants must verify receipt of critical funds through their bank account statement or authorized acquiring bank portal before dispensing goods or services for high-value transactions.
 
 ### 4. Absolute Protection of Banking Credentials
 - UPI-Easy **never** asks for, reads, transmits, or stores user UPI PINs, ATM PINs, bank account passwords, or card CVVs.
 - Per NPCI guidelines, users must never share their UPI-PIN with anyone, including UPI-Easy personnel.
+
+### 5. NPCI UPI 123Pay & USSD (*99#) Offline Payment Regulations
+- **NPCI 123Pay Framework:** UPI 123Pay is an initiative by the National Payments Corporation of India (NPCI) designed to facilitate non-internet UPI payments via Interactive Voice Response (IVR) and USSD.
+- **Transaction Ceiling:** Per NPCI operational circulars, transactions initiated via UPI 123Pay are subject to a maximum statutory ceiling of ₹4,999 per transaction and whole rupee denominations.
+- **Carrier & Operator Charges:** Initiating calls to the national IVR number (`08045163666`) or dialing `*99#` USSD codes utilizes standard cellular voice and signaling channels. Users are subject to their respective telecom service provider's voice calling and USSD tariffs. UPI-Easy does not charge or subsidize telecom carrier rates.
+- **PIN Entry on Telecom Keypad:** When utilizing UPI 123Pay, users enter their UPI PIN directly into their phone's native telephony dialer keypad via standard dual-tone multi-frequency (DTMF) signaling. UPI-Easy does not listen to, record, decrypt, or intercept DTMF audio or PIN entries.
+- **Local SMS Ingestion:** Bank confirmation SMS messages are inspected locally on the merchant's device during active payment sessions to determine confirmation status. Raw SMS data remains strictly on the device and is never uploaded to remote servers.

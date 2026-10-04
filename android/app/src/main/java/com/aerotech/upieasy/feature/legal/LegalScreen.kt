@@ -250,8 +250,28 @@ private fun PermissionsSection() {
                 )
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
                 LegalItemRow(
+                    "Call Phone & Telephony (CALL_PHONE, READ_PHONE_STATE, ANSWER_PHONE_CALLS)",
+                    "Initiates automated NPCI UPI 123Pay IVR calls and *99# USSD codes without internet, inspects SIM subscription readiness, and controls call termination."
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                LegalItemRow(
+                    "Display Over Other Apps (SYSTEM_ALERT_WINDOW)",
+                    "Displays a floating in-call guide overlay window during 123Pay calls so you can view payee details and amount while entering your UPI PIN on your phone's keypad."
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                LegalItemRow(
+                    "Receive SMS (RECEIVE_SMS)",
+                    "Inspects incoming bank confirmation SMS messages locally while an offline payment is active to confirm the transaction and trigger soundbox alerts without internet. Raw SMS bodies never leave your device."
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                LegalItemRow(
+                    "Read Contacts (READ_CONTACTS - Optional)",
+                    "Allows picking a recipient's phone number directly from your contacts list for UPI 123Pay transfers. Your contact list is never uploaded or synchronized."
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                LegalItemRow(
                     "Camera Access (CAMERA - Optional)",
-                    "Used solely for scanning customer or merchant UPI QR codes to initiate dynamic collections."
+                    "Used solely for scanning customer or merchant UPI QR codes to initiate dynamic collections or USSD scan-and-pay."
                 )
             }
         }
@@ -268,6 +288,21 @@ private fun ChangelogSection() {
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
         ) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Version 2.1.0 — Offline UPI Payments & Regulations", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                Text(
+                    text = "• Added offline UPI 123Pay automated telephony dialing with whole rupees & ₹4,999 cap.\n" +
+                            "• Added offline *99# USSD scan-to-pay and bare VPA merchant transfers.\n" +
+                            "• Added Dual-SIM & VoLTE carrier detection (Jio, Airtel, Vi, BSNL).\n" +
+                            "• Added floating in-call guide overlay service (SYSTEM_ALERT_WINDOW) for seamless keypad PIN entry.\n" +
+                            "• Added offline bank confirmation SMS ingestion pipeline with automatic Room persistence.\n" +
+                            "• Added full legal and NPCI 123Pay regulatory compliance documentation.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    lineHeight = 20.sp
+                )
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
                 Text("Version 2.0.0 — Multi-UPI Detection & Reliability", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                 Text(
                     text = "• Added BHIM UPI (in.org.npci.upiapp) notification detection and parser.\n" +
@@ -310,6 +345,7 @@ private fun SitemapSection() {
                 LegalItemRow("Dashboard", "Overview of today's collections, soundbox toggle, and recent detected payments.")
                 LegalItemRow("Transactions", "Complete business ledger, filter by direction, payment app, and review observed transactions.")
                 LegalItemRow("UPI & QR Counters", "Payment accounts configured for PhonePe, Google Pay, BHIM UPI, and Paytm, with QR code generation.")
+                LegalItemRow("Offline Payments (No Internet)", "Dial NPCI 123Pay voice IVR or *99# USSD codes, track live call status, and view offline Room history.")
                 LegalItemRow("Staff & Devices", "Invite cashiers, managers, and accountants, and manage registered POS listener devices.")
                 LegalItemRow("Settings > Payment Detection", "Notification access permission, live listener health status, and battery settings.")
                 LegalItemRow("Settings > Soundbox", "Voice announcement volume, language, and speech confirmation preferences.")
@@ -396,6 +432,17 @@ private fun UpiDisclaimerSection() {
                             "UPI-Easy is NOT an official NPCI or RBI application and does not claim official endorsement or certification unless documented. Payments are executed directly via NPCI rails between participating PSP banks.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                Text(
+                    text = "NPCI UPI 123Pay & USSD Offline Regulations:\n\n" +
+                            "• Statutory Limit: Offline payments via UPI 123Pay IVR are subject to NPCI's statutory cap of ₹4,999 per transaction and whole rupee denominations.\n" +
+                            "• Carrier Charges: Dialing 08045163666 or *99# uses standard cellular voice and signaling channels. Users are subject to their telecom provider's calling and USSD tariffs.\n" +
+                            "• Confidential PIN Entry: Users enter their UPI PIN directly on their phone's native dial pad. UPI-Easy never intercepts, reads, or records DTMF tones or user PIN entries.\n" +
+                            "• Local SMS Ingestion: Bank confirmation SMS messages are evaluated strictly locally on the device. Raw SMS bodies never leave the device.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    lineHeight = 20.sp
                 )
             }
         }

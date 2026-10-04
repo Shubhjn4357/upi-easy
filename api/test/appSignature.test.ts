@@ -109,4 +109,54 @@ describe("App-Server Mutual Request Authentication Middleware", () => {
     const body = await res.json();
     expect(body.error.code).toBe("INVALID_APP_TIMESTAMP");
   });
+
+  it("should permit web Google auth requests without mobile app signature headers", async () => {
+    const res = await app.request("/api/v1/auth/google", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "origin": "https://upi-easy-api.aerotech.workers.dev",
+      },
+      body: JSON.stringify({
+        idToken: "mock:webmerchant@test.com:google_sub_web123",
+        email: "webmerchant@test.com",
+        fullName: "Web Merchant",
+        deviceId: "web-dashboard",
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.success).toBe(true);
+    expect(body.user.email).toBe("webmerchant@test.com");
+    expect(body.tokens.accessToken).toBeDefined();
+  });
+
+  it("should permit authenticated web requests with Bearer token without mobile app signature headers", async () => {
+    // 1. Sign in to obtain access token
+    const loginRes = await app.request("/api/v1/auth/google", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        idToken: "mock:webauth@test.com:google_sub_webauth456",
+        email: "webauth@test.com",
+        fullName: "Web Auth",
+      }),
+    });
+    const body = await loginRes.json();
+    const token = body.tokens.accessToken;
+
+    // 2. Access protected endpoint with Bearer token only (no x-app-* headers)
+    const res = await app.request("/api/v1/users/me", {
+      method: "GET",
+      headers: {
+        "authorization": `Bearer ${token}`,
+      },
+    });
+
+    expect(res.status).toBe(200);
+    const userBody = await res.json();
+    expect(userBody.success).toBe(true);
+  });
 });
+

@@ -4,6 +4,27 @@ All notable changes to the UPI-Easy platform (Android App & Cloud API) are docum
 
 ---
 
+## [Version 2.1.0] - 2026-10-04
+### Offline UPI Payments Without Internet (UPI 123Pay & USSD) & Regulatory Compliance
+
+#### Added
+- **Offline UPI 123Pay (IVR) Engine**:
+  - Implemented automated DTMF telephony dialer (`08045163666,,1,<phone>,,<amount>,,1`) with whole rupee enforcement and statutory ₹4,999 ceiling.
+  - Floating in-call guidance overlay service (`CallOverlayService`) using `SYSTEM_ALERT_WINDOW` displaying live amount, payee details, and one-tap call termination.
+- **Offline USSD *99# Dialing**:
+  - Direct USSD string constructor (`*99*1*3#`) for scan-to-pay and bare VPA merchant transfers without data connection.
+- **Dual SIM & VoLTE Detection**:
+  - SubscriptionManager inspection displaying carrier names (Jio, Airtel, Vi, BSNL) and identifying whether SIM supports VoLTE 123Pay or GSM USSD.
+- **Bank Confirmation SMS Ingestion Pipeline**:
+  - High-priority BroadcastReceiver (`SimpleSMSReceiver` priority 999) capturing debit/credit SMS from Indian banks during active payment sessions.
+  - Automated local Room database persistence with `syncStatus = "QUEUED"` and soundbox voice alerts via `PaymentAlertManager`.
+- **Offline Payment State Machine**:
+  - Complete state coordinator (`Idle`, `Initiating`, `InProgress`, `WaitingForVerification`, `Success`, `Failed`, `Cancelled`, `Timeout`).
+- **Legal & Regulatory Documentation**:
+  - Root `LEGAL.md` and updated `docs/legal/` policies (UPI Disclaimer, Permissions Guide, Terms of Service, Privacy Policy, Sitemap) incorporating NPCI 123Pay guidelines, carrier tariff disclosures, and local-only data processing guarantees.
+
+---
+
 ## [Version 2.0.0] - 2026-10-03
 ### Multi-UPI Notification Detection Expansion & System Strengthening
 

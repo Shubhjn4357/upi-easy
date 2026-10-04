@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@android:color/transparent"
+    android:padding="20dp">
+
+    <LinearLayout
+        android:id="@+id/overlayContainer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:orientation="vertical"
+        android:background="@drawable/frosted_glass_background"
+        android:elevation="14dp"
+        android:padding="24dp"
+        android:gravity="center_horizontal">
+
+        <!-- App Branding -->
+        <TextView
+            android:id="@+id/appLogoText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="UPI-Easy Offline"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:textColor="#006494" />
+
+        <!-- Security Badge -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:background="@drawable/success_badge_bg"
+            android:paddingHorizontal="10dp"
+            android:paddingVertical="4dp"
+            android:layout_marginTop="8dp"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="🔒 Direct Bank Offline Rail"
+                android:textSize="12sp"
+                android:textColor="#02C39A"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- Status Message -->
+        <TextView
+            android:id="@+id/statusText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Connecting to UPI 123Pay..."
+            android:textSize="18sp"
+            android:textColor="#1A1A1A"
+            android:textStyle="bold"
+            android:gravity="center"
+            android:layout_marginTop="16dp" />
+
+        <!-- Payee & Amount Info -->
+        <TextView
+            android:id="@+id/amountText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="₹0.00"
+            android:textSize="26sp"
+            android:textColor="#006494"
+            android:textStyle="bold"
+            android:layout_marginTop="8dp" />
+
+        <TextView
+            android:id="@+id/recipientText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Payee details"
+            android:textSize="13sp"
+            android:textColor="#666666"
+            android:layout_marginTop="4dp" />
+
+        <!-- Progress Indicator -->
+        <ProgressBar
+            android:id="@+id/progressBar"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="10dp"
+            android:progressDrawable="@drawable/dialer_style_progress"
+            android:layout_marginTop="18dp"
+            android:max="100"
+            android:progress="30" />
+
+        <!-- Guidance Instruction -->
+        <TextView
+            android:id="@+id/instructionText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Listen to IVR prompts and enter your UPI PIN on the phone dialer keypad when asked."
+            android:textSize="13sp"
+            android:textColor="#444444"
+            android:gravity="center"
+            android:layout_marginTop="16dp"
+            android:lineSpacingExtra="3dp" />
+
+        <!-- End Call Action -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:layout_marginTop="20dp">
+
+            <ImageButton
+                android:id="@+id/btnEndCall"
+                android:layout_width="54dp"
+                android:layout_height="54dp"
+                android:background="@drawable/terminate_button_background"
+                android:contentDescription="End Call"
+                android:src="@android:drawable/ic_menu_close_clear_cancel" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Cancel &amp; End Call"
+                android:textSize="11sp"
+                android:textColor="#E63946"
+                android:layout_marginTop="4dp" />
+        </LinearLayout>
+    </LinearLayout>
+</FrameLayout>

@@ -9,6 +9,9 @@ interface TransactionDao {
     @Query("SELECT * FROM local_transactions WHERE organizationId = :orgId ORDER BY occurredAt DESC")
     fun getTransactionsFlow(orgId: String): Flow<List<TransactionEntity>>
 
+    @Query("SELECT * FROM local_transactions WHERE eventSource LIKE 'OFFLINE%' ORDER BY occurredAt DESC")
+    fun getOfflineTransactionsFlow(): Flow<List<TransactionEntity>>
+
     @Query("SELECT * FROM local_transactions WHERE organizationId = :orgId AND status = :status ORDER BY occurredAt DESC")
     fun getTransactionsByStatusFlow(orgId: String, status: String): Flow<List<TransactionEntity>>
 

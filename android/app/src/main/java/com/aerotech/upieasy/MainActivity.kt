@@ -85,6 +85,10 @@ class MainActivity : FragmentActivity() {
         setContent {
             val themeMode by sessionManager.themeModeFlow.collectAsState(initial = "SYSTEM")
             val dynamicColor by sessionManager.dynamicColorFlow.collectAsState(initial = false)
+            val hapticFeedback by sessionManager.hapticFeedbackFlow.collectAsState(initial = true)
+            LaunchedEffect(hapticFeedback) {
+                HapticHelper.isHapticsEnabled = hapticFeedback
+            }
             val darkTheme = when (themeMode) {
                 "LIGHT" -> false
                 "DARK" -> true
@@ -365,6 +369,7 @@ class MainActivity : FragmentActivity() {
                                 onNavigateToPaymentDetection = { navController.navigate("payment_detection") },
                                 onNavigateToBankAccounts = { navController.navigate("bank_accounts") },
                                 onNavigateToRolesPermissions = { navController.navigate("roles_permissions") },
+                                onNavigateToOfflinePayment = { navController.navigate("offline_payment") },
                                 onLogout = {
                                     scope.launch {
                                         sessionManager.clearSession()
@@ -384,7 +389,11 @@ class MainActivity : FragmentActivity() {
 
                         composable("qr_scan") {
                             QrScannerScreen(
-                                onNavigateBack = { navController.popBackStack() }
+                                onNavigateBack = { navController.popBackStack() },
+                                onNavigateToTransactions = {
+                                    navController.popBackStack()
+                                    navController.navigate(Screen.Transactions.route)
+                                }
                             )
                         }
 
@@ -429,6 +438,19 @@ class MainActivity : FragmentActivity() {
                             com.aerotech.upieasy.feature.settings.RolesPermissionsScreen(
                                 sessionManager = sessionManager,
                                 onBack = { navController.popBackStack() }
+                            )
+                        }
+
+                        composable("offline_payment") {
+                            com.aerotech.upieasy.feature.offline.ui.OfflinePaymentScreen(
+                                sessionManager = sessionManager,
+                                database = database,
+                                onNavigateBack = { navController.popBackStack() },
+                                onNavigateToScan = { navController.navigate("qr_scan") },
+                                onNavigateToTransactions = {
+                                    navController.popBackStack()
+                                    navController.navigate(Screen.Transactions.route)
+                                }
                             )
                         }
                     }
@@ -579,6 +601,7 @@ fun MainAppContent(
     onNavigateToPaymentDetection: () -> Unit = {},
     onNavigateToBankAccounts: () -> Unit = {},
     onNavigateToRolesPermissions: () -> Unit = {},
+    onNavigateToOfflinePayment: () -> Unit = {},
     onLogout: () -> Unit
 ) {
     val bottomNavController = rememberNavController()
@@ -635,6 +658,7 @@ fun MainAppContent(
                     onNavigateToSettings = { bottomNavController.navigate(Screen.Settings.route) },
                     onNavigateToStaff = { bottomNavController.navigate(Screen.Staff.route) },
                     onNavigateToLegal = onNavigateToLegal,
+                    onNavigateToOfflinePayment = onNavigateToOfflinePayment,
                     onLogout = onLogout
                 )
             }
@@ -663,6 +687,7 @@ fun MainAppContent(
                     onNavigateToPaymentDetection = onNavigateToPaymentDetection,
                     onNavigateToBankAccounts = onNavigateToBankAccounts,
                     onNavigateToRolesPermissions = onNavigateToRolesPermissions,
+                    onNavigateToOfflinePayment = onNavigateToOfflinePayment,
                     onLogout = onLogout
                 )
             }
@@ -741,6 +766,10 @@ fun MainAppContent(
             onNavigateToLegal = {
                 showHubSheet = false
                 onNavigateToLegal()
+            },
+            onNavigateToOfflinePayment = {
+                showHubSheet = false
+                onNavigateToOfflinePayment()
             }
         )
     }
@@ -962,7 +991,8 @@ fun BentoGridRoutesBottomDrawer(
     onNavigateToBankAccounts: () -> Unit = {},
     onNavigateToStaff: () -> Unit,
     onNavigateToSettings: () -> Unit,
-    onNavigateToLegal: () -> Unit
+    onNavigateToLegal: () -> Unit,
+    onNavigateToOfflinePayment: () -> Unit = {}
 ) {
     if (visible) {
         val context = LocalContext.current
@@ -976,7 +1006,11 @@ fun BentoGridRoutesBottomDrawer(
             if (hasWildcard || roleUpper in listOf("MANAGER", "CASHIER") || userPermissions.contains("transactions.create")) {
                 list.add(QuickRouteItem("Scan QR", "Pay any merchant", Icons.Default.QrCodeScanner, PastelEmeraldBg, SuccessGreen, onNavigateToScan))
             }
-            // 2. My QR Code
+            // 2. Offline Payments (No Internet 123Pay / USSD)
+            if (hasWildcard || roleUpper in listOf("MANAGER", "CASHIER") || userPermissions.contains("transactions.create")) {
+                list.add(QuickRouteItem("Offline Pay", "Pay without internet", Icons.Default.Call, PastelEmeraldBg, SuccessGreen, onNavigateToOfflinePayment))
+            }
+            // 3. My QR Code
             if (hasWildcard || roleUpper in listOf("MANAGER", "CASHIER") || userPermissions.contains("qr.create") || userPermissions.contains("upi.read")) {
                 list.add(QuickRouteItem("My QR Code", "Receive payments", Icons.Default.QrCode, PastelIndigoBg, BrandPrimary, onNavigateToQr))
             }

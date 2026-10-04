@@ -54,6 +54,7 @@ fun DashboardScreen(
     onNavigateToSettings: () -> Unit = {},
     onNavigateToStaff: () -> Unit = {},
     onNavigateToLegal: () -> Unit = {},
+    onNavigateToOfflinePayment: () -> Unit = {},
     onLogout: () -> Unit = {}
 ) {
     val scope = rememberCoroutineScope()
@@ -424,6 +425,9 @@ fun DashboardScreen(
                                     }
                                     if (can("transactions.create")) {
                                         list.add(Triple("Scan Pay", Icons.Default.QrCodeScanner, onNavigateToScan))
+                                    }
+                                    if (can("transactions.create")) {
+                                        list.add(Triple("Offline Pay", Icons.Default.Call, onNavigateToOfflinePayment))
                                     }
                                     if (can("upi.manage")) {
                                         list.add(Triple("Add UPI", Icons.Default.AccountBalanceWallet, onNavigateToUpi))
