@@ -10,51 +10,49 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.automirrored.filled.ReceiptLong
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.aerotech.upieasy.core.database.AppDatabase
 import com.aerotech.upieasy.core.network.DashboardDto
 import com.aerotech.upieasy.core.network.NetworkClient
 import com.aerotech.upieasy.core.security.SessionManager
-import com.aerotech.upieasy.domain.model.Transaction
-import com.aerotech.upieasy.ui.components.UpieasyHeroCard
-import com.aerotech.upieasy.ui.components.UpieasyPullToRefreshContainer
-import com.aerotech.upieasy.ui.components.UpieasyQuickActionButton
-import com.aerotech.upieasy.ui.components.UpieasyTopBar
-import com.aerotech.upieasy.ui.components.TransactionRow
-import com.aerotech.upieasy.ui.components.UpieasyConfirmBottomDrawer
-import com.aerotech.upieasy.ui.theme.*
-import kotlinx.coroutines.launch
-
 import com.aerotech.upieasy.core.ui.DashboardSkeleton
-import com.aerotech.upieasy.ui.components.UpieasyNotificationsSheet
-import com.aerotech.upieasy.ui.components.OrganizationSwitcher
-import com.aerotech.upieasy.core.database.AppDatabase
-import com.aerotech.upieasy.data.repository.OrganizationRepository
-import com.aerotech.upieasy.core.util.PaymentAlertManager
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.geometry.Rect
-import com.aerotech.upieasy.ui.components.DashboardTourGuideOverlay
-import com.aerotech.upieasy.ui.components.TourGuideStep
-import com.aerotech.upieasy.ui.components.TourHighlightShape
-import com.aerotech.upieasy.ui.components.tourAnchor
-import kotlinx.coroutines.delay
 import com.aerotech.upieasy.core.util.HapticHelper
+import com.aerotech.upieasy.core.util.PaymentAlertManager
+import com.aerotech.upieasy.data.repository.OrganizationRepository
+import com.aerotech.upieasy.domain.model.Transaction
 import com.aerotech.upieasy.feature.offline.core.CallManager
 import com.aerotech.upieasy.feature.offline.core.OfflinePaymentSessionManager
 import com.aerotech.upieasy.feature.offline.model.OfflinePaymentState
 import com.aerotech.upieasy.feature.offline.ui.LivePaymentStatusCard
+import com.aerotech.upieasy.ui.components.DashboardTourGuideOverlay
+import com.aerotech.upieasy.ui.components.OrganizationSwitcher
 import com.aerotech.upieasy.ui.components.PayContactBottomSheet
+import com.aerotech.upieasy.ui.components.TourGuideStep
+import com.aerotech.upieasy.ui.components.TourHighlightShape
+import com.aerotech.upieasy.ui.components.TransactionRow
+import com.aerotech.upieasy.ui.components.UpieasyConfirmBottomDrawer
+import com.aerotech.upieasy.ui.components.UpieasyNotificationsSheet
+import com.aerotech.upieasy.ui.components.UpieasyPullToRefreshContainer
+import com.aerotech.upieasy.ui.components.UpieasyQuickActionButton
+import com.aerotech.upieasy.ui.components.UpieasyTopBar
+import com.aerotech.upieasy.ui.components.tourAnchor
+import com.aerotech.upieasy.ui.theme.*
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @Composable
 fun DashboardScreen(
@@ -884,7 +882,7 @@ fun DashboardScreen(
                                     }
                                     list.add(Triple("Alerts", Icons.Default.NotificationsActive, { showNotificationsSheet = true }))
                                     if (can("organization.manage")) {
-                                        list.add(Triple("Soundbox", Icons.Default.VolumeUp, onNavigateToSettings))
+                                        list.add(Triple("Soundbox", Icons.AutoMirrored.Filled.VolumeUp, onNavigateToSettings))
                                     }
                                     list.add(Triple("Settings", Icons.Default.Settings, onNavigateToSettings))
                                     list
