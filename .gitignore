@@ -12,6 +12,7 @@ pnpm-debug.log*
 
 # Android / Gradle
 .gradle/
+.kotlin/
 build/
 app/build/
 *.iml
