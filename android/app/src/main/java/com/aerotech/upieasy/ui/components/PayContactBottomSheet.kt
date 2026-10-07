@@ -98,11 +98,16 @@ fun PayContactBottomSheet(
     // Multi-SIM detection
     val availableSims = remember {
         val list = mutableListOf<SubscriptionInfo>()
-        if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED) {
+        if (ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.READ_PHONE_STATE
+            ) == PackageManager.PERMISSION_GRANTED
+        ) {
             val sm = context.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE) as? SubscriptionManager
             try {
                 sm?.activeSubscriptionInfoList?.let { list.addAll(it) }
-            } catch (_: Exception) {}
+            } catch (_: Exception) {
+            }
         }
         list
     }
@@ -128,7 +133,10 @@ fun PayContactBottomSheet(
     // Read contacts permission launcher
     var hasContactsPermission by remember {
         mutableStateOf(
-            ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.READ_CONTACTS
+            ) == PackageManager.PERMISSION_GRANTED
         )
     }
 
@@ -165,11 +173,18 @@ fun PayContactBottomSheet(
                             val normalized = PhoneNumberUtils.normalize(num)
                             if (normalized.length == 10 && !seenNumbers.contains(normalized)) {
                                 seenNumbers.add(normalized)
-                                list.add(PhoneContactItem(name = name.ifBlank { "Contact" }, rawNumber = num, normalizedNumber = normalized))
+                                list.add(
+                                    PhoneContactItem(
+                                        name = name.ifBlank { "Contact" },
+                                        rawNumber = num,
+                                        normalizedNumber = normalized
+                                    )
+                                )
                             }
                         }
                     }
-                } catch (_: Exception) {}
+                } catch (_: Exception) {
+                }
                 contactsList = list
                 isLoadingContacts = false
             }
@@ -177,9 +192,18 @@ fun PayContactBottomSheet(
     }
 
     fun hasTelephonyPermissions(): Boolean {
-        val call = ContextCompat.checkSelfPermission(context, Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED
-        val state = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED
-        val sms = ContextCompat.checkSelfPermission(context, Manifest.permission.RECEIVE_SMS) == PackageManager.PERMISSION_GRANTED
+        val call = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.CALL_PHONE
+        ) == PackageManager.PERMISSION_GRANTED
+        val state = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.READ_PHONE_STATE
+        ) == PackageManager.PERMISSION_GRANTED
+        val sms = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.RECEIVE_SMS
+        ) == PackageManager.PERMISSION_GRANTED
         return call && state && sms
     }
 
@@ -236,7 +260,8 @@ fun PayContactBottomSheet(
                     sessionManager = sessionManager,
                     database = database
                 )
-            } catch (_: Exception) {}
+            } catch (_: Exception) {
+            }
         }
 
         val sessionSuccess = sessionManagerInstance.startSession(
@@ -452,7 +477,10 @@ fun PayContactBottomSheet(
                                 .height(180.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
+                            CircularProgressIndicator(
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(32.dp)
+                            )
                         }
                     } else if (filteredContacts.isEmpty() && !isCustomNumberTyped) {
                         Box(
@@ -744,10 +772,14 @@ fun PayContactBottomSheet(
                             val isSimSelected = selectedSubscriptionId == sim.subscriptionId
                             Surface(
                                 shape = RoundedCornerShape(10.dp),
-                                color = if (isSimSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                                color = if (isSimSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f) else MaterialTheme.colorScheme.surfaceVariant.copy(
+                                    alpha = 0.35f
+                                ),
                                 border = BorderStroke(
                                     width = if (isSimSelected) 1.5.dp else 1.dp,
-                                    color = if (isSimSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                                    color = if (isSimSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(
+                                        alpha = 0.3f
+                                    )
                                 ),
                                 modifier = Modifier
                                     .weight(1f)
@@ -805,10 +837,19 @@ fun PayContactBottomSheet(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.Center
                         ) {
-                            Icon(imageVector = Icons.Default.Bolt, contentDescription = null, modifier = Modifier.size(20.dp))
+                            Icon(
+                                imageVector = Icons.Default.Bolt,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp)
+                            )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = if (amtDouble > 0) "Pay ₹${String.format("%,.0f", amtDouble)} with UPI App" else "Pay with UPI App",
+                                text = if (amtDouble > 0) "Pay ₹${
+                                    String.format(
+                                        "%,.0f",
+                                        amtDouble
+                                    )
+                                } with UPI App" else "Pay with UPI App",
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 15.sp
                             )
@@ -834,7 +875,12 @@ fun PayContactBottomSheet(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.Center
                         ) {
-                            Icon(imageVector = Icons.Default.Call, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(20.dp))
+                            Icon(
+                                imageVector = Icons.Default.Call,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.size(20.dp)
+                            )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = if (amtLong > 0) "Offline Pay ₹$amtLong (No Internet)" else "Offline Pay (No Internet)",
