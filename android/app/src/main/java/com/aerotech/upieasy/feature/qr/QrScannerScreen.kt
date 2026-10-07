@@ -1097,10 +1097,12 @@ fun QrScannerScreen(
                         }
                     }
 
+                    val resolvedAmount = (if (details.amount != null && details.amount > 0.0) details.amount else customAmountText.toDoubleOrNull()) ?: 0.0
+
                     Spacer(modifier = Modifier.height(18.dp))
 
                     Text(
-                        text = "Choose Payment Option",
+                        text = "Pay With",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
@@ -1109,116 +1111,99 @@ fun QrScannerScreen(
                     Spacer(modifier = Modifier.height(10.dp))
 
                     // =================================================================
-                    // CARD OPTION 1: ONLINE UPI APPS
+                    // DIRECT ACTION 1: PAY VIA ONLINE UPI APP
                     // =================================================================
-                    val isOnline = selectedPaymentMode == "ONLINE"
-                    Card(
+                    Button(
+                        onClick = {
+                            HapticHelper.performHaptic(context, HapticHelper.FeedbackType.MEDIUM)
+                            val finalDetails = if (details.amount != null && details.amount > 0.0) {
+                                details
+                            } else {
+                                details.copy(amount = resolvedAmount)
+                            }
+
+                            val uriToLaunch = scannedRawUri ?: UpiUriHelper.buildUri(finalDetails)
+                            val intent = PaymentLauncher.createPaymentIntent(uriToLaunch)
+                            try {
+                                context.startActivity(intent)
+                                scannedDetails = null
+                                onNavigateBack()
+                            } catch (e: Exception) {
+                                Toast.makeText(context, "No UPI application found on device", Toast.LENGTH_LONG).show()
+                            }
+                        },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .animateContentSize()
-                            .clickable {
-                                HapticHelper.performHaptic(context, HapticHelper.FeedbackType.SELECTION)
-                                selectedPaymentMode = "ONLINE"
-                            },
-                        shape = RoundedCornerShape(18.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = if (isOnline) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f) else MaterialTheme.colorScheme.surface
-                        ),
-                        border = BorderStroke(
-                            width = if (isOnline) 2.dp else 1.dp,
-                            color = if (isOnline) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
-                        )
+                            .height(54.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                     ) {
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(44.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Bolt,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.width(14.dp))
-
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "Online UPI Apps",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = "Google Pay, PhonePe, Paytm, BHIM or any installed app",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontSize = 12.sp
-                                )
-                            }
-
-                            // Selection Indicator
-                            Box(
-                                modifier = Modifier
-                                    .size(22.dp)
-                                    .clip(CircleShape)
-                                    .background(if (isOnline) MaterialTheme.colorScheme.primary else Color.Transparent)
-                                    .then(
-                                        if (!isOnline) Modifier.background(Color.Transparent) else Modifier
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                if (isOnline) {
-                                    Icon(
-                                        imageVector = Icons.Default.Check,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onPrimary,
-                                        modifier = Modifier.size(14.dp)
-                                    )
-                                } else {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(20.dp)
-                                            .clip(CircleShape)
-                                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
-                                    )
-                                }
-                            }
+                            Icon(
+                                imageVector = Icons.Default.Bolt,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = if (resolvedAmount > 0) "Pay ₹${CurrencyFormat.inr(resolvedAmount)} via UPI App" else "Pay via UPI App",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                fontSize = 15.sp
+                            )
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // OR DIVIDER
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        HorizontalDivider(
+                            modifier = Modifier.weight(1f),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                        )
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                            modifier = Modifier.padding(horizontal = 10.dp)
+                        ) {
+                            Text(
+                                text = "OR PAY WITHOUT INTERNET",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                fontSize = 10.sp
+                            )
+                        }
+                        HorizontalDivider(
+                            modifier = Modifier.weight(1f),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
 
                     // =================================================================
-                    // CARD OPTION 2: OFFLINE UPI 123PAY / USSD
+                    // DIRECT ACTION 2: OFFLINE PAY (UPI 123PAY / USSD)
                     // =================================================================
-                    val isOffline = selectedPaymentMode == "OFFLINE"
                     Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .animateContentSize()
-                            .clickable {
-                                HapticHelper.performHaptic(context, HapticHelper.FeedbackType.SELECTION)
-                                selectedPaymentMode = "OFFLINE"
-                            },
+                        modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(18.dp),
                         colors = CardDefaults.cardColors(
-                            containerColor = if (isOffline) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f) else MaterialTheme.colorScheme.surface
+                            containerColor = MaterialTheme.colorScheme.surface
                         ),
                         border = BorderStroke(
-                            width = if (isOffline) 2.dp else 1.dp,
-                            color = if (isOffline) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                            width = 1.dp,
+                            color = SuccessGreen.copy(alpha = 0.5f)
                         )
                     ) {
                         Column(
@@ -1232,25 +1217,23 @@ fun QrScannerScreen(
                             ) {
                                 Box(
                                     modifier = Modifier
-                                        .size(44.dp)
+                                        .size(38.dp)
                                         .clip(CircleShape)
-                                        .background(SuccessGreen.copy(alpha = 0.12f)),
+                                        .background(SuccessGreen.copy(alpha = 0.14f)),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.Call,
                                         contentDescription = null,
                                         tint = SuccessGreen,
-                                        modifier = Modifier.size(22.dp)
+                                        modifier = Modifier.size(20.dp)
                                     )
                                 }
-
-                                Spacer(modifier = Modifier.width(14.dp))
-
+                                Spacer(modifier = Modifier.width(12.dp))
                                 Column(modifier = Modifier.weight(1f)) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Text(
-                                            text = "Offline Pay",
+                                            text = "Offline Pay (123Pay)",
                                             style = MaterialTheme.typography.titleSmall,
                                             fontWeight = FontWeight.Bold,
                                             color = MaterialTheme.colorScheme.onSurface
@@ -1261,7 +1244,7 @@ fun QrScannerScreen(
                                             color = SuccessGreen.copy(alpha = 0.15f)
                                         ) {
                                             Text(
-                                                text = "OFFLINE",
+                                                text = "NO INTERNET",
                                                 fontSize = 9.sp,
                                                 fontWeight = FontWeight.ExtraBold,
                                                 color = SuccessGreen,
@@ -1269,320 +1252,233 @@ fun QrScannerScreen(
                                             )
                                         }
                                     }
-                                    Spacer(modifier = Modifier.height(2.dp))
                                     Text(
-                                        text = "Pay without internet via call or code",
+                                        text = "Works via telephone line or *99# USSD",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        fontSize = 12.sp
+                                        fontSize = 11.5.sp
                                     )
-                                }
-
-                                // Selection Indicator
-                                Box(
-                                    modifier = Modifier
-                                        .size(22.dp)
-                                        .clip(CircleShape)
-                                        .background(if (isOffline) MaterialTheme.colorScheme.primary else Color.Transparent),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    if (isOffline) {
-                                        Icon(
-                                            imageVector = Icons.Default.Check,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.onPrimary,
-                                            modifier = Modifier.size(14.dp)
-                                        )
-                                    } else {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(20.dp)
-                                                .clip(CircleShape)
-                                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
-                                        )
-                                    }
                                 }
                             }
 
-                            // Sub-rail selection when OFFLINE is selected
-                            AnimatedVisibility(
-                                visible = isOffline,
-                                enter = expandVertically() + fadeIn(),
-                                exit = shrinkVertically() + fadeOut()
+                            // Sub-rail selection: Voice Call vs *99# Code
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                                    .padding(3.dp)
                             ) {
-                                Column(modifier = Modifier.padding(top = 16.dp)) {
-                                    HorizontalDivider(
-                                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
-                                        thickness = 1.dp
-                                    )
-                                    Spacer(modifier = Modifier.height(14.dp))
-
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = if (offlineSubRail == 0) MaterialTheme.colorScheme.surface else Color.Transparent,
+                                    shadowElevation = if (offlineSubRail == 0) 2.dp else 0.dp,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clickable {
+                                            HapticHelper.performHaptic(context, HapticHelper.FeedbackType.SELECTION)
+                                            offlineSubRail = 0
+                                        }
+                                ) {
                                     Text(
-                                        text = "Payment Method",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSurface
+                                        text = "Voice Call",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontWeight = if (offlineSubRail == 0) FontWeight.Bold else FontWeight.Medium,
+                                        textAlign = TextAlign.Center,
+                                        color = if (offlineSubRail == 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(vertical = 6.dp)
                                     )
+                                }
 
-                                    Spacer(modifier = Modifier.height(8.dp))
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = if (offlineSubRail == 1) MaterialTheme.colorScheme.surface else Color.Transparent,
+                                    shadowElevation = if (offlineSubRail == 1) 2.dp else 0.dp,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clickable {
+                                            HapticHelper.performHaptic(context, HapticHelper.FeedbackType.SELECTION)
+                                            offlineSubRail = 1
+                                        }
+                                ) {
+                                    Text(
+                                        text = "*99# Code",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontWeight = if (offlineSubRail == 1) FontWeight.Bold else FontWeight.Medium,
+                                        textAlign = TextAlign.Center,
+                                        color = if (offlineSubRail == 1) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(vertical = 6.dp)
+                                    )
+                                }
+                            }
 
-                                    // Switcher: Voice Call vs *99# Code
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clip(RoundedCornerShape(10.dp))
-                                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                                            .padding(3.dp)
-                                    ) {
+                            // Multi-SIM selection if available
+                            if (availableSims.isNotEmpty()) {
+                                Spacer(modifier = Modifier.height(10.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    availableSims.forEach { sim ->
+                                        val isSimSelected = selectedSubscriptionId == sim.subscriptionId
                                         Surface(
                                             shape = RoundedCornerShape(8.dp),
-                                            color = if (offlineSubRail == 0) MaterialTheme.colorScheme.surface else Color.Transparent,
-                                            shadowElevation = if (offlineSubRail == 0) 2.dp else 0.dp,
+                                            color = if (isSimSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                                            border = BorderStroke(
+                                                width = if (isSimSelected) 1.5.dp else 1.dp,
+                                                color = if (isSimSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                                            ),
                                             modifier = Modifier
                                                 .weight(1f)
                                                 .clickable {
                                                     HapticHelper.performHaptic(context, HapticHelper.FeedbackType.SELECTION)
-                                                    offlineSubRail = 0
+                                                    selectedSubscriptionId = sim.subscriptionId
                                                 }
                                         ) {
-                                            Text(
-                                                text = "Voice Call",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                fontWeight = if (offlineSubRail == 0) FontWeight.Bold else FontWeight.Medium,
-                                                textAlign = TextAlign.Center,
-                                                color = if (offlineSubRail == 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                                modifier = Modifier.padding(vertical = 8.dp)
-                                            )
-                                        }
-
-                                        Surface(
-                                            shape = RoundedCornerShape(8.dp),
-                                            color = if (offlineSubRail == 1) MaterialTheme.colorScheme.surface else Color.Transparent,
-                                            shadowElevation = if (offlineSubRail == 1) 2.dp else 0.dp,
-                                            modifier = Modifier
-                                                .weight(1f)
-                                                .clickable {
-                                                    HapticHelper.performHaptic(context, HapticHelper.FeedbackType.SELECTION)
-                                                    offlineSubRail = 1
-                                                }
-                                        ) {
-                                            Text(
-                                                text = "*99# Code",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                fontWeight = if (offlineSubRail == 1) FontWeight.Bold else FontWeight.Medium,
-                                                textAlign = TextAlign.Center,
-                                                color = if (offlineSubRail == 1) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                                modifier = Modifier.padding(vertical = 8.dp)
-                                            )
-                                        }
-                                    }
-
-                                    // SIM Selector if multiple SIMs detected
-                                    if (availableSims.isNotEmpty()) {
-                                        Spacer(modifier = Modifier.height(12.dp))
-                                        Text(
-                                            text = "Select Payment SIM",
-                                            style = MaterialTheme.typography.labelMedium,
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.onSurface
-                                        )
-                                        Spacer(modifier = Modifier.height(6.dp))
-
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                        ) {
-                                            availableSims.forEach { sim ->
-                                                val isSimSelected = selectedSubscriptionId == sim.subscriptionId
-                                                Surface(
-                                                    shape = RoundedCornerShape(10.dp),
-                                                    color = if (isSimSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f) else MaterialTheme.colorScheme.surface,
-                                                    border = BorderStroke(
-                                                        width = if (isSimSelected) 1.5.dp else 1.dp,
-                                                        color = if (isSimSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
-                                                    ),
-                                                    modifier = Modifier
-                                                        .weight(1f)
-                                                        .clickable {
-                                                            HapticHelper.performHaptic(context, HapticHelper.FeedbackType.SELECTION)
-                                                            selectedSubscriptionId = sim.subscriptionId
-                                                        }
-                                                ) {
-                                                    Row(
-                                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-                                                        verticalAlignment = Alignment.CenterVertically
-                                                    ) {
-                                                        Icon(
-                                                            imageVector = Icons.Default.SimCard,
-                                                            contentDescription = null,
-                                                            tint = if (isSimSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                                            modifier = Modifier.size(16.dp)
-                                                        )
-                                                        Spacer(modifier = Modifier.width(6.dp))
-                                                        Column {
-                                                            Text(
-                                                                text = "SIM ${sim.simSlotIndex + 1}",
-                                                                fontSize = 11.sp,
-                                                                fontWeight = FontWeight.Bold,
-                                                                color = if (isSimSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                                                            )
-                                                            Text(
-                                                                text = sim.carrierName?.toString() ?: "Cellular",
-                                                                fontSize = 10.sp,
-                                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                            )
-                                                        }
-                                                    }
-                                                }
+                                            Row(
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.SimCard,
+                                                    contentDescription = null,
+                                                    tint = if (isSimSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    modifier = Modifier.size(14.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text(
+                                                    text = "SIM ${sim.simSlotIndex + 1} (${sim.carrierName?.toString() ?: "Cellular"})",
+                                                    fontSize = 11.sp,
+                                                    fontWeight = if (isSimSelected) FontWeight.Bold else FontWeight.Normal,
+                                                    color = if (isSimSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                                    maxLines = 1
+                                                )
                                             }
                                         }
                                     }
                                 }
                             }
-                        }
-                    }
 
-                    Spacer(modifier = Modifier.height(24.dp))
+                            Spacer(modifier = Modifier.height(14.dp))
 
-                    // =================================================================
-                    // ACTION BUTTON
-                    // =================================================================
-                    val resolvedAmount = (if (details.amount != null && details.amount > 0.0) details.amount else customAmountText.toDoubleOrNull()) ?: 0.0
-
-                    Button(
-                        onClick = {
-                            HapticHelper.performHaptic(context, HapticHelper.FeedbackType.MEDIUM)
-
-                            if (selectedPaymentMode == "ONLINE") {
-                                // Online Intent Flow
-                                val finalDetails = if (details.amount != null && details.amount > 0.0) {
-                                    details
-                                } else {
-                                    details.copy(amount = resolvedAmount)
-                                }
-
-                                val uriToLaunch = scannedRawUri ?: UpiUriHelper.buildUri(finalDetails)
-                                val intent = PaymentLauncher.createPaymentIntent(uriToLaunch)
-                                try {
-                                    context.startActivity(intent)
-                                    scannedDetails = null
-                                    onNavigateBack()
-                                } catch (e: Exception) {
-                                    Toast.makeText(context, "No UPI application found on device", Toast.LENGTH_LONG).show()
-                                }
-                            } else {
-                                // Offline Telephony Flow
-                                if (!hasOfflinePermissions()) {
-                                    offlinePermissionLauncher.launch(
-                                        arrayOf(
-                                            Manifest.permission.CALL_PHONE,
-                                            Manifest.permission.READ_PHONE_STATE,
-                                            Manifest.permission.RECEIVE_SMS
+                            // Direct button to initiate offline payment
+                            Button(
+                                onClick = {
+                                    HapticHelper.performHaptic(context, HapticHelper.FeedbackType.MEDIUM)
+                                    if (!hasOfflinePermissions()) {
+                                        offlinePermissionLauncher.launch(
+                                            arrayOf(
+                                                Manifest.permission.CALL_PHONE,
+                                                Manifest.permission.READ_PHONE_STATE,
+                                                Manifest.permission.RECEIVE_SMS
+                                            )
                                         )
-                                    )
-                                    return@Button
-                                }
-
-                                val amtLong = resolvedAmount.toLong()
-                                if (amtLong <= 0L) {
-                                    Toast.makeText(context, "Please enter a valid amount", Toast.LENGTH_SHORT).show()
-                                    return@Button
-                                }
-                                if (amtLong > 4999L) {
-                                    Toast.makeText(context, "UPI 123Pay limit is ₹4,999 per offline transaction", Toast.LENGTH_LONG).show()
-                                    return@Button
-                                }
-
-                                if (offlineSubRail == 0) {
-                                    // 123Pay IVR Call
-                                    val phoneToUse = payeePhoneCandidate ?: run {
-                                        val norm = PhoneNumberUtils.normalize(details.payeeVpa.substringBefore("@"))
-                                        if (norm.length == 10) norm else null
-                                    }
-
-                                    if (phoneToUse == null) {
-                                        Toast.makeText(
-                                            context,
-                                            "Payee UPI ID does not have a 10-digit mobile number. Please use *99# USSD option.",
-                                            Toast.LENGTH_LONG
-                                        ).show()
                                         return@Button
                                     }
 
-                                    if (!Settings.canDrawOverlays(context)) {
-                                        showOverlayPermissionDialog = true
+                                    val amtLong = resolvedAmount.toLong()
+                                    if (amtLong <= 0L) {
+                                        Toast.makeText(context, "Please enter a valid amount", Toast.LENGTH_SHORT).show()
+                                        return@Button
+                                    }
+                                    if (amtLong > 4999L) {
+                                        Toast.makeText(context, "UPI 123Pay limit is ₹4,999 per offline transaction", Toast.LENGTH_LONG).show()
                                         return@Button
                                     }
 
-                                    val sessionSuccess = sessionManagerInstance.startSession(
-                                        phoneNumber = phoneToUse,
-                                        amount = amtLong.toString(),
-                                        payeeName = details.payeeName.ifBlank { "Mobile $phoneToUse" }
-                                    )
+                                    if (offlineSubRail == 0) {
+                                        // 123Pay IVR Call
+                                        val phoneToUse = payeePhoneCandidate ?: run {
+                                            val norm = PhoneNumberUtils.normalize(details.payeeVpa.substringBefore("@"))
+                                            if (norm.length == 10) norm else null
+                                        }
 
-                                    if (sessionSuccess) {
-                                        callManager.initiateUPI123Call(
+                                        if (phoneToUse == null) {
+                                            Toast.makeText(
+                                                context,
+                                                "Payee UPI ID does not have a 10-digit mobile number. Please switch to *99# Code option.",
+                                                Toast.LENGTH_LONG
+                                            ).show()
+                                            return@Button
+                                        }
+
+                                        if (!Settings.canDrawOverlays(context)) {
+                                            showOverlayPermissionDialog = true
+                                            return@Button
+                                        }
+
+                                        val sessionSuccess = sessionManagerInstance.startSession(
                                             phoneNumber = phoneToUse,
                                             amount = amtLong.toString(),
-                                            subscriptionId = selectedSubscriptionId
+                                            payeeName = details.payeeName.ifBlank { "Mobile $phoneToUse" },
+                                            payeeUpiId = details.payeeVpa
                                         )
-                                        scannedDetails = null
-                                        onNavigateBack()
-                                    } else {
-                                        Toast.makeText(context, "Another payment session is already active", Toast.LENGTH_SHORT).show()
-                                    }
-                                } else {
-                                    // *99# USSD
-                                    val targetVpa = details.payeeVpa
-                                    val sessionSuccess = sessionManagerInstance.startSession(
-                                        phoneNumber = targetVpa,
-                                        amount = amtLong.toString(),
-                                        payeeName = details.payeeName.ifBlank { targetVpa }
-                                    )
 
-                                    if (sessionSuccess) {
-                                        callManager.initiateUSSDCall(
-                                            ussdCode = "*99*1*3#",
-                                            subscriptionId = selectedSubscriptionId
-                                        )
-                                        scannedDetails = null
-                                        onNavigateBack()
+                                        if (sessionSuccess) {
+                                            callManager.initiateUPI123Call(
+                                                phoneNumber = phoneToUse,
+                                                amount = amtLong.toString(),
+                                                subscriptionId = selectedSubscriptionId
+                                            )
+                                            scannedDetails = null
+                                            onNavigateBack()
+                                        } else {
+                                            Toast.makeText(context, "Another payment session is already active", Toast.LENGTH_SHORT).show()
+                                        }
                                     } else {
-                                        Toast.makeText(context, "Another payment session is already active", Toast.LENGTH_SHORT).show()
+                                        // *99# USSD
+                                        val targetVpa = details.payeeVpa
+                                        val sessionSuccess = sessionManagerInstance.startSession(
+                                            phoneNumber = targetVpa,
+                                            amount = amtLong.toString(),
+                                            payeeName = details.payeeName.ifBlank { targetVpa },
+                                            rail = "USSD",
+                                            payeeUpiId = details.payeeVpa
+                                        )
+
+                                        if (sessionSuccess) {
+                                            callManager.initiateUSSDCall(
+                                                ussdCode = "*99*1*3#",
+                                                subscriptionId = selectedSubscriptionId
+                                            )
+                                            scannedDetails = null
+                                            onNavigateBack()
+                                        } else {
+                                            Toast.makeText(context, "Another payment session is already active", Toast.LENGTH_SHORT).show()
+                                        }
                                     }
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(50.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = SuccessGreen)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    Icon(
+                                        imageVector = if (offlineSubRail == 0) Icons.Default.Call else Icons.Default.Dialpad,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = if (offlineSubRail == 0) {
+                                            if (resolvedAmount > 0) "Offline Pay (₹${CurrencyFormat.inr(resolvedAmount)})" else "Offline Pay"
+                                        } else {
+                                            if (resolvedAmount > 0) "Dial *99# Code (₹${CurrencyFormat.inr(resolvedAmount)})" else "Dial *99# Code"
+                                        },
+                                        style = MaterialTheme.typography.labelLarge,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White,
+                                        fontSize = 14.sp
+                                    )
                                 }
                             }
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(54.dp),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (selectedPaymentMode == "ONLINE") MaterialTheme.colorScheme.primary else SuccessGreen
-                        )
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            Icon(
-                                imageVector = if (selectedPaymentMode == "ONLINE") Icons.Default.Bolt else Icons.Default.Call,
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = if (selectedPaymentMode == "ONLINE") {
-                                    if (resolvedAmount > 0) "Pay ₹${CurrencyFormat.inr(resolvedAmount)} via UPI App" else "Pay via UPI App"
-                                } else {
-                                    if (offlineSubRail == 0) "Call to Pay (₹${CurrencyFormat.inr(resolvedAmount)})" else "Dial to Pay (₹${CurrencyFormat.inr(resolvedAmount)})"
-                                },
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White,
-                                fontSize = 15.sp
-                            )
                         }
                     }
 

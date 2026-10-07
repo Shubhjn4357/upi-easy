@@ -53,9 +53,13 @@ import com.aerotech.upieasy.feature.offline.core.PhoneNumberUtils
 import com.aerotech.upieasy.feature.offline.model.OfflinePaymentState
 import com.aerotech.upieasy.ui.theme.*
 
-private val PeriwinkleBlue = Color(0xFF6B9BFA)
+private val PeriwinkleBlue: Color
+    @Composable
+    get() = MaterialTheme.colorScheme.primary
 private val DarkCardSurface = Color(0xFF0F0F11)
-private val ActionButtonBlue = Color(0xFF6B9BFA)
+private val ActionButtonBlue: Color
+    @Composable
+    get() = MaterialTheme.colorScheme.primary
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

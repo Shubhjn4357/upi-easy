@@ -776,6 +776,16 @@ fun AppSetupScreen(
                                     permissions = listOf("*")
                                 )
                                 sessionManager.setSetupComplete(true)
+                                try {
+                                    val database = com.aerotech.upieasy.core.database.AppDatabase.getInstance(context)
+                                    com.aerotech.upieasy.feature.offline.core.OfflineUpiBindingManager.ensureOfflineUpiBound(
+                                        context = context,
+                                        sessionManager = sessionManager,
+                                        database = database,
+                                        mobileNumberOverride = phone,
+                                        bankNameHint = bankName.ifBlank { null }
+                                    )
+                                } catch (_: Exception) {}
                                 onSetupComplete()
                             } else {
                                 val errBody = res.errorBody()?.string()

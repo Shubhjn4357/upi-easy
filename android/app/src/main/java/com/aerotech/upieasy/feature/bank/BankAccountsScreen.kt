@@ -306,6 +306,15 @@ fun BankAccountsScreen(
                         if (res.isSuccessful) {
                             showAddDialog = false
                             loadAccounts()
+                            try {
+                                val database = com.aerotech.upieasy.core.database.AppDatabase.getInstance(context)
+                                com.aerotech.upieasy.feature.offline.core.OfflineUpiBindingManager.ensureOfflineUpiBound(
+                                    context = context,
+                                    sessionManager = sessionManager,
+                                    database = database,
+                                    bankNameHint = bankName
+                                )
+                            } catch (_: Exception) {}
                             Toast.makeText(context, "Bank account linked!", Toast.LENGTH_SHORT).show()
                         } else {
                             Toast.makeText(context, "Failed to link account", Toast.LENGTH_SHORT).show()

@@ -2,8 +2,11 @@ package com.aerotech.upieasy.feature.offline.core
 
 import android.content.Context
 import android.util.Log
+import com.aerotech.upieasy.UPIEasyApp
 import com.aerotech.upieasy.core.database.AppDatabase
 import com.aerotech.upieasy.core.database.entity.TransactionEntity
+import com.aerotech.upieasy.core.security.SessionManager
+import com.aerotech.upieasy.core.util.PaymentAlertManager
 import com.aerotech.upieasy.feature.offline.model.OfflinePaymentState
 import com.aerotech.upieasy.feature.offline.model.SimpleTransaction
 import com.aerotech.upieasy.feature.offline.model.TimeoutType
@@ -15,6 +18,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.util.UUID
 
@@ -95,6 +99,17 @@ class OfflinePaymentSessionManager private constructor(
         val txnId = initiating.transactionId
         val now = clock()
 
+        val sessionMgr = SessionManager(context)
+
+        // Ensure offline UPI ID binding is saved & synced on first offline payment
+        scope.launch(Dispatchers.IO) {
+            try {
+                OfflineUpiBindingManager.ensureOfflineUpiBound(context, sessionMgr, db)
+            } catch (e: Exception) {
+                Log.w(TAG, "Offline UPI binding check deferred: ${e.message}")
+            }
+        }
+
         if (supersededTxnId != null) {
             val previousInsert = pendingInsertJob
             scope.launch {
@@ -109,9 +124,15 @@ class OfflinePaymentSessionManager private constructor(
 
         pendingInsertJob = scope.launch(Dispatchers.IO) {
             try {
+                val resolvedOrgId = if (orgId.isNotBlank() && orgId != "offline_org") {
+                    orgId
+                } else {
+                    sessionMgr.getCurrentOrgId() ?: "default_org"
+                }
+
                 val entity = TransactionEntity(
                     id = txnId,
-                    organizationId = orgId,
+                    organizationId = resolvedOrgId,
                     bankAccountId = null,
                     upiAccountId = null,
                     type = "PAYMENT",
@@ -121,8 +142,8 @@ class OfflinePaymentSessionManager private constructor(
                     status = "PENDING",
                     paymentMethod = if (rail == "USSD") "OFFLINE_USSD" else "OFFLINE_123PAY",
                     referenceNumber = null,
-                    payerName = "Merchant Self",
-                    payerVpa = null,
+                    payerName = sessionMgr.userNameFlow.first() ?: "Merchant Self",
+                    payerVpa = sessionMgr.getOfflineUpiId() ?: "$phoneNumber@upi",
                     payeeName = payeeName.ifBlank { "Recipient ($phoneNumber)" },
                     payeeVpa = payeeUpiId ?: "$phoneNumber@upi",
                     note = "Offline payment via $rail",
@@ -132,9 +153,9 @@ class OfflinePaymentSessionManager private constructor(
                     eventSource = if (rail == "USSD") "OFFLINE_USSD" else "OFFLINE_123PAY"
                 )
                 db.transactionDao().insertTransaction(entity)
-                Log.d(TAG, "Recorded PENDING offline transaction $txnId in Room")
+                Log.d(TAG, "Recorded PENDING offline transaction $txnId in Room ledger (Org: $resolvedOrgId)")
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to insert pending offline transaction", e)
+                Log.e(TAG, "Failed to insert pending offline transaction into ledger", e)
             }
         }
 
@@ -271,6 +292,18 @@ class OfflinePaymentSessionManager private constructor(
                     referenceNumber = parsed.transactionId
                 )
                 Log.d(TAG, "Updated offline transaction $activeTxnId to $status in database")
+
+                if (!isFailed) {
+                    PaymentAlertManager.notifyPayment(
+                        context = context,
+                        amount = amt.toDoubleOrNull() ?: 0.0,
+                        payerName = payee,
+                        referenceNumber = parsed.transactionId
+                    )
+                    try {
+                        UPIEasyApp.triggerImmediateSync(context)
+                    } catch (_: Exception) {}
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Error updating transaction in database", e)
             }

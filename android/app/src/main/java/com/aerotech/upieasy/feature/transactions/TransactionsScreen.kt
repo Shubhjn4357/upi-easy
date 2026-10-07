@@ -1246,6 +1246,9 @@ private fun TransactionCardItem(
     onClick: () -> Unit
 ) {
     val isFailed = transaction.status.equals("FAILED", ignoreCase = true)
+    val isDebit = transaction.direction.equals("DEBIT", ignoreCase = true)
+    val isOffline = transaction.paymentMethod?.contains("OFFLINE", ignoreCase = true) == true ||
+            transaction.note?.contains("offline", ignoreCase = true) == true
     val firstLetter = transaction.payeeName.take(1).uppercase()
 
     // Determine category based on note or payee name
@@ -1253,6 +1256,7 @@ private fun TransactionCardItem(
         val note = transaction.note?.lowercase() ?: ""
         val name = transaction.payeeName.lowercase()
         when {
+            isOffline -> "Offline 123Pay"
             note.contains("recharge") || name.contains("jio") || name.contains("airtel") || name.contains("bill") -> "Bills & Utilities"
             note.contains("food") || name.contains("cafe") || name.contains("dining") -> "Food & Dining"
             note.contains("retail") || name.contains("store") -> "Retail & Store"
@@ -1294,15 +1298,24 @@ private fun TransactionCardItem(
                 modifier = Modifier
                     .size(46.dp)
                     .clip(RoundedCornerShape(14.dp))
-                    .background(squircleBg),
+                    .background(if (isOffline) SuccessGreen.copy(alpha = 0.15f) else squircleBg),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = firstLetter,
-                    color = squircleTextColor,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp
-                )
+                if (isOffline) {
+                    Icon(
+                        imageVector = Icons.Default.Call,
+                        contentDescription = null,
+                        tint = SuccessGreen,
+                        modifier = Modifier.size(20.dp)
+                    )
+                } else {
+                    Text(
+                        text = firstLetter,
+                        color = squircleTextColor,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.width(14.dp))
@@ -1360,10 +1373,10 @@ private fun TransactionCardItem(
             // Right: Amount, Account / Status line, and Cashback / Settled badge
             Column(horizontalAlignment = Alignment.End) {
                 Text(
-                    text = "₹${String.format("%,.0f", transaction.amount)}",
+                    text = if (isDebit) "-₹${String.format("%,.0f", transaction.amount)}" else "+₹${String.format("%,.0f", transaction.amount)}",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = if (isDebit) MaterialTheme.colorScheme.onSurface else SuccessGreen,
                     fontSize = 17.sp
                 )
 
@@ -1383,7 +1396,7 @@ private fun TransactionCardItem(
                         horizontalArrangement = Arrangement.spacedBy(3.dp)
                     ) {
                         Text(
-                            text = "From",
+                            text = if (isDebit) "To" else "From",
                             style = MaterialTheme.typography.bodySmall.copy(
                                 platformStyle = PlatformTextStyle(includeFontPadding = false),
                                 lineHeight = 12.sp
@@ -1395,7 +1408,7 @@ private fun TransactionCardItem(
                             modifier = Modifier
                                 .size(13.dp)
                                 .clip(CircleShape)
-                                .background(Color(0xFF0083CA)),
+                                .background(if (isOffline) SuccessGreen else Color(0xFF0083CA)),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
@@ -1410,20 +1423,48 @@ private fun TransactionCardItem(
 
                     Spacer(modifier = Modifier.height(3.dp))
 
-                    // Green settlement / incentive pill
-                    Row(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(SuccessGreenBg)
-                            .padding(horizontal = 4.dp, vertical = 1.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "⚡ 0.12%",
-                            color = SuccessGreen,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 10.sp
-                        )
+                    if (isOffline) {
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = SuccessGreenBg
+                        ) {
+                            Text(
+                                text = "OFFLINE",
+                                color = SuccessGreen,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 9.sp,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                            )
+                        }
+                    } else if (isDebit) {
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant
+                        ) {
+                            Text(
+                                text = "DEBIT",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 9.sp,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                            )
+                        }
+                    } else {
+                        // Green settlement / incentive pill
+                        Row(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(SuccessGreenBg)
+                                .padding(horizontal = 4.dp, vertical = 1.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "⚡ 0.12%",
+                                color = SuccessGreen,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 10.sp
+                            )
+                        }
                     }
                 }
             }

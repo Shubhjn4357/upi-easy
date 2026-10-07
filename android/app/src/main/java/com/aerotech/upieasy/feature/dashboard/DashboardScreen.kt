@@ -42,6 +42,19 @@ import com.aerotech.upieasy.core.database.AppDatabase
 import com.aerotech.upieasy.data.repository.OrganizationRepository
 import com.aerotech.upieasy.core.util.PaymentAlertManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Rect
+import com.aerotech.upieasy.ui.components.DashboardTourGuideOverlay
+import com.aerotech.upieasy.ui.components.TourGuideStep
+import com.aerotech.upieasy.ui.components.TourHighlightShape
+import com.aerotech.upieasy.ui.components.tourAnchor
+import kotlinx.coroutines.delay
+import com.aerotech.upieasy.core.util.HapticHelper
+import com.aerotech.upieasy.feature.offline.core.CallManager
+import com.aerotech.upieasy.feature.offline.core.OfflinePaymentSessionManager
+import com.aerotech.upieasy.feature.offline.model.OfflinePaymentState
+import com.aerotech.upieasy.feature.offline.ui.LivePaymentStatusCard
+import com.aerotech.upieasy.ui.components.PayContactBottomSheet
 
 @Composable
 fun DashboardScreen(
@@ -65,8 +78,24 @@ fun DashboardScreen(
     val organizations by orgRepository.observeOrganizations().collectAsState(initial = emptyList())
     var showOrgSwitcher by remember { mutableStateOf(false) }
 
+    val upiAccounts by database.upiDao().getAllUpiAccountsFlow().collectAsState(initial = emptyList())
+    val sessionManagerInstance = remember { OfflinePaymentSessionManager.getInstance(context) }
+    val callManager = remember { CallManager(context) }
+    val paymentState by sessionManagerInstance.paymentState.collectAsState()
+    var showPayContactSheet by remember { mutableStateOf(false) }
+
     val currentOrgId by sessionManager.currentOrgIdFlow.collectAsState(initial = null)
     val currentOrgName by sessionManager.currentOrgNameFlow.collectAsState(initial = null)
+
+    val connectedBankName = remember(upiAccounts, currentOrgName) {
+        val defaultUpi = upiAccounts.firstOrNull { it.isDefault } ?: upiAccounts.firstOrNull()
+        when {
+            defaultUpi != null -> defaultUpi.payeeName.ifBlank { defaultUpi.vpa }
+            !currentOrgName.isNullOrBlank() -> "$currentOrgName Account"
+            else -> "Connected Bank"
+        }
+    }
+
     val userName by sessionManager.userNameFlow.collectAsState(initial = null)
     val userAvatarUrl by sessionManager.userAvatarUrlFlow.collectAsState(initial = null)
     val themeMode by sessionManager.themeModeFlow.collectAsState(initial = "SYSTEM")
@@ -84,6 +113,13 @@ fun DashboardScreen(
     var dashboardData by remember { mutableStateOf<DashboardDto?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var isRefreshing by remember { mutableStateOf(false) }
+
+    val isTourCompleted by sessionManager.dashboardTourCompletedFlow.collectAsState(initial = true)
+    var hasCheckedTour by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        hasCheckedTour = true
+    }
 
     val listState = rememberLazyListState()
     val collapseProgress by remember {
@@ -149,8 +185,68 @@ fun DashboardScreen(
         )
     }
 
-    Scaffold(
-        topBar = {
+    val tourSteps = remember {
+        listOf(
+            TourGuideStep(
+                index = 0,
+                title = "Business Pulse & Linked Bank",
+                description = "View today's collected revenue, total payment count, and your connected bank account or active UPI ID.",
+                targetListItemIndex = 0,
+                shape = TourHighlightShape.Rounded
+            ),
+            TourGuideStep(
+                index = 1,
+                title = "Scan QR (Online & Offline)",
+                description = "Scan any UPI QR code. Pay instantly via installed apps (GPay, PhonePe, Paytm) or seamlessly initiate Offline 123Pay without internet.",
+                targetListItemIndex = 1,
+                shape = TourHighlightShape.Circle
+            ),
+            TourGuideStep(
+                index = 2,
+                title = "Pay Contact / Mobile Number",
+                description = "Search phonebook contacts or enter any mobile number directly to pay online or trigger Offline 123Pay telecom calls.",
+                targetListItemIndex = 1,
+                shape = TourHighlightShape.Rounded
+            ),
+            TourGuideStep(
+                index = 3,
+                title = "Receive via Store QR",
+                description = "Display and share your official store QR code to accept customer payments right on your counter.",
+                targetListItemIndex = 1,
+                shape = TourHighlightShape.Rounded
+            ),
+            TourGuideStep(
+                index = 4,
+                title = "Business Ledger History",
+                description = "Access your verified bookkeeping ledger, transaction receipts, and live soundbox audio alerts.",
+                targetListItemIndex = 1,
+                shape = TourHighlightShape.Rounded
+            )
+        )
+    }
+
+    var isTourActive by remember { mutableStateOf(false) }
+    var currentTourStep by remember { mutableIntStateOf(0) }
+    val tourBoundsMap = remember { mutableStateMapOf<Int, Rect>() }
+
+    LaunchedEffect(isLoading, isTourCompleted, hasCheckedTour) {
+        if (!isLoading && hasCheckedTour && !isTourCompleted) {
+            delay(600)
+            isTourActive = true
+            currentTourStep = 0
+        }
+    }
+
+    // Auto-scroll list to bring the highlighted target into view smoothly
+    LaunchedEffect(currentTourStep, isTourActive) {
+        if (isTourActive && currentTourStep in tourSteps.indices) {
+            val targetItem = tourSteps[currentTourStep].targetListItemIndex
+            listState.animateScrollToItem(targetItem)
+        }
+    }
+
+        Scaffold(
+            topBar = {
             val unreadCount = remember(alertHistory) { alertHistory.size }
             Box(
                 modifier = Modifier
@@ -223,7 +319,7 @@ fun DashboardScreen(
                         verticalArrangement = Arrangement.spacedBy(16.dp),
                         contentPadding = PaddingValues(top = 8.dp, bottom = 100.dp)
                     ) {
-                        // Bento Tile 1: Hero Glass Collection Card with Dynamic Shrink/Scale Animation
+                        // Bento Tile 1: Signature Top Rounded Periwinkle Card with Connected Bank Pill & Collections
                         item {
                             val receivedAmount = dashboardData?.todayReceived?.amount ?: 0.0
                             val receivedCount = dashboardData?.todayReceived?.count ?: 0
@@ -239,13 +335,361 @@ fun DashboardScreen(
                                         alpha = heroAlpha
                                     }
                             ) {
-                                UpieasyHeroCard(
-                                    balance = receivedAmount,
-                                    transactionCount = receivedCount,
-                                    onShowQrClick = { if (can("qr.create") || can("upi.read")) onNavigateToQr() },
-                                    onScanPayClick = { if (can("transactions.create")) onNavigateToScan() },
-                                    onHistoryClick = { if (can("transactions.read")) onNavigateToTransactions() }
+                                Surface(
+                                    shape = RoundedCornerShape(32.dp),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .tourAnchor(0) { idx, rect -> tourBoundsMap[idx] = rect }
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(22.dp)
+                                    ) {
+                                        // Header Row: App Title & Subtitle + Organization Switcher Button
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Column {
+                                                Text(
+                                                    text = "UPIEasy",
+                                                    color = MaterialTheme.colorScheme.onPrimary,
+                                                    fontSize = 28.sp,
+                                                    fontWeight = FontWeight.ExtraBold,
+                                                    letterSpacing = (-0.5).sp
+                                                )
+                                                Spacer(modifier = Modifier.height(2.dp))
+                                                Text(
+                                                    text = currentOrgName ?: "Unified Payments & Inflows",
+                                                    color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f),
+                                                    fontSize = 13.5.sp,
+                                                    fontWeight = FontWeight.Medium
+                                                )
+                                            }
+
+                                            // Circular Organization Switcher / Settings Button
+                                            IconButton(
+                                                onClick = {
+                                                    HapticHelper.performHaptic(context, HapticHelper.FeedbackType.LIGHT)
+                                                    showOrgSwitcher = true
+                                                },
+                                                modifier = Modifier
+                                                    .size(42.dp)
+                                                    .clip(CircleShape)
+                                                    .background(MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.22f))
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.SwapHoriz,
+                                                    contentDescription = "Switch Organization",
+                                                    tint = MaterialTheme.colorScheme.onPrimary,
+                                                    modifier = Modifier.size(22.dp)
+                                                )
+                                            }
+                                        }
+
+                                        Spacer(modifier = Modifier.height(18.dp))
+
+                                        // Connected Bank Inner Pill Card (Signature Offline Pay Style)
+                                        Surface(
+                                            shape = RoundedCornerShape(22.dp),
+                                            color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.18f),
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clickable {
+                                                    HapticHelper.performHaptic(context, HapticHelper.FeedbackType.LIGHT)
+                                                    if (can("accounts.read") || can("accounts.manage")) {
+                                                        onNavigateToBankAccounts()
+                                                    } else {
+                                                        onNavigateToUpi()
+                                                    }
+                                                }
+                                        ) {
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(horizontal = 18.dp, vertical = 14.dp),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Text(
+                                                        text = "Connected Bank & UPI",
+                                                        color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.82f),
+                                                        fontSize = 12.sp,
+                                                        fontWeight = FontWeight.Medium
+                                                    )
+                                                    Spacer(modifier = Modifier.height(2.dp))
+                                                    Text(
+                                                        text = connectedBankName,
+                                                        color = MaterialTheme.colorScheme.onPrimary,
+                                                        fontSize = 18.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        maxLines = 1,
+                                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                                    )
+                                                }
+
+                                                // Circular Wallet / Bank Badge
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(44.dp)
+                                                        .clip(CircleShape)
+                                                        .background(MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.30f)),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.AccountBalanceWallet,
+                                                        contentDescription = null,
+                                                        tint = MaterialTheme.colorScheme.onPrimary,
+                                                        modifier = Modifier.size(22.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
+
+                                        Spacer(modifier = Modifier.height(18.dp))
+
+                                        // Today's Inflows Summary Pill inside top card
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Column {
+                                                Text(
+                                                    text = "Today's Collection",
+                                                    color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.82f),
+                                                    fontSize = 12.sp,
+                                                    fontWeight = FontWeight.Medium
+                                                )
+                                                Text(
+                                                    text = "₹${String.format("%,.2f", receivedAmount)}",
+                                                    color = MaterialTheme.colorScheme.onPrimary,
+                                                    fontSize = 24.sp,
+                                                    fontWeight = FontWeight.ExtraBold
+                                                )
+                                            }
+
+                                            Surface(
+                                                shape = RoundedCornerShape(12.dp),
+                                                color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.22f)
+                                            ) {
+                                                Text(
+                                                    text = "$receivedCount payments",
+                                                    color = MaterialTheme.colorScheme.onPrimary,
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 12.sp,
+                                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Live Payment Banner (if an offline payment is active)
+                        if (paymentState !is OfflinePaymentState.Idle) {
+                            item {
+                                LivePaymentStatusCard(
+                                    state = paymentState,
+                                    onCancelSession = {
+                                        sessionManagerInstance.cancelSession("Cancelled by user")
+                                        callManager.hangupCall()
+                                    }
                                 )
+                            }
+                        }
+
+                        // Bento Tile 2: Center Hero Controls (Iconic Offline Pay: Circular Scan QR + Squircle Pay Contact)
+                        item {
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(26.dp),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+                                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 20.dp, horizontal = 16.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceEvenly,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        // Action 1: Circular Scan QR Code Button
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            modifier = Modifier.clickable {
+                                                HapticHelper.performHaptic(context, HapticHelper.FeedbackType.MEDIUM)
+                                                if (can("transactions.create")) onNavigateToScan()
+                                            }
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(68.dp)
+                                                    .tourAnchor(1) { idx, rect -> tourBoundsMap[idx] = rect }
+                                                    .clip(CircleShape)
+                                                    .background(MaterialTheme.colorScheme.primary),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.QrCodeScanner,
+                                                    contentDescription = "Scan QR Code",
+                                                    tint = MaterialTheme.colorScheme.onPrimary,
+                                                    modifier = Modifier.size(32.dp)
+                                                )
+                                            }
+                                            Spacer(modifier = Modifier.height(8.dp))
+                                            Text(
+                                                text = "Scan QR Code",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                            Text(
+                                                text = "Online / Offline",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                fontSize = 11.sp
+                                            )
+                                        }
+
+                                        // "OR" Divider Pill
+                                        Box(
+                                            modifier = Modifier
+                                                .size(34.dp)
+                                                .clip(CircleShape)
+                                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text = "OR",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                fontSize = 10.sp
+                                            )
+                                        }
+
+                                        // Action 2: Squircle Pay Contact Button
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            modifier = Modifier.clickable {
+                                                HapticHelper.performHaptic(context, HapticHelper.FeedbackType.MEDIUM)
+                                                showPayContactSheet = true
+                                            }
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(68.dp)
+                                                    .tourAnchor(2) { idx, rect -> tourBoundsMap[idx] = rect }
+                                                    .clip(RoundedCornerShape(22.dp))
+                                                    .background(MaterialTheme.colorScheme.primary),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Person,
+                                                    contentDescription = "Pay Contact",
+                                                    tint = MaterialTheme.colorScheme.onPrimary,
+                                                    modifier = Modifier.size(32.dp)
+                                                )
+                                            }
+                                            Spacer(modifier = Modifier.height(8.dp))
+                                            Text(
+                                                text = "Pay Contact",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                            Text(
+                                                text = "Search or Number",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                fontSize = 11.sp
+                                            )
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
+                                    Spacer(modifier = Modifier.height(12.dp))
+
+                                    // Secondary quick links: My QR Code & Ledger
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                    ) {
+                                        Surface(
+                                            shape = RoundedCornerShape(12.dp),
+                                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .tourAnchor(3) { idx, rect -> tourBoundsMap[idx] = rect }
+                                                .clickable {
+                                                    HapticHelper.performHaptic(context, HapticHelper.FeedbackType.LIGHT)
+                                                    if (can("qr.create") || can("upi.read")) onNavigateToQr()
+                                                }
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.Center
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.QrCode,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text(
+                                                    text = "Receive (My QR)",
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.primary
+                                                )
+                                            }
+                                        }
+
+                                        Surface(
+                                            shape = RoundedCornerShape(12.dp),
+                                            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.45f),
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .tourAnchor(4) { idx, rect -> tourBoundsMap[idx] = rect }
+                                                .clickable {
+                                                    HapticHelper.performHaptic(context, HapticHelper.FeedbackType.LIGHT)
+                                                    if (can("transactions.read")) onNavigateToTransactions()
+                                                }
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.Center
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.AutoMirrored.Filled.ReceiptLong,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.secondary,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text(
+                                                    text = "Ledger History",
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.secondary
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
 
@@ -425,9 +869,6 @@ fun DashboardScreen(
                                     }
                                     if (can("transactions.create")) {
                                         list.add(Triple("Scan Pay", Icons.Default.QrCodeScanner, onNavigateToScan))
-                                    }
-                                    if (can("transactions.create")) {
-                                        list.add(Triple("Offline Pay", Icons.Default.Call, onNavigateToOfflinePayment))
                                     }
                                     if (can("upi.manage")) {
                                         list.add(Triple("Add UPI", Icons.Default.AccountBalanceWallet, onNavigateToUpi))
@@ -681,6 +1122,38 @@ fun DashboardScreen(
             onDismissRequest = { showOrgSwitcher = false }
         )
     }
+
+    if (showPayContactSheet) {
+        PayContactBottomSheet(
+            sessionManager = sessionManager,
+            database = database,
+            onDismiss = { showPayContactSheet = false }
+        )
+    }
+
+    DashboardTourGuideOverlay(
+        visible = isTourActive,
+        currentStep = currentTourStep,
+        steps = tourSteps,
+        boundsMap = tourBoundsMap,
+        onNext = {
+            if (currentTourStep < tourSteps.size - 1) {
+                currentTourStep++
+            } else {
+                isTourActive = false
+                scope.launch { sessionManager.setDashboardTourCompleted(true) }
+            }
+        },
+        onBack = {
+            if (currentTourStep > 0) {
+                currentTourStep--
+            }
+        },
+        onDismiss = {
+            isTourActive = false
+            scope.launch { sessionManager.setDashboardTourCompleted(true) }
+        }
+    )
 }
 
 

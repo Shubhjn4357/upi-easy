@@ -524,8 +524,8 @@ fun GoogleSignInScreen(
                         Surface(
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(10.dp),
-                            color = FailedRed.copy(alpha = 0.08f),
-                            border = BorderStroke(1.dp, FailedRed.copy(alpha = 0.3f))
+                            color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.7f),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f))
                         ) {
                             Row(
                                 modifier = Modifier.padding(12.dp),
@@ -534,13 +534,13 @@ fun GoogleSignInScreen(
                                 Icon(
                                     Icons.Default.Warning,
                                     contentDescription = null,
-                                    tint = FailedRed,
+                                    tint = MaterialTheme.colorScheme.error,
                                     modifier = Modifier.size(18.dp)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
                                     text = errorMessage!!,
-                                    color = FailedRed,
+                                    color = MaterialTheme.colorScheme.onErrorContainer,
                                     style = MaterialTheme.typography.bodySmall,
                                     modifier = Modifier.weight(1f)
                                 )

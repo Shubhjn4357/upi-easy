@@ -1,8 +1,10 @@
 package com.aerotech.upieasy.core.security
 
 import android.content.Context
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -27,15 +29,18 @@ class SessionManager(val context: Context) {
         private val KEY_USER_EMAIL = stringPreferencesKey("user_email")
         private val KEY_USER_NAME = stringPreferencesKey("user_name")
         private val KEY_USER_AVATAR_URL = stringPreferencesKey("user_avatar_url")
-        private val KEY_IS_SETUP_COMPLETE = androidx.datastore.preferences.core.booleanPreferencesKey("is_setup_complete")
-        private val KEY_SOUND_NOTIFICATIONS = androidx.datastore.preferences.core.booleanPreferencesKey("sound_notifications")
-        private val KEY_BIOMETRIC_LOCK = androidx.datastore.preferences.core.booleanPreferencesKey("biometric_lock")
-        private val KEY_HIGH_VALUE_ALERT = androidx.datastore.preferences.core.booleanPreferencesKey("high_value_alert")
+        private val KEY_IS_SETUP_COMPLETE =booleanPreferencesKey("is_setup_complete")
+        private val KEY_SOUND_NOTIFICATIONS =booleanPreferencesKey("sound_notifications")
+        private val KEY_BIOMETRIC_LOCK =booleanPreferencesKey("biometric_lock")
+        private val KEY_HIGH_VALUE_ALERT =booleanPreferencesKey("high_value_alert")
         private val KEY_THEME_MODE = stringPreferencesKey("theme_mode")
-        private val KEY_DYNAMIC_COLOR = androidx.datastore.preferences.core.booleanPreferencesKey("dynamic_color")
-        private val KEY_HAPTIC_FEEDBACK = androidx.datastore.preferences.core.booleanPreferencesKey("haptic_feedback")
+        private val KEY_DYNAMIC_COLOR =booleanPreferencesKey("dynamic_color")
+        private val KEY_HAPTIC_FEEDBACK =booleanPreferencesKey("haptic_feedback")
         private val KEY_DEVICE_ID = stringPreferencesKey("device_id")
-        private val KEY_USER_PERMISSIONS = androidx.datastore.preferences.core.stringSetPreferencesKey("user_permissions")
+        private val KEY_USER_PERMISSIONS = stringSetPreferencesKey("user_permissions")
+        private val KEY_OFFLINE_UPI_ID = stringPreferencesKey("offline_upi_id")
+        private val KEY_CONSENT_ACKNOWLEDGED = booleanPreferencesKey("consent_acknowledged")
+        private val KEY_DASHBOARD_TOUR_COMPLETED = booleanPreferencesKey("dashboard_tour_completed")
     }
 
     val accessTokenFlow: Flow<String?> = context.dataStore.data.map { it[KEY_ACCESS_TOKEN] }
@@ -56,8 +61,27 @@ class SessionManager(val context: Context) {
     val biometricLockFlow: Flow<Boolean> = context.dataStore.data.map { it[KEY_BIOMETRIC_LOCK] ?: false }
     val highValueAlertFlow: Flow<Boolean> = context.dataStore.data.map { it[KEY_HIGH_VALUE_ALERT] ?: true }
     val themeModeFlow: Flow<String> = context.dataStore.data.map { it[KEY_THEME_MODE] ?: "SYSTEM" }
-    val dynamicColorFlow: Flow<Boolean> = context.dataStore.data.map { it[KEY_DYNAMIC_COLOR] ?: false }
+    val dynamicColorFlow: Flow<Boolean> = context.dataStore.data.map { it[KEY_DYNAMIC_COLOR] ?: (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) }
     val hapticFeedbackFlow: Flow<Boolean> = context.dataStore.data.map { it[KEY_HAPTIC_FEEDBACK] ?: true }
+    val offlineUpiIdFlow: Flow<String?> = context.dataStore.data.map { it[KEY_OFFLINE_UPI_ID] }
+    val consentAcknowledgedFlow: Flow<Boolean> = context.dataStore.data.map { it[KEY_CONSENT_ACKNOWLEDGED] ?: false }
+    val dashboardTourCompletedFlow: Flow<Boolean> = context.dataStore.data.map { it[KEY_DASHBOARD_TOUR_COMPLETED] ?: false }
+
+    suspend fun setConsentAcknowledged(acknowledged: Boolean) {
+        context.dataStore.edit { it[KEY_CONSENT_ACKNOWLEDGED] = acknowledged }
+    }
+
+    suspend fun isConsentAcknowledged(): Boolean {
+        return context.dataStore.data.first()[KEY_CONSENT_ACKNOWLEDGED] ?: false
+    }
+
+    suspend fun setDashboardTourCompleted(completed: Boolean = true) {
+        context.dataStore.edit { it[KEY_DASHBOARD_TOUR_COMPLETED] = completed }
+    }
+
+    suspend fun isDashboardTourCompleted(): Boolean {
+        return context.dataStore.data.first()[KEY_DASHBOARD_TOUR_COMPLETED] ?: false
+    }
 
     suspend fun setThemeMode(mode: String) {
         context.dataStore.edit { it[KEY_THEME_MODE] = mode }
@@ -114,6 +138,14 @@ class SessionManager(val context: Context) {
 
     suspend fun setSetupComplete(complete: Boolean) {
         context.dataStore.edit { it[KEY_IS_SETUP_COMPLETE] = complete }
+    }
+
+    suspend fun setOfflineUpiId(upiId: String) {
+        context.dataStore.edit { it[KEY_OFFLINE_UPI_ID] = upiId }
+    }
+
+    suspend fun getOfflineUpiId(): String? {
+        return context.dataStore.data.first()[KEY_OFFLINE_UPI_ID]
     }
 
     suspend fun saveSession(

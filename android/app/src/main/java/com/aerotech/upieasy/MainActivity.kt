@@ -57,6 +57,7 @@ import com.aerotech.upieasy.feature.settings.SettingsScreen
 import com.aerotech.upieasy.feature.staff.StaffScreen
 import com.aerotech.upieasy.feature.transactions.TransactionsScreen
 import com.aerotech.upieasy.feature.upi.UpiScreen
+import com.aerotech.upieasy.ui.components.FirstTimeConsentDialog
 import com.aerotech.upieasy.ui.theme.*
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -100,6 +101,7 @@ class MainActivity : FragmentActivity() {
                 val scope = rememberCoroutineScope()
 
                 var initialToken by remember { mutableStateOf<String?>(null) }
+                var initialConsentAcknowledged by remember { mutableStateOf(true) }
                 var isInitialized by remember { mutableStateOf(false) }
                 var resolvedStartDestination by remember { mutableStateOf("auth") }
                 var isAppLocked by remember { mutableStateOf(false) }
@@ -108,6 +110,7 @@ class MainActivity : FragmentActivity() {
                     try {
                         val token = sessionManager.getAccessToken()
                         initialToken = token
+                        initialConsentAcknowledged = sessionManager.isConsentAcknowledged()
                         var isComplete = sessionManager.isSetupCompleteFlow.first()
                         var currentOrg = sessionManager.currentOrgIdFlow.first()
                         val bioEnabled = sessionManager.biometricLockFlow.first()
@@ -161,10 +164,11 @@ class MainActivity : FragmentActivity() {
                             .background(MaterialTheme.colorScheme.background),
                         contentAlignment = Alignment.Center
                     ) {
-                        CircularProgressIndicator(color = BrandAccent)
+                        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                     }
                 } else {
                     val token by sessionManager.accessTokenFlow.collectAsState(initial = initialToken)
+                    val isConsentAcknowledged by sessionManager.consentAcknowledgedFlow.collectAsState(initial = initialConsentAcknowledged)
                     val currentOrgId by sessionManager.currentOrgIdFlow.collectAsState(initial = null)
                     val biometricLockEnabled by sessionManager.biometricLockFlow.collectAsState(initial = false)
 
@@ -561,6 +565,17 @@ class MainActivity : FragmentActivity() {
                                     )
                                 } else {
                                     isAppLocked = false
+                                }
+                            }
+                        )
+                    }
+
+                    // Mandatory First-Time Regulatory Consent Modal (Requires full scroll before unlocking)
+                    if (!isConsentAcknowledged) {
+                        FirstTimeConsentDialog(
+                            onAcknowledge = {
+                                scope.launch {
+                                    sessionManager.setConsentAcknowledged(true)
                                 }
                             }
                         )
@@ -1006,11 +1021,7 @@ fun BentoGridRoutesBottomDrawer(
             if (hasWildcard || roleUpper in listOf("MANAGER", "CASHIER") || userPermissions.contains("transactions.create")) {
                 list.add(QuickRouteItem("Scan QR", "Pay any merchant", Icons.Default.QrCodeScanner, PastelEmeraldBg, SuccessGreen, onNavigateToScan))
             }
-            // 2. Offline Payments (No Internet 123Pay / USSD)
-            if (hasWildcard || roleUpper in listOf("MANAGER", "CASHIER") || userPermissions.contains("transactions.create")) {
-                list.add(QuickRouteItem("Offline Pay", "Pay without internet", Icons.Default.Call, PastelEmeraldBg, SuccessGreen, onNavigateToOfflinePayment))
-            }
-            // 3. My QR Code
+            // 2. My QR Code
             if (hasWildcard || roleUpper in listOf("MANAGER", "CASHIER") || userPermissions.contains("qr.create") || userPermissions.contains("upi.read")) {
                 list.add(QuickRouteItem("My QR Code", "Receive payments", Icons.Default.QrCode, PastelIndigoBg, BrandPrimary, onNavigateToQr))
             }

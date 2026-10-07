@@ -181,6 +181,9 @@ dependencies {
     // QR Code Generation
     implementation("com.google.zxing:core:3.5.3")
 
+    // Interactive Step-by-Step Onboarding Tourtip
+    implementation("com.fappslab.tourtip:tourtip:1.06.1")
+
     // Unit Testing
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
